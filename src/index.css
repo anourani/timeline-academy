@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  @font-face {
+    font-family: 'Avenir';
+    src: url('https://fonts.cdnfonts.com/css/avenir') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+  }
+
+  h1 {
+    font-family: 'Droid Serif', serif;
+    letter-spacing: -0.01em;
+    line-height: 1.15;
+    font-weight: 400;
+  }
+}
+
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono&family=Droid+Serif:wght@400&display=swap');
+
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;  /* Chrome, Safari and Opera */
+  }
+}
