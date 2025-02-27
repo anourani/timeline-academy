@@ -9,6 +9,7 @@ import { ScaleSelector } from './ScaleSelector';
 import { lockScroll, unlockScroll } from '../../utils/scrollLock';
 import { DEFAULT_TIMELINE_DESCRIPTION } from '../../constants/defaults';
 import { utils, writeFile } from 'xlsx';
+import { read } from 'xlsx';
 
 interface TimelineSettingsPanelProps {
   isOpen: boolean;
@@ -112,8 +113,82 @@ export function TimelineSettingsPanel({
     setShowResetConfirmation(false);
   };
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      // Check file type
+      if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+        // Process Excel file
+        const data = await file.arrayBuffer();
+        const workbook = read(data, { cellDates: true });
+        
+        // Get first sheet
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        
+        // Convert to JSON, skipping first two rows (headers and instructions)
+        const rows = utils.sheet_to_json<any>(worksheet);
+        const events = rows.slice(2).map(row => {
+          // Format dates properly
+          let startDate = '';
+          let endDate = '';
+          
+          if (row['Start Date']) {
+            const startDateObj = new Date(row['Start Date']);
+            startDate = startDateObj.toISOString().split('T')[0];
+          }
+          
+          if (row['End Date']) {
+            const endDateObj = new Date(row['End Date']);
+            endDate = endDateObj.toISOString().split('T')[0];
+          } else {
+            endDate = startDate;
+          }
+          
+          // Find matching category
+          const categoryLabel = row['Category'];
+          const category = categories.find(c => 
+            c.label.toLowerCase() === categoryLabel?.toLowerCase()
+          );
+          
+          return {
+            title: row['Event Title'] || '',
+            startDate,
+            endDate,
+            category: category?.id || categories[0]?.id
+          };
+        }).filter(event => event.title && event.startDate && event.category);
+        
+        if (events.length > 0) {
+          onImportEvents(events);
+        } else {
+          alert('No valid events found in the file');
+        }
+      } else {
+        alert('Please select an Excel file (.xlsx or .xls)');
+      }
+    } catch (error) {
+      console.error('Error importing file:', error);
+      alert('Error importing file. Please check the format and try again.');
+    }
+    
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   return (
     <>
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        accept=".xlsx,.xls"
+        style={{ display: 'none' }}
+      />
       <div 
         className={`fixed inset-0 bg-black/50 z-40 transition-opacity duration-250 ease-in-out ${
           isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
