@@ -112,7 +112,7 @@ export function Timeline({
   }, [editingEvent, onAddEvent, onUpdateEvent]);
 
   return (
-    <div className={isFullScreen ? 'h-[calc(100vh-6rem)]' : 'relative'}>
+    <div className={isFullScreen ? 'h-[calc(100vh-6rem)]' : 'relative mb-16'}>
       <div 
         className="absolute left-0 top-[64px] w-[150px] z-10 bg-black" 
         style={{ height: categoryData.totalHeight }}

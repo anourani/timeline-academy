@@ -28,7 +28,7 @@ export function SampleTimelineView({ isOpen, onClose }: SampleTimelineViewProps)
 
   return (
     <div 
-      className={`fixed inset-0 bg-black z-50 transition-transform duration-500 ease-in-out ${
+      className={`fixed inset-0 bg-black z-50 transition-transform duration-500 ease-in-out overflow-auto ${
         isOpen ? 'translate-y-0' : 'translate-y-full'
       }`}
       aria-hidden={!isOpen}
@@ -61,7 +61,7 @@ export function SampleTimelineView({ isOpen, onClose }: SampleTimelineViewProps)
       </div>
 
       <main 
-        className={`timeline-container relative mt-16 transition-all duration-500 delay-200 ease-in-out ${
+        className={`timeline-container relative mt-16 mb-16 transition-all duration-500 delay-200 ease-in-out ${
           isOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
         }`}
       >
