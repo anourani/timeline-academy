@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import { TimelineEvent as ITimelineEvent } from '../../types/event';
-import { Month } from '../../types/timeline';
+import { Month, TimelineScale } from '../../types/timeline';
 
 interface TimelineEventProps {
   event: ITimelineEvent & { stackIndex: number };
@@ -8,6 +8,7 @@ interface TimelineEventProps {
   categoryOffset: number;
   categoryColor?: string;
   onEventClick?: (event: ITimelineEvent) => void;
+  scale?: TimelineScale;
 }
 
 export const TimelineEvent = memo(function TimelineEvent({ 
@@ -15,7 +16,8 @@ export const TimelineEvent = memo(function TimelineEvent({
   months,
   categoryOffset,
   categoryColor = '#666',
-  onEventClick
+  onEventClick,
+  scale
 }: TimelineEventProps) {
   if (!months.length) return null;
 
@@ -42,7 +44,6 @@ export const TimelineEvent = memo(function TimelineEvent({
   const endColumn = (endMonthIndex * 4) + endQuarter + 2;
 
   const isSingleDay = event.startDate === event.endDate;
-  const EVENT_HEIGHT = 36;
 
   const handleClick = () => {
     if (onEventClick) {
@@ -52,25 +53,32 @@ export const TimelineEvent = memo(function TimelineEvent({
 
   return (
     <div
-      className="flex items-center text-white cursor-pointer group rounded transition-colors hover:brightness-110"
+      className="flex items-center text-white cursor-pointer group rounded transition-colors hover:brightness-110 p-0.5"
       style={{
         gridColumn: `${startColumn} / ${endColumn}`,
         gridRow: event.stackIndex + 1,
-        backgroundColor: isSingleDay ? 'transparent' : `${categoryColor}73`,
+        backgroundColor: 'transparent',
         minWidth: '120px',
-        height: `${EVENT_HEIGHT}px`,
-        padding: '2px',
+        height: '38px',
         zIndex: event.stackIndex + 1,
       }}
       onClick={handleClick}
       title={`${event.title} (${event.startDate}${event.endDate !== event.startDate ? ` to ${event.endDate}` : ''})`}
     >
       <div 
-        className="h-full w-[8px] rounded flex-shrink-0"
-        style={{ backgroundColor: categoryColor }}
-      />
-      <div className="pl-1 whitespace-nowrap text-base font-medium overflow-visible">
-        {event.title}
+        className="flex items-center h-full w-full rounded"
+        style={{ 
+          backgroundColor: isSingleDay ? 'transparent' : `${categoryColor}73`,
+          padding: '2px 2px'
+        }}
+      >
+        <div 
+          className="h-full w-[8px] rounded flex-shrink-0"
+          style={{ backgroundColor: categoryColor }}
+        />
+        <div className="pl-1 whitespace-nowrap text-base font-medium overflow-visible">
+          {event.title}
+        </div>
       </div>
     </div>
   );
