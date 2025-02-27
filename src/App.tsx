@@ -116,7 +116,7 @@ export function App() {
   };
 
   return (
-    <div className="app-container min-h-screen bg-black text-white">
+    <div className="app-container min-h-screen bg-black text-white overflow-auto">
       <GlobalNav 
         onViewTimelinesClick={() => setShowSidePanel(true)}
         onSignInClick={() => {
