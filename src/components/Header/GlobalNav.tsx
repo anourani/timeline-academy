@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, Video } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { Modal } from '../Modal/Modal';
 
 interface GlobalNavProps {
   onViewTimelinesClick: () => void;
@@ -17,6 +18,7 @@ export function GlobalNav({
 }: GlobalNavProps) {
   const { user } = useAuth();
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isVideoTutorialOpen, setIsVideoTutorialOpen] = useState(false);
 
   const handlePresentMode = () => {
     if (timelineId) {
@@ -41,6 +43,11 @@ export function GlobalNav({
     e.preventDefault();
     const mailtoLink = "mailto:alex@timeline.academy?subject=" + encodeURIComponent("I'm a timeline.academy user. Here's my feedback");
     window.location.href = mailtoLink;
+  };
+
+  const handleVideoTutorialClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsVideoTutorialOpen(true);
   };
 
   return (
@@ -68,6 +75,13 @@ export function GlobalNav({
 
         {/* Right side - Controls */}
         <div className="flex items-center gap-4">
+          <button
+            onClick={handleVideoTutorialClick}
+            className="text-[#A770EC] hover:text-[#B68FF0] transition-colors text-sm font-medium"
+          >
+            Quick Tutorial
+          </button>
+
           <button
             onClick={handleFeedbackClick}
             className="text-gray-400 hover:text-white transition-colors text-sm"
@@ -154,6 +168,34 @@ export function GlobalNav({
           </div>
         </div>
       </div>
+
+      {/* Video Tutorial Modal */}
+      <Modal
+        isOpen={isVideoTutorialOpen}
+        onClose={() => setIsVideoTutorialOpen(false)}
+        title="Quick Tutorial to Get Started"
+      >
+        <div className="space-y-4">
+          <p className="text-gray-300">
+            This video tutorial walks through how to start building your timeline by adding events, editing categories, customizing timeline settings, and importing or exporting data to build faster.
+          </p>
+          
+          <div className="aspect-video">
+            <a 
+              href="https://www.loom.com/share/f19575818a9341d4a266c482af981ba2" 
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block w-full h-full bg-gray-700 rounded-lg flex items-center justify-center text-white hover:bg-gray-600 transition-colors"
+            >
+              <div className="text-center p-6">
+                <Video size={48} className="mx-auto mb-4" />
+                <p>Click to watch the tutorial video on Loom</p>
+                <p className="text-sm text-gray-400 mt-2">The video will open in a new tab</p>
+              </div>
+            </a>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
