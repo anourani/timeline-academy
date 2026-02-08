@@ -17,13 +17,15 @@ interface SidePanelProps {
   onClose: () => void;
   timelineId: string | null;
   onTimelineSwitch: (timelineId: string) => void;
+  onAuthClick: (isSignUp: boolean) => void;
 }
 
-export function SidePanel({ 
-  isOpen, 
+export function SidePanel({
+  isOpen,
   onClose,
   timelineId,
-  onTimelineSwitch
+  onTimelineSwitch,
+  onAuthClick
 }: SidePanelProps) {
   const [currentPanel, setCurrentPanel] = useState<SubPanel>('main');
   const { user } = useAuth();
@@ -69,7 +71,7 @@ export function SidePanel({
   };
 
   const handleAuthClick = (signUp: boolean) => {
-    window.dispatchEvent(new CustomEvent('open-auth-modal', { detail: { isSignUp: signUp } }));
+    onAuthClick(signUp);
     onClose();
   };
 
