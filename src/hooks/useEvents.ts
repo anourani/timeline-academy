@@ -1,6 +1,11 @@
 import { useState, useCallback } from 'react';
 import { TimelineEvent } from '../types/event';
 
+export interface AddEventsResult {
+  added: number;
+  duplicates: number;
+}
+
 export function useEvents() {
   const [events, setEvents] = useState<TimelineEvent[]>([]);
 
@@ -13,53 +18,40 @@ export function useEvents() {
   }, []);
 
   const updateEvent = useCallback((updatedEvent: TimelineEvent) => {
-    setEvents(prev => prev.map(event => 
+    setEvents(prev => prev.map(event =>
       event.id === updatedEvent.id ? updatedEvent : event
     ));
   }, []);
 
-  const addEvents = useCallback((newEvents: Omit<TimelineEvent, 'id'>[]) => {
+  const addEvents = useCallback((newEvents: Omit<TimelineEvent, 'id'>[]): AddEventsResult => {
     if (newEvents.length === 0) {
-      console.log('No valid events to add');
-      return;
+      return { added: 0, duplicates: 0 };
     }
 
-    console.log(`Adding ${newEvents.length} events to timeline`);
-    console.log('Event sample:', newEvents[0]);
-    
     const eventsWithIds = newEvents.map(event => ({
       ...event,
       id: crypto.randomUUID(),
     }));
 
-    setEvents(prev => {
-      // Filter out exact duplicates only
-      const uniqueEvents = eventsWithIds.filter(newEvent => {
-        const isDuplicate = prev.some(existingEvent => 
-          existingEvent.title === newEvent.title &&
-          existingEvent.startDate === newEvent.startDate &&
-          existingEvent.endDate === newEvent.endDate &&
-          existingEvent.category === newEvent.category
-        );
-        
-        if (isDuplicate) {
-          console.log(`Skipping duplicate event: ${newEvent.title}`);
-        }
-        
-        return !isDuplicate;
-      });
-
-      if (uniqueEvents.length === 0) {
-        console.log('No new events to add - all are duplicates');
-        alert('All events already exist in the timeline');
-        return prev;
-      }
-
-      const updatedEvents = [...prev, ...uniqueEvents];
-      console.log(`Timeline now has ${updatedEvents.length} total events`);
-      return updatedEvents;
+    // Dedup against current state before updating
+    const currentEvents = events;
+    const uniqueEvents = eventsWithIds.filter(newEvent => {
+      return !currentEvents.some(existingEvent =>
+        existingEvent.title === newEvent.title &&
+        existingEvent.startDate === newEvent.startDate &&
+        existingEvent.endDate === newEvent.endDate &&
+        existingEvent.category === newEvent.category
+      );
     });
-  }, []);
+
+    const duplicates = eventsWithIds.length - uniqueEvents.length;
+
+    if (uniqueEvents.length > 0) {
+      setEvents(prev => [...prev, ...uniqueEvents]);
+    }
+
+    return { added: uniqueEvents.length, duplicates };
+  }, [events]);
 
   const clearEvents = useCallback(() => {
     setEvents([]);
