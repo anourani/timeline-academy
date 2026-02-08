@@ -40,17 +40,10 @@ export function App() {
 
   const { saveStatus, lastSavedTime, handleChange } = useAutosave(timelineData);
 
-  useEffect(() => {
-    const handleOpenAuthModal = (e: CustomEvent<{ isSignUp: boolean }>) => {
-      setIsSignUp(e.detail.isSignUp);
-      setShowAuthModal(true);
-    };
-
-    window.addEventListener('open-auth-modal', handleOpenAuthModal as EventListener);
-    return () => {
-      window.removeEventListener('open-auth-modal', handleOpenAuthModal as EventListener);
-    };
-  }, []);
+  const handleAuthClick = (signUp: boolean) => {
+    setIsSignUp(signUp);
+    setShowAuthModal(true);
+  };
 
   // Trigger autosave when timeline data changes
   useEffect(() => {
@@ -145,6 +138,7 @@ export function App() {
         onEventsChange={setEvents}
         showSidePanel={showSidePanel}
         onCloseSidePanel={() => setShowSidePanel(false)}
+        onAuthClick={handleAuthClick}
         scale={scale}
         onScaleChange={handleScaleChange}
         saveStatus={saveStatus}

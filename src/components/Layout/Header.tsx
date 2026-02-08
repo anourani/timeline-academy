@@ -28,6 +28,7 @@ interface HeaderProps {
   onEventsChange: (events: TimelineEvent[]) => void;
   showSidePanel: boolean;
   onCloseSidePanel: () => void;
+  onAuthClick: (isSignUp: boolean) => void;
   scale: 'large' | 'small';
   onScaleChange: (scale: 'large' | 'small') => void;
   saveStatus: SaveStatus;
@@ -50,6 +51,7 @@ export function Header({
   onEventsChange,
   showSidePanel,
   onCloseSidePanel,
+  onAuthClick,
   scale,
   onScaleChange,
   saveStatus,
@@ -116,11 +118,12 @@ export function Header({
         defaultIsSignUp={isSignUp}
       />
 
-      <SidePanel 
-        isOpen={showSidePanel} 
-        onClose={onCloseSidePanel} 
+      <SidePanel
+        isOpen={showSidePanel}
+        onClose={onCloseSidePanel}
         timelineId={timelineId}
         onTimelineSwitch={onTimelineSwitch}
+        onAuthClick={onAuthClick}
       />
 
       <TimelineSettingsPanel
