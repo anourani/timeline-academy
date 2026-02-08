@@ -66,8 +66,6 @@ export function parseCSVEvents(csvContent: string, existingCategories: CategoryC
     existingCategories.map(cat => normalizeCategory(cat.id))
   );
   
-  console.log('Valid categories:', Array.from(validCategories));
-  
   // Skip header rows and filter out empty lines
   const dataLines = lines
     .slice(2) // Skip first two header rows
@@ -75,8 +73,6 @@ export function parseCSVEvents(csvContent: string, existingCategories: CategoryC
       const trimmed = line.trim();
       return trimmed && !trimmed.toLowerCase().includes('character limit');
     });
-  
-  console.log(`Processing ${dataLines.length} data lines`);
   
   // Process each data line
   dataLines.forEach((line, index) => {
@@ -160,9 +156,6 @@ export function parseCSVEvents(csvContent: string, existingCategories: CategoryC
     );
   });
 
-  console.log(`Successfully parsed ${events.length} events`);
-  console.log(`Found ${categoryMismatches.size} invalid categories`);
-  
   return { 
     events, 
     categories: existingCategories, // Return existing categories unchanged

@@ -53,7 +53,7 @@ export async function testConnection() {
       .select('count', { count: 'exact', head: true });
     
     if (error) throw error;
-    console.log('Successfully connected to Supabase');
+    // Connection successful
     connectionTested = true;
   } catch (error) {
     console.error('Failed to connect to Supabase:', error);
