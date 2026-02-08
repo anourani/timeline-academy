@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { TimelineEvent, CategoryConfig } from '../types/event';
 import { useAuth } from '../contexts/AuthContext';
 import { DEFAULT_TIMELINE_TITLE } from '../constants/defaults';
+import { saveTimelineEvents } from '../utils/saveEvents';
 
 interface TimelineData {
   title: string;
@@ -158,12 +159,13 @@ export function useTimeline() {
         if (timelineError) throw timelineError;
         setTimelineId(timeline.id);
 
-        // Insert events
+        // Insert events with client-generated IDs
         if (events.length > 0) {
           const { error: eventsError } = await supabase
             .from('events')
             .insert(
               events.map(event => ({
+                id: event.id,
                 timeline_id: timeline.id,
                 title: event.title,
                 start_date: event.startDate,
@@ -187,29 +189,8 @@ export function useTimeline() {
 
         if (timelineError) throw timelineError;
 
-        // Delete existing events and insert new ones
-        const { error: deleteError } = await supabase
-          .from('events')
-          .delete()
-          .eq('timeline_id', timelineId);
-
-        if (deleteError) throw deleteError;
-
-        if (events.length > 0) {
-          const { error: eventsError } = await supabase
-            .from('events')
-            .insert(
-              events.map(event => ({
-                timeline_id: timelineId,
-                title: event.title,
-                start_date: event.startDate,
-                end_date: event.endDate,
-                category: event.category
-              }))
-            );
-
-          if (eventsError) throw eventsError;
-        }
+        // Diff-based event save
+        await saveTimelineEvents(timelineId, events);
       }
     } catch (error) {
       console.error('Error saving timeline:', error);

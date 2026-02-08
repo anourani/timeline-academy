@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { debounce } from '../utils/debounce';
 import { supabase } from '../lib/supabase';
+import { saveTimelineEvents } from '../utils/saveEvents';
 import type { SaveStatus } from '../components/SaveStatusIndicator/SaveStatusIndicator';
 import type { TimelineEvent } from '../types/event';
 
@@ -37,31 +38,8 @@ export function useAutosave(timelineData: TimelineData) {
 
       if (timelineError) throw timelineError;
 
-      // Then update events
-      // First delete all existing events
-      const { error: deleteError } = await supabase
-        .from('events')
-        .delete()
-        .eq('timeline_id', data.id);
-
-      if (deleteError) throw deleteError;
-
-      // Then insert new events if there are any
-      if (data.events.length > 0) {
-        const { error: eventsError } = await supabase
-          .from('events')
-          .insert(
-            data.events.map(event => ({
-              timeline_id: data.id,
-              title: event.title,
-              start_date: event.startDate,
-              end_date: event.endDate,
-              category: event.category
-            }))
-          );
-
-        if (eventsError) throw eventsError;
-      }
+      // Diff-based event save
+      await saveTimelineEvents(data.id, data.events);
 
       const now = new Date();
       setSaveStatus('saved');
