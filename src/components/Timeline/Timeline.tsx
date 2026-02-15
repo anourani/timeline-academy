@@ -10,6 +10,7 @@ import { TimelineScale } from '../../types/timeline';
 import { getTimelineRange } from '../../utils/dateUtils';
 import { calculateEventStacks } from '../../utils/eventStacking';
 import { useTimelineScroll } from '../../hooks/useTimelineScroll';
+import { EVENT_HEIGHT, CATEGORY_PADDING, CATEGORY_MIN_HEIGHT } from '../../constants/timeline';
 import { Modal } from '../Modal/Modal';
 import { EventForm } from '../EventForm/EventForm';
 
@@ -58,26 +59,22 @@ export function Timeline({
       const stackedEvents = calculateEventStacks(categoryEvents, months);
       const maxStack = Math.max(...stackedEvents.map(event => event.stackIndex), 0);
       
-      const EVENT_HEIGHT = 36;
-      const STACK_SPACING = 0;
-      const CATEGORY_PADDING = 8;
-      
-      const height = (maxStack + 1) * (EVENT_HEIGHT + STACK_SPACING) + CATEGORY_PADDING;
-      
+      const height = (maxStack + 1) * EVENT_HEIGHT + CATEGORY_PADDING;
+
       const result = {
         id: category.id,
-        height: Math.max(height, 80), // Changed from 72 to 80
+        height: Math.max(height, CATEGORY_MIN_HEIGHT),
         offset: currentOffset,
         events: stackedEvents,
       };
-      
+
       currentOffset += result.height;
       return result;
     });
 
     return {
       categories: data,
-      totalHeight: currentOffset || 80, // Changed from 72 to 80
+      totalHeight: currentOffset || CATEGORY_MIN_HEIGHT,
     };
   }, [visibleEvents, visibleCategories, months]);
 
@@ -149,7 +146,7 @@ export function Timeline({
                     gridColumn: `1 / span ${months.length * 4}`,
                     display: 'grid',
                     gridTemplateColumns: `repeat(${months.length * 4}, ${scale.quarterWidth}px)`,
-                    gridAutoRows: '36px',
+                    gridAutoRows: `${EVENT_HEIGHT}px`,
                     gap: 0,
                   }}
                 >

@@ -1,5 +1,6 @@
 import { TimelineEvent } from '../types/event';
 import { Month } from '../types/timeline';
+import { EVENT_MIN_WIDTH } from '../constants/timeline';
 
 export interface StackedEvent extends TimelineEvent {
   stackIndex: number;
@@ -15,8 +16,6 @@ interface EventPlacement {
 
 // Constants
 const COLUMN_WIDTH = 32; // Width of each month column in pixels
-const MIN_EVENT_WIDTH = 120; // Minimum width in pixels for title
-const CHARS_PER_COLUMN = 2; // Approximate number of characters that fit in one column
 
 function getEventColumns(event: TimelineEvent, months: Month[]): { start: number; end: number } {
   if (!months?.length) return { start: 0, end: 0 };
@@ -40,7 +39,7 @@ function getEventColumns(event: TimelineEvent, months: Month[]): { start: number
 
 function calculateTitleWidth(title: string): number {
   // Calculate columns needed for title
-  const titleWidth = Math.max(MIN_EVENT_WIDTH, title.length * 8); // 8px per character approximation
+  const titleWidth = Math.max(EVENT_MIN_WIDTH, title.length * 8); // 8px per character approximation
   return Math.ceil(titleWidth / COLUMN_WIDTH);
 }
 
