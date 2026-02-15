@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
 import { TimelineEvent as ITimelineEvent } from '../../types/event';
 import { Month, TimelineScale } from '../../types/timeline';
+import { EVENT_ROW_HEIGHT, EVENT_MIN_WIDTH } from '../../constants/timeline';
 
 interface TimelineEventProps {
   event: ITimelineEvent & { stackIndex: number };
@@ -58,8 +59,8 @@ export const TimelineEvent = memo(function TimelineEvent({
         gridColumn: `${startColumn} / ${endColumn}`,
         gridRow: event.stackIndex + 1,
         backgroundColor: 'transparent',
-        minWidth: '120px',
-        height: '38px',
+        minWidth: `${EVENT_MIN_WIDTH}px`,
+        height: `${EVENT_ROW_HEIGHT}px`,
         zIndex: event.stackIndex + 1,
       }}
       onClick={handleClick}

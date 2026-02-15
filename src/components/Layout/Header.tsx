@@ -11,6 +11,7 @@ import { TimelineEvent, CategoryConfig } from '../../types/event';
 import { useAuth } from '../../contexts/AuthContext';
 import { AuthModal } from '../Auth/AuthModal';
 import type { SaveStatus } from '../SaveStatusIndicator/SaveStatusIndicator';
+import type { AddEventsResult } from '../../hooks/useEvents';
 
 interface HeaderProps {
   title: string;
@@ -18,7 +19,7 @@ interface HeaderProps {
   onTitleChange: (title: string) => void;
   onDescriptionChange: (description: string) => void;
   onAddEvent: (event: Omit<TimelineEvent, 'id'>) => void;
-  onImportEvents: (events: Omit<TimelineEvent, 'id'>[]) => void;
+  onImportEvents: (events: Omit<TimelineEvent, 'id'>[]) => AddEventsResult;
   onClearTimeline: () => void;
   events: TimelineEvent[];
   timelineId: string | null;

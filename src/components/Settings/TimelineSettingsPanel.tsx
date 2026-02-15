@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, FileDown, FileUp, Trash2, RotateCcw, Download } from 'lucide-react';
 import { TimelineEvent, CategoryConfig } from '../../types/event';
+import type { AddEventsResult } from '../../hooks/useEvents';
 import { exportEventsToExcel } from '../../utils/excelExport';
 import { OptionButton } from '../SidePanel/OptionButton';
 import { Modal } from '../Modal/Modal';
@@ -17,7 +18,7 @@ interface TimelineSettingsPanelProps {
   events: TimelineEvent[];
   timelineTitle: string;
   timelineDescription: string;
-  onImportEvents: (events: Omit<TimelineEvent, 'id'>[]) => void;
+  onImportEvents: (events: Omit<TimelineEvent, 'id'>[]) => AddEventsResult;
   onClearTimeline: () => void;
   onTitleChange: (title: string) => void;
   onDescriptionChange: (description: string) => void;
@@ -162,7 +163,10 @@ export function TimelineSettingsPanel({
         }).filter(event => event.title && event.startDate && event.category);
         
         if (events.length > 0) {
-          onImportEvents(events);
+          const result = onImportEvents(events);
+          if (result.added === 0) {
+            alert('All events already exist in the timeline');
+          }
         } else {
           alert('No valid events found in the file');
         }

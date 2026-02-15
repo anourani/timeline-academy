@@ -14,16 +14,8 @@ export function ImportCSVButton({ onImport, categories }: ImportCSVButtonProps) 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) {
-      console.log('No file selected');
       return;
     }
-
-    // Log file details
-    console.log('File selected:', {
-      name: file.name,
-      size: file.size,
-      type: file.type
-    });
 
     // Validate file type
     if (!file.name.toLowerCase().endsWith('.csv')) {
@@ -36,7 +28,6 @@ export function ImportCSVButton({ onImport, categories }: ImportCSVButtonProps) 
 
     try {
       // Read file content
-      console.log('Reading file...');
       let content: string;
       try {
         content = await file.text();
@@ -52,22 +43,11 @@ export function ImportCSVButton({ onImport, categories }: ImportCSVButtonProps) 
         throw new Error('CSV file is empty');
       }
 
-      console.log('File content length:', content.length);
-      console.log('First 100 characters:', content.substring(0, 100));
-
       // Parse CSV content
-      console.log('Parsing CSV content...');
       const { events, categories: parsedCategories, errors } = parseCSVEvents(content, categories);
-      
-      console.log('Parse results:', {
-        eventCount: events.length,
-        categoryCount: parsedCategories.length,
-        errorCount: errors.length
-      });
 
       // Handle parsing errors
       if (errors.length > 0) {
-        console.log('Parse errors:', errors);
         alert(errors.join('\n'));
         return;
       }
@@ -78,9 +58,7 @@ export function ImportCSVButton({ onImport, categories }: ImportCSVButtonProps) 
       }
 
       // Import events
-      console.log('Importing events...');
       onImport(events, parsedCategories);
-      console.log('Import successful');
 
       // Reset file input
       if (fileInputRef.current) {
@@ -88,19 +66,17 @@ export function ImportCSVButton({ onImport, categories }: ImportCSVButtonProps) 
       }
     } catch (error) {
       console.error('CSV import error:', error);
-      
+
       // Construct user-friendly error message
       let errorMessage = 'Error importing CSV file:\n';
       if (error instanceof Error) {
         errorMessage += error.message;
-        console.error('Error stack:', error.stack);
       } else {
         errorMessage += 'An unexpected error occurred';
-        console.error('Unknown error:', error);
       }
-      
+
       alert(errorMessage);
-      
+
       // Reset file input on error
       if (fileInputRef.current) {
         fileInputRef.current.value = '';

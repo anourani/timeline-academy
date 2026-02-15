@@ -3,14 +3,14 @@ import { debounce } from '../utils/debounce';
 import { supabase } from '../lib/supabase';
 import { saveTimelineEvents } from '../utils/saveEvents';
 import type { SaveStatus } from '../components/SaveStatusIndicator/SaveStatusIndicator';
-import type { TimelineEvent } from '../types/event';
+import type { TimelineEvent, CategoryConfig } from '../types/event';
 
 interface TimelineData {
   id: string | null;
   title: string;
   description: string;
   events: TimelineEvent[];
-  categories: any[];
+  categories: CategoryConfig[];
   scale: 'large' | 'small';
 }
 

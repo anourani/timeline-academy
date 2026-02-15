@@ -21,7 +21,7 @@ export function App() {
   const { categories, updateCategories, resetCategories } = useCategories();
   const { scale, currentScale, handleScaleChange } = useTimelineScale();
   const { user } = useAuth();
-  const { saveTimeline, timelineId, loadTimeline } = useTimeline();
+  const { saveTimeline, timelineId, loadTimeline, error: timelineError, retryInitialLoad } = useTimeline();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showSampleTimeline, setShowSampleTimeline] = useState(false);
   const [pendingSwitchTimelineId, setPendingSwitchTimelineId] = useState<string | null>(null);
@@ -64,18 +64,17 @@ export function App() {
 
   const switchTimeline = async (newTimelineId: string) => {
     try {
-      // Reset all state before loading new timeline
-      clearEvents();
-      resetTitle();
-      resetCategories();
-
+      // Load new data first — don't clear state until we have the replacement
       const { title: newTitle, description: newDescription, events: newEvents, categories: newCategories, scale: newScale } = await loadTimeline(newTimelineId);
-      
+
+      // Only update state after successful load
       setTitle(newTitle);
       setDescription(newDescription || '');
       setEvents(newEvents);
       if (newCategories) {
         updateCategories(newCategories);
+      } else {
+        resetCategories();
       }
       handleScaleChange(newScale || 'large');
     } catch (error) {
@@ -110,7 +109,7 @@ export function App() {
 
   return (
     <div className="app-container min-h-screen bg-black text-white overflow-auto">
-      <GlobalNav 
+      <GlobalNav
         onViewTimelinesClick={() => setShowSidePanel(true)}
         onSignInClick={() => {
           setIsSignUp(false);
@@ -121,6 +120,8 @@ export function App() {
           setShowAuthModal(true);
         }}
         timelineId={timelineId}
+        title={title}
+        onTitleChange={setTitle}
       />
       <Header
         title={title} 
@@ -144,13 +145,27 @@ export function App() {
         saveStatus={saveStatus}
         lastSavedTime={lastSavedTime}
       />
-      <TimelineContainer 
-        events={events} 
-        categories={categories} 
-        onAddEvent={addEvent}
-        onUpdateEvent={handleUpdateEvent}
-        scale={currentScale}
-      />
+      {timelineError ? (
+        <div className="flex items-center justify-center py-20">
+          <div className="bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full text-center">
+            <p className="text-red-400 mb-4">{timelineError}</p>
+            <button
+              onClick={retryInitialLoad}
+              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      ) : (
+        <TimelineContainer
+          events={events}
+          categories={categories}
+          onAddEvent={addEvent}
+          onUpdateEvent={handleUpdateEvent}
+          scale={currentScale}
+        />
+      )}
       <SampleTimelineView 
         isOpen={showSampleTimeline}
         onClose={() => setShowSampleTimeline(false)}

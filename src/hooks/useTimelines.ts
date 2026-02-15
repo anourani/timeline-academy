@@ -93,7 +93,7 @@ export function useTimelines() {
       )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          console.log('Successfully subscribed to timeline changes');
+          // Successfully subscribed
         } else if (status === 'CHANNEL_ERROR') {
           console.error('Error subscribing to timeline changes');
           setError('Failed to subscribe to timeline updates');

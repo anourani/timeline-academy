@@ -16,36 +16,46 @@ export function useTimeline() {
   const { user } = useAuth();
   const [timelineId, setTimelineId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadInitialTimeline = async () => {
     if (!user) {
       setTimelineId(null);
       setIsLoading(false);
+      setError(null);
       return;
     }
 
-    const loadTimeline = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('timelines')
-          .select('id')
-          .eq('user_id', user.id)
-          .limit(1)
-          .maybeSingle();
+    try {
+      setIsLoading(true);
+      setError(null);
 
-        if (error) {
-          console.error('Error loading timeline:', error);
-        }
+      const { data, error: fetchError } = await supabase
+        .from('timelines')
+        .select('id')
+        .eq('user_id', user.id)
+        .limit(1)
+        .maybeSingle();
 
-        setTimelineId(data?.id ?? null);
-      } catch (error) {
-        console.error('Error loading timeline:', error);
-      } finally {
-        setIsLoading(false);
+      if (fetchError) {
+        throw fetchError;
       }
-    };
 
-    loadTimeline();
+      setTimelineId(data?.id ?? null);
+    } catch (err) {
+      console.error('Error loading timeline:', err);
+      setError('Failed to load timeline. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const retryInitialLoad = () => {
+    loadInitialTimeline();
+  };
+
+  useEffect(() => {
+    loadInitialTimeline();
   }, [user]);
 
   const loadTimeline = async (id: string): Promise<TimelineData> => {
@@ -201,6 +211,8 @@ export function useTimeline() {
   return {
     timelineId,
     isLoading,
+    error,
+    retryInitialLoad,
     saveTimeline,
     loadTimeline
   };
