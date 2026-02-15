@@ -109,7 +109,7 @@ export function App() {
 
   return (
     <div className="app-container min-h-screen bg-black text-white overflow-auto">
-      <GlobalNav 
+      <GlobalNav
         onViewTimelinesClick={() => setShowSidePanel(true)}
         onSignInClick={() => {
           setIsSignUp(false);
@@ -120,6 +120,8 @@ export function App() {
           setShowAuthModal(true);
         }}
         timelineId={timelineId}
+        title={title}
+        onTitleChange={setTitle}
       />
       <Header
         title={title} 
