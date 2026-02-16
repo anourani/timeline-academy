@@ -7,6 +7,7 @@ interface GlobalNavProps {
   onViewTimelinesClick: () => void;
   onSignInClick: () => void;
   onSignUpClick: () => void;
+  onPresentMode: () => void;
   timelineId: string | null;
   title: string;
   onTitleChange: (title: string) => void;
@@ -16,6 +17,7 @@ export function GlobalNav({
   onViewTimelinesClick,
   onSignInClick,
   onSignUpClick,
+  onPresentMode,
   timelineId,
   title,
   onTitleChange
@@ -23,12 +25,6 @@ export function GlobalNav({
   const { user } = useAuth();
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isVideoTutorialOpen, setIsVideoTutorialOpen] = useState(false);
-
-  const handlePresentMode = () => {
-    if (timelineId) {
-      window.open(`/view/${timelineId}`, '_blank');
-    }
-  };
 
   const handleShare = () => {
     if (timelineId) {
@@ -107,9 +103,8 @@ export function GlobalNav({
           </button>
 
           <button
-            onClick={handlePresentMode}
+            onClick={onPresentMode}
             className="text-gray-400 hover:text-white transition-colors text-sm"
-            disabled={!timelineId}
           >
             Present Mode
           </button>

@@ -29,6 +29,35 @@ export function TimelineViewer() {
         return;
       }
 
+      // Load from localStorage for logged-out users
+      if (timelineId === 'local') {
+        try {
+          const raw = localStorage.getItem('timeline_draft');
+          if (!raw) {
+            setError('No local draft found');
+            setLoading(false);
+            return;
+          }
+          const draft = JSON.parse(raw);
+          const categories = (draft.categories || DEFAULT_CATEGORIES).map((cat: CategoryConfig) => ({
+            ...cat,
+            visible: true
+          }));
+          setTimeline({
+            title: draft.title || 'Untitled Timeline',
+            description: draft.description || '',
+            events: draft.events || [],
+            categories,
+            scale: draft.scale || 'large'
+          });
+        } catch {
+          setError('Failed to load local draft');
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
       try {
         // First load the timeline
         const { data: timelineData, error: timelineError } = await supabase
