@@ -28,6 +28,7 @@ export function App() {
   const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [showSidePanel, setShowSidePanel] = useState(false);
+  const [pendingScrollDate, setPendingScrollDate] = useState<string | null>(null);
 
   const timelineData = {
     id: timelineId,
@@ -107,6 +108,20 @@ export function App() {
     updateEvent(updatedEvent);
   };
 
+  const handleBulkEventsChange = (newEvents: TimelineEvent[]) => {
+    const currentIds = new Set(events.map(e => e.id));
+    const addedEvents = newEvents.filter(e => !currentIds.has(e.id));
+
+    if (addedEvents.length > 0) {
+      const earliest = addedEvents.reduce((a, b) =>
+        a.startDate < b.startDate ? a : b
+      );
+      setPendingScrollDate(earliest.startDate);
+    }
+
+    setEvents(newEvents);
+  };
+
   return (
     <div className="app-container min-h-screen bg-black text-white overflow-auto">
       <GlobalNav
@@ -136,7 +151,7 @@ export function App() {
         onTimelineSwitch={handleTimelineSwitch}
         categories={categories}
         onCategoriesChange={updateCategories}
-        onEventsChange={setEvents}
+        onEventsChange={handleBulkEventsChange}
         showSidePanel={showSidePanel}
         onCloseSidePanel={() => setShowSidePanel(false)}
         onAuthClick={handleAuthClick}
@@ -164,6 +179,8 @@ export function App() {
           onAddEvent={addEvent}
           onUpdateEvent={handleUpdateEvent}
           scale={currentScale}
+          pendingScrollDate={pendingScrollDate}
+          onScrollComplete={() => setPendingScrollDate(null)}
         />
       )}
       <SampleTimelineView 
