@@ -13,6 +13,7 @@ import { useCategories } from './hooks/useCategories';
 import { useAutosave } from './hooks/useAutosave';
 import { AuthModal } from './components/Auth/AuthModal';
 import { UnsavedChangesModal } from './components/Modal/UnsavedChangesModal';
+import { useLocalDraft } from './hooks/useLocalDraft';
 import { TimelineEvent } from './types/event';
 
 export function App() {
@@ -29,6 +30,9 @@ export function App() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [showSidePanel, setShowSidePanel] = useState(false);
   const [pendingScrollDate, setPendingScrollDate] = useState<string | null>(null);
+  const [draftHydrated, setDraftHydrated] = useState(false);
+  const [nudgeDismissed, setNudgeDismissed] = useState(false);
+  const { loadDraft, saveDraft, clearDraft } = useLocalDraft();
 
   const timelineData = {
     id: timelineId,
@@ -52,6 +56,58 @@ export function App() {
       handleChange(timelineData);
     }
   }, [timelineId, title, description, events, categories, currentScale.value]);
+
+  // Hydrate from localStorage draft if logged out
+  useEffect(() => {
+    if (!user && !draftHydrated) {
+      const draft = loadDraft();
+      if (draft && draft.events.length > 0) {
+        setTitle(draft.title);
+        setDescription(draft.description);
+        setEvents(draft.events);
+        updateCategories(draft.categories);
+        handleScaleChange(draft.scale);
+      }
+      setDraftHydrated(true);
+    }
+  }, [user, draftHydrated]);
+
+  // Save to localStorage when logged out
+  useEffect(() => {
+    if (!user && draftHydrated) {
+      saveDraft({
+        title,
+        description,
+        events,
+        categories,
+        scale: currentScale.value,
+        savedAt: new Date().toISOString()
+      });
+    }
+  }, [user, draftHydrated, title, description, events, categories, currentScale.value]);
+
+  // Migrate localStorage draft to Supabase as a new timeline on login
+  useEffect(() => {
+    if (user && draftHydrated) {
+      const draft = loadDraft();
+      if (draft && draft.events.length > 0) {
+        saveTimeline(draft.title, draft.events, draft.scale)
+          .then(() => {
+            clearDraft();
+          })
+          .catch((err) => {
+            if (err.message === 'Maximum limit of 3 timelines reached') {
+              alert('You\'ve reached the 3-timeline limit. Your draft couldn\'t be saved. Delete an existing timeline to make room.');
+            } else {
+              console.error('Failed to migrate draft:', err);
+              clearDraft();
+            }
+          });
+      } else {
+        clearDraft();
+      }
+    }
+  }, [user, draftHydrated]);
 
   const handleTimelineSwitch = async (newTimelineId: string) => {
     if (saveStatus === 'saving') {
@@ -104,6 +160,13 @@ export function App() {
     }
   };
 
+  const handleClearTimeline = () => {
+    clearEvents();
+    if (!user) {
+      clearDraft();
+    }
+  };
+
   const handleUpdateEvent = (updatedEvent: TimelineEvent) => {
     updateEvent(updatedEvent);
   };
@@ -145,7 +208,7 @@ export function App() {
         onDescriptionChange={setDescription}
         onAddEvent={addEvent}
         onImportEvents={addEvents}
-        onClearTimeline={clearEvents}
+        onClearTimeline={handleClearTimeline}
         events={events}
         timelineId={timelineId}
         onTimelineSwitch={handleTimelineSwitch}
@@ -160,6 +223,26 @@ export function App() {
         saveStatus={saveStatus}
         lastSavedTime={lastSavedTime}
       />
+      {!user && events.length > 0 && !nudgeDismissed && (
+        <div className="mx-4 mt-2 px-4 py-3 bg-blue-900/40 border border-blue-800/50 rounded-lg flex items-center justify-between text-sm">
+          <span className="text-blue-200">
+            Your work isn't saved to the cloud yet.{' '}
+            <button
+              onClick={() => { setIsSignUp(true); setShowAuthModal(true); }}
+              className="text-blue-400 underline hover:text-blue-300"
+            >
+              Sign up
+            </button>
+            {' '}to save your timeline and access it from any device.
+          </span>
+          <button
+            onClick={() => setNudgeDismissed(true)}
+            className="text-gray-400 hover:text-white ml-4 shrink-0"
+          >
+            &#10005;
+          </button>
+        </div>
+      )}
       {timelineError ? (
         <div className="flex items-center justify-center py-20">
           <div className="bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full text-center">
