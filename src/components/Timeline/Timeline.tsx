@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { TimelineHeader } from './TimelineHeader';
 import { TimelineGrid } from './TimelineGrid';
 import { TimelineCategoryLabels } from './TimelineCategoryLabels';
@@ -21,15 +21,19 @@ interface TimelineProps {
   onAddEvent?: (event: Omit<ITimelineEvent, 'id'>) => void;
   onUpdateEvent?: (event: ITimelineEvent) => void;
   scale: TimelineScale;
+  pendingScrollDate?: string | null;
+  onScrollComplete?: () => void;
 }
 
-export function Timeline({ 
-  events, 
-  categories, 
+export function Timeline({
+  events,
+  categories,
   isFullScreen,
   onAddEvent,
   onUpdateEvent,
-  scale
+  scale,
+  pendingScrollDate,
+  onScrollComplete
 }: TimelineProps) {
   // Filter visible categories and their events
   const visibleCategories = categories.filter(cat => cat.visible);
@@ -44,13 +48,37 @@ export function Timeline({
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [editingEvent, setEditingEvent] = useState<ITimelineEvent | null>(null);
   
-  const { 
-    scrollLeft, 
-    containerWidth, 
+  const {
+    scrollLeft,
+    containerWidth,
     contentWidth,
-    visibleRange 
+    visibleRange
   } = useTimelineScroll(scrollContainerRef, months.length * 4);
-  
+
+  const scrollToDate = useCallback((dateStr: string) => {
+    if (!months.length || !scrollContainerRef.current) return;
+
+    const [year, month] = dateStr.split('-').map(Number);
+    const monthIndex = months.findIndex(m => m.year === year && m.month === month - 1);
+    if (monthIndex === -1) return;
+
+    const pixelOffset = monthIndex * scale.monthWidth;
+    const viewportWidth = scrollContainerRef.current.clientWidth;
+    const targetLeft = pixelOffset - (viewportWidth / 2) + (scale.monthWidth / 2);
+
+    scrollContainerRef.current.scrollTo({ left: targetLeft, behavior: 'smooth' });
+  }, [months, scale.monthWidth]);
+
+  // Handle bulk-add scroll target from EventTableEditor
+  useEffect(() => {
+    if (pendingScrollDate) {
+      requestAnimationFrame(() => {
+        scrollToDate(pendingScrollDate);
+        onScrollComplete?.();
+      });
+    }
+  }, [pendingScrollDate, scrollToDate, onScrollComplete]);
+
   // Calculate stacks and heights for each category
   const categoryData = React.useMemo(() => {
     let currentOffset = 0;
@@ -106,7 +134,11 @@ export function Timeline({
     setShowEventModal(false);
     setEditingEvent(null);
     setSelectedDate(null);
-  }, [editingEvent, onAddEvent, onUpdateEvent]);
+
+    requestAnimationFrame(() => {
+      scrollToDate(eventData.startDate);
+    });
+  }, [editingEvent, onAddEvent, onUpdateEvent, scrollToDate]);
 
   return (
     <div className={isFullScreen ? 'h-[calc(100vh-6rem)]' : 'relative mb-16'}>
