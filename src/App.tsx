@@ -160,6 +160,24 @@ export function App() {
     }
   };
 
+  const handlePresentMode = () => {
+    if (timelineId) {
+      window.open(`/view/${timelineId}`, '_blank');
+    } else {
+      // Flush current state to localStorage synchronously so the new tab can read it
+      try {
+        localStorage.setItem('timeline_draft', JSON.stringify({
+          title, description, events, categories,
+          scale: currentScale.value,
+          savedAt: new Date().toISOString()
+        }));
+      } catch {
+        // Ignore storage errors
+      }
+      window.open('/view/local', '_blank');
+    }
+  };
+
   const handleClearTimeline = () => {
     clearEvents();
     if (!user) {
@@ -197,6 +215,7 @@ export function App() {
           setIsSignUp(true);
           setShowAuthModal(true);
         }}
+        onPresentMode={handlePresentMode}
         timelineId={timelineId}
         title={title}
         onTitleChange={setTitle}
