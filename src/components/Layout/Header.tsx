@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
-import { Settings, Columns3, Layers } from 'lucide-react';
 import { TimelineTitle } from '../TimelineTitle/TimelineTitle';
 import { SaveStatusIndicator } from '../SaveStatusIndicator/SaveStatusIndicator';
 import { SidePanel } from '../SidePanel/SidePanel';
 import { TimelineSettingsPanel } from '../Settings/TimelineSettingsPanel';
 import { EventTableEditor } from '../EventTableEditor/EventTableEditor';
 import { CategoriesPanel } from '../Categories/CategoriesPanel';
-import { useSidePanel } from '../../hooks/useSidePanel';
+import { FloatingToolbar } from '../FloatingToolbar/FloatingToolbar';
 import { TimelineEvent, CategoryConfig } from '../../types/event';
 import { useAuth } from '../../contexts/AuthContext';
 import { AuthModal } from '../Auth/AuthModal';
@@ -58,10 +57,14 @@ export function Header({
   saveStatus,
   lastSavedTime
 }: HeaderProps) {
-  const { isOpen: isSettingsOpen, open: openSettings, close: closeSettings } = useSidePanel();
-  const { isOpen: isCategoriesOpen, open: openCategories, close: closeCategories } = useSidePanel();
-  const [showTableEditor, setShowTableEditor] = useState(false);
+  const [activePanel, setActivePanel] = useState<'events' | 'categories' | 'settings' | null>(null);
   const { user } = useAuth();
+
+  const togglePanel = (panel: 'events' | 'categories' | 'settings') => {
+    setActivePanel(prev => prev === panel ? null : panel);
+  };
+
+  const closePanel = () => setActivePanel(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
 
@@ -86,31 +89,12 @@ export function Header({
           </div>
         </div>
 
-        <div className="pl-[32px] pr-8 py-1">
-          <div className="flex gap-3 justify-end items-center">
-            <button
-              onClick={() => setShowTableEditor(true)}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors"
-            >
-              <Columns3 size={20} />
-              Events
-            </button>
-            <button
-              onClick={openCategories}
-              className="flex items-center gap-2 bg-transparent text-white px-4 py-2 rounded-md transition-colors border-2 border-gray-700 hover:border-gray-600"
-            >
-              <Layers size={20} />
-              Categories
-            </button>
-            <button
-              onClick={openSettings}
-              className="flex items-center gap-2 bg-transparent text-white px-4 py-2 rounded-md transition-colors border-2 border-gray-700 hover:border-gray-600"
-            >
-              <Settings size={20} />
-              Settings
-            </button>
-          </div>
-        </div>
+        <FloatingToolbar
+          onEventsClick={() => togglePanel('events')}
+          onCategoriesClick={() => togglePanel('categories')}
+          onSettingsClick={() => togglePanel('settings')}
+          activePanel={activePanel}
+        />
       </header>
 
       <AuthModal 
@@ -128,8 +112,8 @@ export function Header({
       />
 
       <TimelineSettingsPanel
-        isOpen={isSettingsOpen}
-        onClose={closeSettings}
+        isOpen={activePanel === 'settings'}
+        onClose={closePanel}
         events={events}
         timelineTitle={title}
         timelineDescription={description}
@@ -144,15 +128,15 @@ export function Header({
       />
 
       <CategoriesPanel
-        isOpen={isCategoriesOpen}
-        onClose={closeCategories}
+        isOpen={activePanel === 'categories'}
+        onClose={closePanel}
         categories={categories}
         onCategoriesChange={onCategoriesChange}
       />
 
       <EventTableEditor
-        isOpen={showTableEditor}
-        onClose={() => setShowTableEditor(false)}
+        isOpen={activePanel === 'events'}
+        onClose={closePanel}
         events={events}
         onEventsChange={onEventsChange}
         categories={categories}
