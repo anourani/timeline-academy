@@ -1,4 +1,3 @@
-import React from 'react';
 import { TimelineEvent } from '../../types/event';
 import { getTimelineYearRange } from '../../utils/timelineUtils';
 import { DEFAULT_TIMELINE_DESCRIPTION } from '../../constants/defaults';
@@ -18,14 +17,30 @@ export function TimelineTitle({
   const displayDescription = description || DEFAULT_TIMELINE_DESCRIPTION;
 
   return (
-    <div className="flex-1 max-w-[800px] p-[24px_40px_32px_24px] bg-dark rounded-2xl">
-      <div className="text-gray-400 text-sm mb-1">
-        {timelineRange}
+    <div className="flex items-center gap-5 py-2">
+      {/* Stats column */}
+      <div className="flex flex-col gap-1 shrink-0">
+        <span className="font-mono text-xs font-light leading-[140%] text-gray-300">
+          {timelineRange}
+        </span>
+        <span className="font-mono text-xs font-light leading-[140%] text-gray-300">
+          {events.length} {events.length === 1 ? 'event' : 'events'}
+        </span>
       </div>
-      <h1 className="text-[48px] text-[#FBFBFB]">
+
+      {/* Divider */}
+      <div className="w-px self-stretch bg-[#1E1E1E]" />
+
+      {/* Title column */}
+      <h1 className="text-[32px] leading-[115%] text-[#F3F3F3] shrink-0">
         {title}
       </h1>
-      <p className="text-base text-gray-300 mt-2">
+
+      {/* Divider */}
+      <div className="w-px self-stretch bg-[#1E1E1E]" />
+
+      {/* Description column */}
+      <p className="font-mono text-xs font-light leading-[140%] text-gray-300 max-w-[560px]">
         {displayDescription}
       </p>
     </div>

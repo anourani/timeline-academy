@@ -76,16 +76,14 @@ export function Header({
   return (
     <>
       <header>
-        <div className="pl-[32px] pr-8 pt-12 pb-8">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <TimelineTitle 
-              title={title} 
-              description={description}
-              events={events}
-            />
-            <div className="flex-shrink-0">
-              <SaveStatusIndicator status={saveStatus} lastSaved={lastSavedTime} />
-            </div>
+        <div className="pl-[32px] pr-8 pt-8 pb-5 flex items-center justify-between">
+          <TimelineTitle
+            title={title}
+            description={description}
+            events={events}
+          />
+          <div className="shrink-0">
+            <SaveStatusIndicator status={saveStatus} lastSaved={lastSavedTime} />
           </div>
         </div>
 
