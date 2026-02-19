@@ -76,7 +76,7 @@ export function Header({
   return (
     <>
       <header>
-        <div className="pl-[32px] pr-8 pt-8 pb-5 flex items-center justify-between">
+        <div className="px-[120px] pt-[40px] pb-8 flex items-center justify-between">
           <TimelineTitle
             title={title}
             description={description}
