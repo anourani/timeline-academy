@@ -20,10 +20,10 @@ export function TimelineTitle({
     <div className="flex items-center gap-5 py-2">
       {/* Stats column */}
       <div className="flex flex-col gap-1 shrink-0">
-        <span className="font-mono text-xs font-light leading-[140%] text-gray-300">
+        <span className="font-mono text-sm font-light leading-[140%] text-gray-300">
           {timelineRange}
         </span>
-        <span className="font-mono text-xs font-light leading-[140%] text-gray-300">
+        <span className="font-mono text-sm font-light leading-[140%] text-gray-300">
           {events.length} {events.length === 1 ? 'event' : 'events'}
         </span>
       </div>
