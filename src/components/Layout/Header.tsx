@@ -89,14 +89,14 @@ export function Header({
   return (
     <>
       <header>
-        <div className="px-[120px] pt-[40px] pb-8 flex items-center justify-between">
+        <div className="px-[120px] pt-[40px] pb-8 flex flex-col items-center relative">
           <TimelineTitle
             title={title}
             description={description}
             events={events}
             onTitleChange={onTitleChange}
           />
-          <div className="shrink-0">
+          <div className="absolute right-8 top-[40px] shrink-0">
             <SaveStatusIndicator status={saveStatus} lastSaved={lastSavedTime} />
           </div>
         </div>
