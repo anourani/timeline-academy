@@ -150,7 +150,7 @@ export function TimelineViewer() {
       </div>
 
       {/* Timeline Content */}
-      <div className="px-[120px] pt-[40px] pb-8">
+      <div className="px-[120px] pt-[40px] pb-8 flex flex-col items-center">
         <TimelineTitle
           title={timeline.title}
           description={timeline.description}
