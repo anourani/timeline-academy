@@ -94,6 +94,7 @@ export function Header({
             title={title}
             description={description}
             events={events}
+            onTitleChange={onTitleChange}
           />
           <div className="shrink-0">
             <SaveStatusIndicator status={saveStatus} lastSaved={lastSavedTime} />

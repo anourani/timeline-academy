@@ -6,16 +6,19 @@ interface TimelineTitleProps {
   description: string;
   events: TimelineEvent[];
   showDescription?: boolean;
+  onTitleChange?: (title: string) => void;
 }
 
 export function TimelineTitle({
   title,
   description,
   events,
-  showDescription = false
+  showDescription = false,
+  onTitleChange
 }: TimelineTitleProps) {
   const timelineRange = getTimelineYearRange(events);
   const hasDescription = showDescription && description.trim().length > 0;
+  const isEditable = !!onTitleChange;
 
   return (
     <div className="flex items-center gap-5 py-2">
@@ -33,9 +36,24 @@ export function TimelineTitle({
       <div className="w-px self-stretch bg-[#1E1E1E]" />
 
       {/* Title column */}
-      <h1 className="text-[48px] leading-[115%] text-[#F3F3F3] shrink-0">
-        {title}
-      </h1>
+      {isEditable ? (
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => onTitleChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              (e.target as HTMLInputElement).blur();
+            }
+          }}
+          className="bg-transparent text-[48px] leading-[115%] text-[#F3F3F3] shrink-0 font-['Aleo'] font-medium tracking-[-0.01em] border-none outline-none focus:outline-none caret-white min-w-0"
+          style={{ width: `${Math.max(title.length, 1)}ch` }}
+        />
+      ) : (
+        <h1 className="text-[48px] leading-[115%] text-[#F3F3F3] shrink-0">
+          {title}
+        </h1>
+      )}
 
       {hasDescription && (
         <>
