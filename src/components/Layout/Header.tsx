@@ -6,6 +6,8 @@ import { TimelineSettingsPanel } from '../Settings/TimelineSettingsPanel';
 import { EventTableEditor } from '../EventTableEditor/EventTableEditor';
 import { CategoriesPanel } from '../Categories/CategoriesPanel';
 import { FloatingToolbar } from '../FloatingToolbar/FloatingToolbar';
+import { Modal } from '../Modal/Modal';
+import { EventForm } from '../EventForm/EventForm';
 import { TimelineEvent, CategoryConfig } from '../../types/event';
 import { useAuth } from '../../contexts/AuthContext';
 import { AuthModal } from '../Auth/AuthModal';
@@ -65,8 +67,19 @@ export function Header({
   };
 
   const closePanel = () => setActivePanel(null);
+  const [showAddEventModal, setShowAddEventModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
+
+  const handleAddEventClick = () => {
+    setActivePanel(null);
+    setShowAddEventModal(true);
+  };
+
+  const handleAddEventSubmit = (event: Omit<TimelineEvent, 'id'>) => {
+    onAddEvent(event);
+    setShowAddEventModal(false);
+  };
 
   const handleAuthClick = (signUp: boolean) => {
     setIsSignUp(signUp);
@@ -76,20 +89,20 @@ export function Header({
   return (
     <>
       <header>
-        <div className="pl-[32px] pr-8 pt-12 pb-8">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <TimelineTitle 
-              title={title} 
-              description={description}
-              events={events}
-            />
-            <div className="flex-shrink-0">
-              <SaveStatusIndicator status={saveStatus} lastSaved={lastSavedTime} />
-            </div>
+        <div className="px-[120px] pt-[40px] pb-8 flex items-center justify-between">
+          <TimelineTitle
+            title={title}
+            description={description}
+            events={events}
+            onTitleChange={onTitleChange}
+          />
+          <div className="shrink-0">
+            <SaveStatusIndicator status={saveStatus} lastSaved={lastSavedTime} />
           </div>
         </div>
 
         <FloatingToolbar
+          onAddEventClick={handleAddEventClick}
           onEventsClick={() => togglePanel('events')}
           onCategoriesClick={() => togglePanel('categories')}
           onSettingsClick={() => togglePanel('settings')}
@@ -97,7 +110,20 @@ export function Header({
         />
       </header>
 
-      <AuthModal 
+      {showAddEventModal && (
+        <Modal
+          isOpen={showAddEventModal}
+          onClose={() => setShowAddEventModal(false)}
+          title="Add New Event"
+        >
+          <EventForm
+            onSubmit={handleAddEventSubmit}
+            categories={categories.filter(c => c.visible)}
+          />
+        </Modal>
+      )}
+
+      <AuthModal
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
         defaultIsSignUp={isSignUp}

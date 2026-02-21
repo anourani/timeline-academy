@@ -1,7 +1,8 @@
 import React from 'react';
-import { Columns3, Layers, Settings } from 'lucide-react';
+import { Plus, Columns3, Layers, Settings } from 'lucide-react';
 
 interface FloatingToolbarProps {
+  onAddEventClick: () => void;
   onEventsClick: () => void;
   onCategoriesClick: () => void;
   onSettingsClick: () => void;
@@ -20,12 +21,12 @@ function ToolbarButton({ icon, label, isActive, onClick }: ToolbarButtonProps) {
     <button
       onClick={onClick}
       className={`
-        relative flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium
+        flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-medium
         transition-all duration-200 ease-out
         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500
         ${isActive
-          ? 'bg-white/15 text-white'
-          : 'text-gray-300 hover:bg-white/10 hover:text-white hover:scale-105 active:scale-95 active:bg-white/5'
+          ? 'bg-[#2A2A2A] text-white'
+          : 'bg-[#1A1A1A] text-white hover:bg-[#252525] active:bg-[#151515]'
         }
       `}
     >
@@ -40,9 +41,12 @@ function MobileToolbarButton({ icon, label, isActive, onClick }: ToolbarButtonPr
     <button
       onClick={onClick}
       className={`
-        flex flex-col items-center gap-1 px-3 py-1 rounded-lg text-xs font-medium
+        flex flex-col items-center gap-1 px-3 py-2 rounded-xl text-[11px] font-medium
         transition-all duration-200 ease-out
-        ${isActive ? 'text-white' : 'text-gray-400'}
+        ${isActive
+          ? 'bg-[#2A2A2A] text-white'
+          : 'bg-[#1A1A1A] text-gray-300'
+        }
       `}
     >
       {icon}
@@ -52,6 +56,7 @@ function MobileToolbarButton({ icon, label, isActive, onClick }: ToolbarButtonPr
 }
 
 export function FloatingToolbar({
+  onAddEventClick,
   onEventsClick,
   onCategoriesClick,
   onSettingsClick,
@@ -59,9 +64,15 @@ export function FloatingToolbar({
 }: FloatingToolbarProps) {
   return (
     <>
-      {/* Desktop: Floating pill toolbar */}
+      {/* Desktop */}
       <div className="sticky top-[44px] z-30 hidden md:flex justify-center py-3">
-        <div className="inline-flex items-center gap-1 px-2 py-1.5 bg-white/10 backdrop-blur-xl border border-white/15 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.1)] animate-toolbar-in">
+        <div className="inline-flex items-center gap-3">
+          <ToolbarButton
+            icon={<Plus size={18} />}
+            label="Add Event"
+            isActive={false}
+            onClick={onAddEventClick}
+          />
           <ToolbarButton
             icon={<Columns3 size={18} />}
             label="Events"
@@ -84,21 +95,27 @@ export function FloatingToolbar({
       </div>
 
       {/* Mobile: Fixed bottom bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 flex md:hidden justify-around items-center px-4 pt-2 pb-6 bg-white/10 backdrop-blur-xl border-t border-white/15">
+      <div className="fixed bottom-0 left-0 right-0 z-30 flex md:hidden justify-center items-center gap-2 px-4 pt-2 pb-6 bg-black">
         <MobileToolbarButton
-          icon={<Columns3 size={22} />}
+          icon={<Plus size={20} />}
+          label="Add"
+          isActive={false}
+          onClick={onAddEventClick}
+        />
+        <MobileToolbarButton
+          icon={<Columns3 size={20} />}
           label="Events"
           isActive={activePanel === 'events'}
           onClick={onEventsClick}
         />
         <MobileToolbarButton
-          icon={<Layers size={22} />}
+          icon={<Layers size={20} />}
           label="Categories"
           isActive={activePanel === 'categories'}
           onClick={onCategoriesClick}
         />
         <MobileToolbarButton
-          icon={<Settings size={22} />}
+          icon={<Settings size={20} />}
           label="Settings"
           isActive={activePanel === 'settings'}
           onClick={onSettingsClick}

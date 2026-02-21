@@ -11,14 +11,14 @@
   }
 
   h1 {
-    font-family: 'Droid Serif', serif;
+    font-family: 'Aleo', serif;
     letter-spacing: -0.01em;
     line-height: 1.15;
-    font-weight: 400;
+    font-weight: 500;
   }
 }
 
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono&family=Droid+Serif:wght@400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Aleo:wght@500&family=IBM+Plex+Mono:wght@300;400&display=swap');
 
 @layer utilities {
   .scrollbar-hide {
