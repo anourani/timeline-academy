@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Header } from './components/Layout/Header';
 import { GlobalNav } from './components/Header/GlobalNav';
 import { TimelineContainer } from './components/Timeline/TimelineContainer';
@@ -23,6 +24,8 @@ export function App() {
   const { scale, currentScale, handleScaleChange } = useTimelineScale();
   const { user } = useAuth();
   const { saveTimeline, timelineId, loadTimeline, error: timelineError, retryInitialLoad } = useTimeline();
+  const location = useLocation();
+  const routerNavigate = useNavigate();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showSampleTimeline, setShowSampleTimeline] = useState(false);
   const [pendingSwitchTimelineId, setPendingSwitchTimelineId] = useState<string | null>(null);
@@ -33,6 +36,7 @@ export function App() {
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
   const { loadDraft, saveDraft, clearDraft } = useLocalDraft();
+  const handledRouteStateRef = useRef(false);
 
   const timelineData = {
     id: timelineId,
@@ -108,6 +112,17 @@ export function App() {
       }
     }
   }, [user, draftHydrated]);
+
+  // Handle navigation from Homepage with a specific timeline to load
+  useEffect(() => {
+    const state = location.state as { timelineId?: string } | null;
+    if (state?.timelineId && user && !handledRouteStateRef.current) {
+      handledRouteStateRef.current = true;
+      switchTimeline(state.timelineId);
+      // Clear the state so refreshing doesn't re-trigger
+      routerNavigate('/', { replace: true, state: {} });
+    }
+  }, [location.state, user]);
 
   const handleTimelineSwitch = async (newTimelineId: string) => {
     if (saveStatus === 'saving') {
