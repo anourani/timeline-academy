@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { PanelLeft, Play, X, Video } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Modal } from '../Modal/Modal';
 
@@ -23,6 +24,7 @@ export function GlobalNav({
   onTitleChange
 }: GlobalNavProps) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isVideoTutorialOpen, setIsVideoTutorialOpen] = useState(false);
 
@@ -64,12 +66,22 @@ export function GlobalNav({
           </button>
           {user ? (
             <div className="flex items-center text-sm">
-              <span className="text-gray-400">Timelines</span>
+              <button
+                onClick={() => navigate('/timelines')}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                Timelines
+              </button>
               <span className="text-gray-500 mx-1.5">/</span>
               <span className="text-white font-medium">{title}</span>
             </div>
           ) : (
-            <span className="text-gray-400 text-sm">Timelines</span>
+            <button
+              onClick={() => navigate('/timelines')}
+              className="text-gray-400 hover:text-white transition-colors text-sm"
+            >
+              Timelines
+            </button>
           )}
         </div>
 
