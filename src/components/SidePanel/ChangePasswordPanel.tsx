@@ -22,8 +22,10 @@ export function ChangePasswordPanel({ onBack }: ChangePasswordPanelProps) {
 
     try {
       // First verify the current password
+      const { data: { user } } = await supabase.auth.getUser();
+      const email = user?.email || '';
       const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: supabase.auth.getUser().then(res => res.data.user?.email || ''),
+        email,
         password: currentPassword
       });
 
