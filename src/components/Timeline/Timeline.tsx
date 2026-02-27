@@ -7,9 +7,10 @@ import { TimelineScrollIndicator } from './TimelineScrollIndicator';
 import { TimelineOverview } from './TimelineOverview';
 import { TimelineEvent as ITimelineEvent, CategoryConfig } from '../../types/event';
 import { TimelineScale } from '../../types/timeline';
-import { getTimelineRange } from '../../utils/dateUtils';
+import { getTimelineRange, shiftEventDates } from '../../utils/dateUtils';
 import { calculateEventStacks } from '../../utils/eventStacking';
 import { useTimelineScroll } from '../../hooks/useTimelineScroll';
+import { useEventDrag } from '../../hooks/useEventDrag';
 import { EVENT_HEIGHT, CATEGORY_PADDING, CATEGORY_MIN_HEIGHT } from '../../constants/timeline';
 import { Modal } from '../Modal/Modal';
 import { EventForm } from '../EventForm/EventForm';
@@ -68,6 +69,19 @@ export function Timeline({
 
     scrollContainerRef.current.scrollTo({ left: targetLeft, behavior: 'smooth' });
   }, [months, scale.monthWidth]);
+
+  // Drag-and-drop event repositioning
+  const handleDragEnd = useCallback((eventId: string, deltaQuarters: number) => {
+    const event = events.find(e => e.id === eventId);
+    if (!event || deltaQuarters === 0 || !onUpdateEvent) return;
+
+    const { startDate: newStart, endDate: newEnd } = shiftEventDates(event, deltaQuarters, months);
+    if (newStart === event.startDate && newEnd === event.endDate) return;
+
+    onUpdateEvent({ ...event, startDate: newStart, endDate: newEnd });
+  }, [events, months, onUpdateEvent]);
+
+  const { dragState, handlePointerDown } = useEventDrag(scale, scrollContainerRef, handleDragEnd);
 
   // Handle bulk-add scroll target from EventTableEditor
   useEffect(() => {
@@ -198,13 +212,16 @@ export function Timeline({
                       categoryColor={visibleCategories.find(c => c.id === category.id)?.color}
                       onEventClick={onUpdateEvent ? handleEventClick : undefined}
                       scale={scale}
+                      isDragging={dragState.isDragging && dragState.draggedEventId === event.id}
+                      dragDeltaPixels={dragState.draggedEventId === event.id ? dragState.deltaPixels : 0}
+                      onPointerDown={onUpdateEvent ? handlePointerDown : undefined}
                     />
                   ))}
                 </div>
               ))}
 
-              {/* Add Event Cursor */}
-              {hoveredMonth !== null && onAddEvent && (
+              {/* Add Event Cursor — hidden during drag */}
+              {hoveredMonth !== null && onAddEvent && !dragState.isDragging && (
                 <div
                   className="absolute top-[64px] bottom-0 bg-[#FBFBFB]/25 pointer-events-none transition-transform duration-75 ease-out"
                   style={{
