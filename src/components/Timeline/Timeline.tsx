@@ -75,13 +75,13 @@ export function Timeline({
     const event = events.find(e => e.id === eventId);
     if (!event || deltaQuarters === 0 || !onUpdateEvent) return;
 
-    const { startDate: newStart, endDate: newEnd } = shiftEventDates(event, deltaQuarters, months);
+    const { startDate: newStart, endDate: newEnd } = shiftEventDates(event, deltaQuarters);
     if (newStart === event.startDate && newEnd === event.endDate) return;
 
     onUpdateEvent({ ...event, startDate: newStart, endDate: newEnd });
-  }, [events, months, onUpdateEvent]);
+  }, [events, onUpdateEvent]);
 
-  const { dragState, handlePointerDown } = useEventDrag(scale, scrollContainerRef, handleDragEnd);
+  const { dragState, handlePointerDown, justDraggedRef } = useEventDrag(scale, scrollContainerRef, handleDragEnd);
 
   // Handle bulk-add scroll target from EventTableEditor
   useEffect(() => {
@@ -121,8 +121,8 @@ export function Timeline({
   }, [visibleEvents, visibleCategories, months]);
 
   const handleMonthClick = useCallback((monthIndex: number) => {
-    if (!onAddEvent) return;
-    
+    if (!onAddEvent || justDraggedRef.current) return;
+
     const clickedMonth = months[monthIndex];
     if (clickedMonth) {
       const date = new Date(clickedMonth.year, clickedMonth.month, 1);
@@ -130,14 +130,14 @@ export function Timeline({
       setEditingEvent(null);
       setShowEventModal(true);
     }
-  }, [months, onAddEvent]);
+  }, [months, onAddEvent, justDraggedRef]);
 
   const handleEventClick = useCallback((event: ITimelineEvent) => {
-    if (!onUpdateEvent) return;
+    if (!onUpdateEvent || justDraggedRef.current) return;
     setEditingEvent(event);
     setSelectedDate(null);
     setShowEventModal(true);
-  }, [onUpdateEvent]);
+  }, [onUpdateEvent, justDraggedRef]);
 
   const handleSubmit = useCallback((eventData: Omit<ITimelineEvent, 'id'>) => {
     if (editingEvent) {

@@ -1,4 +1,3 @@
-import { Month } from '../types/timeline';
 import { TimelineEvent } from '../types/event';
 import { calculateTimelineRange, generateMonthsRange } from './timelineRange';
 
@@ -50,60 +49,29 @@ export function formatDateForCSV(dateStr: string): string {
 
 // Drag-and-drop date shifting utilities
 
-function getQuarter(day: number): number {
-  return Math.floor((day - 1) / 8);
-}
-
-function columnToDate(column: number, months: Month[]): string {
-  const monthIndex = Math.max(0, Math.min(Math.floor(column / 4), months.length - 1));
-  const quarter = Math.max(0, column - monthIndex * 4);
-  const month = months[monthIndex];
-
-  // Quarter to day: 0→1, 1→9, 2→17, 3→25
-  const day = Math.min(quarter, 3) * 8 + 1;
-  const daysInMonth = new Date(month.year, month.month + 1, 0).getDate();
-  const clampedDay = Math.max(1, Math.min(day, daysInMonth));
-
-  const mm = String(month.month + 1).padStart(2, '0');
-  const dd = String(clampedDay).padStart(2, '0');
-  return `${month.year}-${mm}-${dd}`;
-}
-
 export function shiftEventDates(
   event: { startDate: string; endDate: string },
   deltaQuarters: number,
-  months: Month[]
 ): { startDate: string; endDate: string } {
-  const [startYear, startMonth, startDay] = event.startDate.split('-').map(Number);
-  const [endYear, endMonth, endDay] = event.endDate.split('-').map(Number);
-
-  const startMonthIndex = months.findIndex(
-    m => m.year === startYear && m.month === startMonth - 1
-  );
-  const endMonthIndex = months.findIndex(
-    m => m.year === endYear && m.month === endMonth - 1
-  );
-
-  if (startMonthIndex === -1 || endMonthIndex === -1) {
+  if (deltaQuarters === 0) {
     return { startDate: event.startDate, endDate: event.endDate };
   }
 
-  const startColumn = startMonthIndex * 4 + getQuarter(startDay);
-  const endColumn = endMonthIndex * 4 + getQuarter(endDay);
+  // Use addDays to shift dates directly, preserving exact duration.
+  // Each quarter-column represents ~7 days (month split into 4 parts).
+  const daysDelta = deltaQuarters * 7;
+  const start = new Date(event.startDate + 'T00:00:00');
+  const end = new Date(event.endDate + 'T00:00:00');
 
-  // Clamp delta so neither date goes outside the timeline
-  const maxColumn = months.length * 4 - 1;
-  const clampedDelta = Math.max(
-    -startColumn,
-    Math.min(maxColumn - endColumn, deltaQuarters)
-  );
+  start.setDate(start.getDate() + daysDelta);
+  end.setDate(end.getDate() + daysDelta);
 
-  if (clampedDelta === 0) {
-    return { startDate: event.startDate, endDate: event.endDate };
-  }
-
-  return {
-    startDate: columnToDate(startColumn + clampedDelta, months),
-    endDate: columnToDate(endColumn + clampedDelta, months),
+  const fmt = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
   };
+
+  return { startDate: fmt(start), endDate: fmt(end) };
 }

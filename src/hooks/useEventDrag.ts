@@ -23,6 +23,7 @@ export function useEventDrag(
   onDragEnd: (eventId: string, deltaQuarters: number) => void
 ) {
   const [dragState, setDragState] = useState<DragState>(INITIAL_STATE);
+  const justDraggedRef = useRef(false);
 
   const dragRef = useRef({
     eventId: '',
@@ -75,8 +76,15 @@ export function useEventDrag(
     window.removeEventListener('blur', handlePointerUp);
 
     const ref = dragRef.current;
-    if (ref.isDragging && ref.lastDeltaQuarters !== 0) {
-      onDragEnd(ref.eventId, ref.lastDeltaQuarters);
+    if (ref.isDragging) {
+      // Flag that a drag just completed so downstream click handlers
+      // (e.g. TimelineGrid month click, event click) can suppress themselves.
+      justDraggedRef.current = true;
+      requestAnimationFrame(() => { justDraggedRef.current = false; });
+
+      if (ref.lastDeltaQuarters !== 0) {
+        onDragEnd(ref.eventId, ref.lastDeltaQuarters);
+      }
     }
 
     reset();
@@ -108,5 +116,5 @@ export function useEventDrag(
     };
   }, [handlePointerMove, handlePointerUp]);
 
-  return { dragState, handlePointerDown };
+  return { dragState, handlePointerDown, justDraggedRef };
 }
