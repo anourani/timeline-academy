@@ -1,4 +1,3 @@
-import { Month } from '../types/timeline';
 import { TimelineEvent } from '../types/event';
 import { calculateTimelineRange, generateMonthsRange } from './timelineRange';
 
@@ -46,4 +45,33 @@ export function isValidDateFormat(dateStr: string): boolean {
 export function formatDateForCSV(dateStr: string): string {
   const [year, month, day] = dateStr.split('-').map(Number);
   return `${month}/${day}/${year}`;
+}
+
+// Drag-and-drop date shifting utilities
+
+export function shiftEventDates(
+  event: { startDate: string; endDate: string },
+  deltaQuarters: number,
+): { startDate: string; endDate: string } {
+  if (deltaQuarters === 0) {
+    return { startDate: event.startDate, endDate: event.endDate };
+  }
+
+  // Use addDays to shift dates directly, preserving exact duration.
+  // Each quarter-column represents ~7 days (month split into 4 parts).
+  const daysDelta = deltaQuarters * 7;
+  const start = new Date(event.startDate + 'T00:00:00');
+  const end = new Date(event.endDate + 'T00:00:00');
+
+  start.setDate(start.getDate() + daysDelta);
+  end.setDate(end.getDate() + daysDelta);
+
+  const fmt = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  return { startDate: fmt(start), endDate: fmt(end) };
 }
