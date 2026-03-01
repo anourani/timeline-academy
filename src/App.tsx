@@ -15,6 +15,7 @@ import { useAutosave } from './hooks/useAutosave';
 import { AuthModal } from './components/Auth/AuthModal';
 import { UnsavedChangesModal } from './components/Modal/UnsavedChangesModal';
 import { useLocalDraft } from './hooks/useLocalDraft';
+import { NewTimelineScreen } from './components/NewTimeline/NewTimelineScreen';
 import { TimelineEvent } from './types/event';
 
 export function App() {
@@ -35,6 +36,7 @@ export function App() {
   const [pendingScrollDate, setPendingScrollDate] = useState<string | null>(null);
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
+  const [showCreationScreen, setShowCreationScreen] = useState(false);
   const { loadDraft, saveDraft, clearDraft } = useLocalDraft();
   const handledRouteStateRef = useRef(false);
 
@@ -71,6 +73,9 @@ export function App() {
         setEvents(draft.events);
         updateCategories(draft.categories);
         handleScaleChange(draft.scale);
+      } else {
+        // No draft exists — show creation screen for first-time visitors
+        setShowCreationScreen(true);
       }
       setDraftHydrated(true);
     }
@@ -118,13 +123,22 @@ export function App() {
     const state = location.state as { timelineId?: string } | null;
     if (state?.timelineId && user && !handledRouteStateRef.current) {
       handledRouteStateRef.current = true;
-      switchTimeline(state.timelineId);
+      if (state.timelineId === 'new') {
+        setShowCreationScreen(true);
+      } else {
+        switchTimeline(state.timelineId);
+      }
       // Clear the state so refreshing doesn't re-trigger
       routerNavigate('/', { replace: true, state: {} });
     }
   }, [location.state, user]);
 
   const handleTimelineSwitch = async (newTimelineId: string) => {
+    if (newTimelineId === 'new') {
+      setShowCreationScreen(true);
+      return;
+    }
+
     if (saveStatus === 'saving') {
       setPendingSwitchTimelineId(newTimelineId);
       setShowUnsavedChangesModal(true);
@@ -202,6 +216,21 @@ export function App() {
 
   const handleUpdateEvent = (updatedEvent: TimelineEvent) => {
     updateEvent(updatedEvent);
+  };
+
+  const handleManualCreate = async () => {
+    setShowCreationScreen(false);
+    if (user) {
+      await switchTimeline('new');
+    }
+    // For logged-out users, just hiding the creation screen reveals the empty timeline
+  };
+
+  const handleAIGenerate = (subject: string) => {
+    // Phase 2: This will call the Supabase Edge Function to generate a timeline via LLM.
+    // For now, fall through to manual create as a placeholder.
+    console.log('AI generate requested for:', subject);
+    handleManualCreate();
   };
 
   const handleBulkEventsChange = (newEvents: TimelineEvent[]) => {
@@ -309,6 +338,14 @@ export function App() {
         onClose={() => setShowAuthModal(false)}
         defaultIsSignUp={isSignUp}
       />
+      {showCreationScreen && (
+        <NewTimelineScreen
+          onAIGenerate={handleAIGenerate}
+          onManualCreate={handleManualCreate}
+          isGenerating={false}
+          error={null}
+        />
+      )}
       <UnsavedChangesModal
         isOpen={showUnsavedChangesModal}
         onClose={() => {
