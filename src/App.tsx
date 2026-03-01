@@ -16,6 +16,7 @@ import { AuthModal } from './components/Auth/AuthModal';
 import { UnsavedChangesModal } from './components/Modal/UnsavedChangesModal';
 import { useLocalDraft } from './hooks/useLocalDraft';
 import { NewTimelineScreen } from './components/NewTimeline/NewTimelineScreen';
+import { useAIMode } from './hooks/useAIMode';
 import { TimelineEvent } from './types/event';
 
 export function App() {
@@ -37,6 +38,7 @@ export function App() {
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
   const [showCreationScreen, setShowCreationScreen] = useState(false);
+  const { isGenerating, error: aiError, generate } = useAIMode();
   const { loadDraft, saveDraft, clearDraft } = useLocalDraft();
   const handledRouteStateRef = useRef(false);
 
@@ -226,11 +228,20 @@ export function App() {
     // For logged-out users, just hiding the creation screen reveals the empty timeline
   };
 
-  const handleAIGenerate = (subject: string) => {
-    // Phase 2: This will call the Supabase Edge Function to generate a timeline via LLM.
-    // For now, fall through to manual create as a placeholder.
-    console.log('AI generate requested for:', subject);
-    handleManualCreate();
+  const handleAIGenerate = async (subject: string) => {
+    try {
+      const { title: genTitle, description: genDesc, events: genEvents } = await generate(subject);
+      setTitle(genTitle);
+      setDescription(genDesc);
+      setEvents(genEvents);
+      setShowCreationScreen(false);
+      if (genEvents.length > 0) {
+        const earliest = genEvents.reduce((a, b) => a.startDate < b.startDate ? a : b);
+        setPendingScrollDate(earliest.startDate);
+      }
+    } catch {
+      // Error is already set in useAIMode — stays on creation screen showing error
+    }
   };
 
   const handleBulkEventsChange = (newEvents: TimelineEvent[]) => {
@@ -342,8 +353,8 @@ export function App() {
         <NewTimelineScreen
           onAIGenerate={handleAIGenerate}
           onManualCreate={handleManualCreate}
-          isGenerating={false}
-          error={null}
+          isGenerating={isGenerating}
+          error={aiError}
         />
       )}
       <UnsavedChangesModal

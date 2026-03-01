@@ -72,7 +72,7 @@ State: `const [showCreationScreen, setShowCreationScreen] = useState(false)`
 
 ---
 
-## Phase 2: Supabase Edge Function + LLM Integration
+## Phase 2: Supabase Edge Function + LLM Integration — DONE
 
 ### 2.1 Edge Function: `generate-timeline`
 
