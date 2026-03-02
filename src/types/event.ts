@@ -6,7 +6,7 @@ export interface TimelineEvent {
   category: TimelineCategory;
 }
 
-export type TimelineCategory = 'personal' | 'career' | 'education' | 'home';
+export type TimelineCategory = 'category_1' | 'category_2' | 'category_3' | 'category_4';
 
 export interface CategoryConfig {
   id: TimelineCategory;

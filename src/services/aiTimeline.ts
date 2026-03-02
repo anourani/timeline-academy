@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { getSessionToken } from './sessionToken';
+import { TimelineCategory } from '../types/event';
 
 export interface GeneratedTimeline {
   timelineTitle: string;
@@ -8,7 +9,7 @@ export interface GeneratedTimeline {
     title: string;
     startDate: string;
     endDate: string;
-    category: string;
+    category: TimelineCategory;
   }>;
 }
 

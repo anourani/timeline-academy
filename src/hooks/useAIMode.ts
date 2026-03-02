@@ -24,7 +24,7 @@ export function useAIMode() {
         title: e.title,
         startDate: e.startDate,
         endDate: e.endDate,
-        category: e.category as TimelineEvent['category'],
+        category: e.category,
       }));
 
       return {
