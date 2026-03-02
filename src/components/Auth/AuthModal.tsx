@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { Modal } from '../Modal/Modal';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabase } from '../../lib/supabase';
+import { supabase, isNetworkError, testConnection, getConnectionStatus } from '../../lib/supabase';
 import { OtpInput } from './OtpInput';
 
 interface AuthModalProps {
@@ -16,6 +16,12 @@ type OtpStep = 'phone_entry' | 'otp_verify';
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
+interface MappedError {
+  message: string;
+  isRetryable: boolean;
+  hint?: string;
+}
+
 function Spinner() {
   return (
     <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -25,50 +31,72 @@ function Spinner() {
   );
 }
 
-function mapErrorMessage(err: unknown): string {
-  if (!(err instanceof Error)) return 'An unexpected error occurred';
+function mapErrorMessage(err: unknown): MappedError {
+  if (!(err instanceof Error)) return { message: 'An unexpected error occurred.', isRetryable: false };
 
   const msg = err.message;
 
-  // Network errors
-  if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg === 'fetch') {
-    return 'Unable to connect. Please check your internet connection and try again.';
+  // Network / connection errors
+  if (isNetworkError(err)) {
+    const status = getConnectionStatus();
+
+    if (!status.ok && status.reason === 'project_paused') {
+      return {
+        message: 'The server appears to be offline.',
+        isRetryable: true,
+        hint: 'If using Supabase free tier, your project may be paused due to inactivity. Visit your Supabase dashboard to restore it.',
+      };
+    }
+
+    if (!status.ok && status.reason === 'auth_config') {
+      return {
+        message: 'Unable to reach the authentication server.',
+        isRetryable: true,
+        hint: 'The server URL or API key may be incorrect. Check your environment configuration.',
+      };
+    }
+
+    return {
+      message: 'Unable to connect. Please check your internet connection.',
+      isRetryable: true,
+      hint: 'If the problem persists, the server may be temporarily unavailable.',
+    };
   }
 
   // Email/password auth errors
   if (msg.includes('Email not confirmed')) {
-    return 'Please check your email to confirm your account before signing in.';
+    return { message: 'Please check your email to confirm your account before signing in.', isRetryable: false };
   }
   if (msg.includes('Invalid login credentials')) {
-    return 'Invalid email or password.';
+    return { message: 'Invalid email or password.', isRetryable: false };
   }
   if (msg.includes('Email rate limit exceeded')) {
-    return 'Too many attempts. Please try again later.';
+    return { message: 'Too many attempts. Please try again later.', isRetryable: false };
   }
 
   // Phone/OTP errors
   if (msg.includes('Phone number') || msg.includes('Invalid phone') || msg.includes('phone')) {
-    return 'Please enter a valid phone number with country code (e.g., +1 555 000 0000).';
+    return { message: 'Please enter a valid phone number with country code (e.g., +1 555 000 0000).', isRetryable: false };
   }
   if (msg.includes('Token has expired') || msg.includes('otp_expired')) {
-    return 'Code expired. Please request a new one.';
+    return { message: 'Code expired. Please request a new one.', isRetryable: false };
   }
   if (msg.includes('Invalid otp') || msg.includes('invalid token') || msg.includes('Token is invalid')) {
-    return 'Incorrect code. Please try again.';
+    return { message: 'Incorrect code. Please try again.', isRetryable: false };
   }
 
   // Rate limiting (generic)
   if (msg.includes('rate limit')) {
-    return 'Too many attempts. Please wait a moment and try again.';
+    return { message: 'Too many attempts. Please wait a moment and try again.', isRetryable: false };
   }
 
-  return msg;
+  return { message: msg, isRetryable: false };
 }
 
 export function AuthModal({ isOpen, onClose, defaultIsSignUp = false }: AuthModalProps) {
   // Shared state
   const [authMethod, setAuthMethod] = useState<AuthMethod>('phone');
-  const [error, setError] = useState('');
+  const [error, setError] = useState<MappedError | null>(null);
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -99,7 +127,7 @@ export function AuthModal({ isOpen, onClose, defaultIsSignUp = false }: AuthModa
   useEffect(() => {
     if (isOpen) {
       setAuthMethod('phone');
-      setError('');
+      setError(null);
       setMessage('');
       setIsLoading(false);
       setIsSignUp(defaultIsSignUp);
@@ -133,9 +161,35 @@ export function AuthModal({ isOpen, onClose, defaultIsSignUp = false }: AuthModa
     }, 1000);
   }, []);
 
+  const handleRetryConnection = useCallback(async () => {
+    setError(null);
+    setIsLoading(true);
+    try {
+      const status = await testConnection();
+      if (status.ok) {
+        setMessage('Connection restored. Please try again.');
+      } else {
+        setError({
+          message: status.message,
+          isRetryable: true,
+          hint: status.reason === 'project_paused'
+            ? 'Visit your Supabase dashboard to unpause your project.'
+            : undefined,
+        });
+      }
+    } catch {
+      setError({
+        message: 'Still unable to connect.',
+        isRetryable: true,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   const switchAuthMethod = (method: AuthMethod) => {
     setAuthMethod(method);
-    setError('');
+    setError(null);
     setMessage('');
     setEmail('');
     setPassword('');
@@ -171,14 +225,14 @@ export function AuthModal({ isOpen, onClose, defaultIsSignUp = false }: AuthModa
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError(null);
     setMessage('');
     setIsLoading(true);
 
     // Basic client-side phone validation
     const cleaned = phone.replace(/[\s()-]/g, '');
     if (!cleaned.startsWith('+') || cleaned.replace(/\D/g, '').length < 10) {
-      setError('Please enter a valid phone number with country code (e.g., +1 555 000 0000).');
+      setError({ message: 'Please enter a valid phone number with country code (e.g., +1 555 000 0000).', isRetryable: false });
       setIsLoading(false);
       return;
     }
@@ -196,7 +250,7 @@ export function AuthModal({ isOpen, onClose, defaultIsSignUp = false }: AuthModa
   };
 
   const handleVerifyOtp = async (code: string) => {
-    setError('');
+    setError(null);
     setIsLoading(true);
 
     const cleaned = phone.replace(/[\s()-]/g, '');
@@ -214,7 +268,7 @@ export function AuthModal({ isOpen, onClose, defaultIsSignUp = false }: AuthModa
 
   const handleResendOtp = async () => {
     if (resendCooldown > 0) return;
-    setError('');
+    setError(null);
     setIsLoading(true);
 
     const cleaned = phone.replace(/[\s()-]/g, '');
@@ -235,7 +289,7 @@ export function AuthModal({ isOpen, onClose, defaultIsSignUp = false }: AuthModa
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError(null);
     setMessage('');
     setIsLoading(true);
 
@@ -272,7 +326,7 @@ export function AuthModal({ isOpen, onClose, defaultIsSignUp = false }: AuthModa
 
   const handleForgotPassword = () => {
     setIsForgotPassword(true);
-    setError('');
+    setError(null);
     setMessage('');
     setPassword('');
     setSignUpSuccess(false);
@@ -281,7 +335,7 @@ export function AuthModal({ isOpen, onClose, defaultIsSignUp = false }: AuthModa
   const handleBackToSignIn = () => {
     setIsForgotPassword(false);
     setIsSignUp(false);
-    setError('');
+    setError(null);
     setMessage('');
     setSignUpSuccess(false);
   };
@@ -331,11 +385,24 @@ export function AuthModal({ isOpen, onClose, defaultIsSignUp = false }: AuthModa
         {/* Error display */}
         {error && (
           <div
-            className="p-3 bg-red-900/30 border border-red-500 rounded text-red-500"
+            className="p-3 bg-red-900/30 border border-red-500 rounded text-red-400"
             role="alert"
             aria-live="polite"
           >
-            {error}
+            <p className="font-medium">{error.message}</p>
+            {error.hint && (
+              <p className="text-xs text-red-400/70 mt-1">{error.hint}</p>
+            )}
+            {error.isRetryable && (
+              <button
+                type="button"
+                onClick={handleRetryConnection}
+                className="mt-2 text-sm text-blue-400 hover:text-blue-300 underline"
+                disabled={isLoading}
+              >
+                Test connection
+              </button>
+            )}
           </div>
         )}
 
@@ -413,7 +480,7 @@ export function AuthModal({ isOpen, onClose, defaultIsSignUp = false }: AuthModa
                 type="button"
                 onClick={() => {
                   setOtpStep('phone_entry');
-                  setError('');
+                  setError(null);
                   setMessage('');
                 }}
                 className="text-sm text-gray-400 hover:text-gray-300"
@@ -489,7 +556,7 @@ export function AuthModal({ isOpen, onClose, defaultIsSignUp = false }: AuthModa
                       type="button"
                       onClick={() => {
                         setIsSignUp(!isSignUp);
-                        setError('');
+                        setError(null);
                         setMessage('');
                       }}
                       className="text-blue-400 hover:text-blue-300"
