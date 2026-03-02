@@ -53,7 +53,7 @@ export function useTimelineMetadata(timelineIds: string[]): Map<string, Timeline
           title: '',
           startDate: e.start_date,
           endDate: e.end_date || e.start_date,
-          category: 'personal' as TimelineCategory,
+          category: 'category_1' as TimelineCategory,
         }));
 
         result.set(timelineId, {

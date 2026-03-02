@@ -82,7 +82,7 @@ Deno.serve(async (req: Request) => {
     const selectedProvider =
       (provider as "openai" | "claude") ||
       (Deno.env.get("DEFAULT_LLM_PROVIDER") as "openai" | "claude") ||
-      "openai";
+      "claude";
 
     const client = createLLMClient(selectedProvider);
     const result = await client.generateTimeline(subject.trim());
