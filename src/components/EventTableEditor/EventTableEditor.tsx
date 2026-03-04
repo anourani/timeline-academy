@@ -3,6 +3,7 @@ import { TimelineEvent, CategoryConfig } from '../../types/event';
 import { Trash2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
@@ -127,23 +128,20 @@ export function EventTableEditor({
         </DialogHeader>
 
         <div className="flex flex-col h-[calc(100vh-200px)]">
-          <div className="flex gap-2 mb-6">
-            <Button
-              variant={activeCategory === null ? "default" : "secondary"}
-              onClick={() => setActiveCategory(null)}
-            >
-              All
-            </Button>
-            {categories.map(cat => (
-              <Button
-                key={cat.id}
-                variant={activeCategory === cat.id ? "default" : "secondary"}
-                onClick={() => setActiveCategory(cat.id)}
-              >
-                {cat.label}
-              </Button>
-            ))}
-          </div>
+          <Tabs
+            value={activeCategory ?? "all"}
+            onValueChange={(value) => setActiveCategory(value === "all" ? null : value)}
+            className="mb-6"
+          >
+            <TabsList>
+              <TabsTrigger value="all">All</TabsTrigger>
+              {categories.map(cat => (
+                <TabsTrigger key={cat.id} value={cat.id}>
+                  {cat.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
 
           <div className="flex-1 flex flex-col min-h-0 border rounded-lg">
             <div className="rounded-t-lg bg-card">
