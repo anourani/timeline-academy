@@ -27,22 +27,16 @@ import { FeedbackPanel } from '@/components/FeedbackPanel/FeedbackPanel';
 
 interface GlobalNavProps {
   onViewTimelinesClick: () => void;
-  onSignInClick: () => void;
-  onSignUpClick: () => void;
   onPresentMode: () => void;
   timelineId: string | null;
   title: string;
-  onTitleChange: (title: string) => void;
 }
 
 export function GlobalNav({
   onViewTimelinesClick,
-  onSignInClick,
-  onSignUpClick,
   onPresentMode,
   timelineId,
   title,
-  onTitleChange
 }: GlobalNavProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -68,10 +62,9 @@ export function GlobalNav({
                   variant="ghost"
                   size="icon"
                   onClick={onViewTimelinesClick}
-                  className="text-muted-foreground hover:text-foreground"
                   aria-label="View Timelines"
                 >
-                  <PanelLeft size={20} />
+                  <PanelLeft />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">
@@ -80,70 +73,62 @@ export function GlobalNav({
             </Tooltip>
           </TooltipProvider>
 
-          {user ? (
-            <Breadcrumb>
-              <BreadcrumbList className="text-sm">
-                <BreadcrumbItem>
-                  <BreadcrumbLink asChild>
-                    <button
-                      onClick={() => navigate('/timelines')}
-                      className="text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      Timelines
-                    </button>
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator />
-                <BreadcrumbItem>
-                  <BreadcrumbPage>{title}</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
-          ) : (
-            <button
-              onClick={() => navigate('/timelines')}
-              className="text-muted-foreground hover:text-foreground transition-colors text-sm"
-            >
-              Timelines
-            </button>
-          )}
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem>
+                <BreadcrumbLink asChild>
+                  <button onClick={() => navigate('/timelines')}>
+                    Timelines
+                  </button>
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+              {user && (
+                <>
+                  <BreadcrumbSeparator />
+                  <BreadcrumbItem>
+                    <BreadcrumbPage>{title}</BreadcrumbPage>
+                  </BreadcrumbItem>
+                </>
+              )}
+            </BreadcrumbList>
+          </Breadcrumb>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
           {!user && (
             <Button
-              variant="ghost"
+              variant="outline"
+              size="sm"
               onClick={() => setIsVideoTutorialOpen(true)}
-              className="text-muted-foreground hover:text-foreground text-sm h-auto px-2 py-1"
             >
               How it Works
             </Button>
           )}
 
           <Button
-            variant="ghost"
+            variant="outline"
+            size="sm"
             onClick={() => setIsFeedbackOpen(true)}
-            className="text-muted-foreground hover:text-foreground text-sm h-auto px-2 py-1"
           >
             Feedback
           </Button>
 
           {user && (
             <Button
-              variant="ghost"
+              variant="outline"
+              size="sm"
               onClick={onPresentMode}
-              className="text-muted-foreground hover:text-foreground text-sm h-auto px-2 py-1 gap-1.5"
             >
-              <Play size={16} />
+              <Play />
               Present
             </Button>
           )}
 
           {user && (
             <Button
+              size="sm"
               onClick={handleShare}
               disabled={!timelineId}
-              className="text-sm h-auto px-4 py-1.5"
             >
               Share
             </Button>
