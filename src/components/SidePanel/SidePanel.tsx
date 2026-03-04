@@ -192,9 +192,9 @@ export function SidePanel({
                     <KeyRound size={20} className="text-muted-foreground" />
                   </Button>
                   <Button
-                    variant="ghost"
+                    variant="destructive"
                     onClick={() => setShowSignOutConfirmation(true)}
-                    className="w-full justify-between px-4 py-3 h-auto text-destructive hover:text-destructive"
+                    className="w-full justify-between px-4 py-3 h-auto"
                   >
                     <span>Sign Out</span>
                     <LogOut size={20} />

@@ -210,7 +210,7 @@ export function TimelineSettingsPanel({
                 <Label>Import / Export</Label>
                 <div className="space-y-2 mt-3">
                   <Button
-                    variant="secondary"
+                    variant="outline"
                     onClick={() => fileInputRef.current?.click()}
                     className="w-full justify-between px-4 py-3 h-auto"
                   >
@@ -219,7 +219,7 @@ export function TimelineSettingsPanel({
                   </Button>
 
                   <Button
-                    variant="secondary"
+                    variant="outline"
                     onClick={handleDownloadTemplate}
                     className="w-full justify-between px-4 py-3 h-auto"
                   >
@@ -228,7 +228,7 @@ export function TimelineSettingsPanel({
                   </Button>
 
                   <Button
-                    variant="secondary"
+                    variant="outline"
                     onClick={handleExportExcel}
                     className="w-full justify-between px-4 py-3 h-auto"
                   >
@@ -242,18 +242,18 @@ export function TimelineSettingsPanel({
                 <Label>Danger Zone</Label>
                 <div className="space-y-2 mt-3">
                   <Button
-                    variant="ghost"
+                    variant="destructive"
                     onClick={() => setShowClearConfirmation(true)}
-                    className="w-full justify-between px-4 py-3 h-auto text-destructive hover:text-destructive hover:bg-destructive/10"
+                    className="w-full justify-between px-4 py-3 h-auto"
                   >
                     <span>Clear Timeline</span>
                     <Trash2 size={20} />
                   </Button>
 
                   <Button
-                    variant="ghost"
+                    variant="destructive"
                     onClick={() => setShowResetConfirmation(true)}
-                    className="w-full justify-between px-4 py-3 h-auto text-destructive hover:text-destructive hover:bg-destructive/10"
+                    className="w-full justify-between px-4 py-3 h-auto"
                   >
                     <span>Reset All Data</span>
                     <RotateCcw size={20} />
