@@ -1,4 +1,6 @@
 import React from 'react';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 
 interface ScaleSelectorProps {
   value: 'large' | 'small';
@@ -14,30 +16,24 @@ export function ScaleSelector({ value, onChange }: ScaleSelectorProps) {
 
   return (
     <div className="space-y-2">
-      <label className="block text-sm font-medium text-gray-300">Timeline Scale</label>
-      <div className="flex bg-gray-700 rounded-lg p-1">
-        <button
+      <Label>Timeline Scale</Label>
+      <div className="flex bg-secondary rounded-lg p-1">
+        <Button
           type="button"
+          variant={value === 'large' ? 'default' : 'ghost'}
           onClick={() => handleScaleChange('large')}
-          className={`flex-1 px-4 py-2 text-base rounded-md transition-all duration-200 ${
-            value === 'large'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'text-gray-300 hover:text-white'
-          }`}
+          className="flex-1"
         >
           Large
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant={value === 'small' ? 'default' : 'ghost'}
           onClick={() => handleScaleChange('small')}
-          className={`flex-1 px-4 py-2 text-base rounded-md transition-all duration-200 ${
-            value === 'small'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'text-gray-300 hover:text-white'
-          }`}
+          className="flex-1"
         >
           Small
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -1,16 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { X, FileDown, FileUp, Trash2, RotateCcw, Download } from 'lucide-react';
+import { FileDown, FileUp, Trash2, RotateCcw, Download } from 'lucide-react';
 import { TimelineEvent, CategoryConfig } from '../../types/event';
 import type { AddEventsResult } from '../../hooks/useEvents';
 import { exportEventsToExcel } from '../../utils/excelExport';
-import { OptionButton } from '../SidePanel/OptionButton';
-import { Modal } from '../Modal/Modal';
 import { ConfirmationModal } from '../Modal/ConfirmationModal';
 import { ScaleSelector } from './ScaleSelector';
-import { lockScroll, unlockScroll } from '../../utils/scrollLock';
 import { DEFAULT_TIMELINE_DESCRIPTION } from '../../constants/defaults';
 import { utils, writeFile } from 'xlsx';
 import { read } from 'xlsx';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet';
 
 interface TimelineSettingsPanelProps {
   isOpen: boolean;
@@ -46,20 +53,11 @@ export function TimelineSettingsPanel({
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const maxDescriptionLength = 260;
 
-  // Initialize description when panel opens
   useEffect(() => {
     if (isOpen && !timelineDescription) {
       onDescriptionChange(DEFAULT_TIMELINE_DESCRIPTION);
     }
   }, [isOpen, timelineDescription, onDescriptionChange]);
-
-  // Lock/unlock scroll when panel opens/closes
-  useEffect(() => {
-    if (isOpen) {
-      lockScroll();
-      return () => unlockScroll();
-    }
-  }, [isOpen]);
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onTitleChange(e.target.value);
@@ -77,10 +75,7 @@ export function TimelineSettingsPanel({
   };
 
   const handleDownloadTemplate = () => {
-    // Create workbook
     const wb = utils.book_new();
-    
-    // Create headers and instructions
     const headers = ['Event Title', 'Start Date', 'End Date', 'Category'];
     const instructions = [
       '55 char limit',
@@ -88,22 +83,14 @@ export function TimelineSettingsPanel({
       'Format: MM/DD/YYYY',
       'Must match a timeline category'
     ];
-    
-    // Create sample data using existing category labels
     const data = [
       headers,
       instructions,
       ['Sample Event 1', '1/15/2024', '1/20/2024', categories[0]?.label || 'Personal Life'],
       ['Sample Event 2', '10/14/2024', '10/16/2024', categories[1]?.label || 'Career']
     ];
-    
-    // Create worksheet
     const ws = utils.aoa_to_sheet(data);
-    
-    // Add worksheet to workbook
     utils.book_append_sheet(wb, ws, 'Timeline Events');
-    
-    // Save file
     writeFile(wb, 'timeline-template.xlsx');
   };
 
@@ -119,41 +106,29 @@ export function TimelineSettingsPanel({
     if (!file) return;
 
     try {
-      // Check file type
       if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-        // Process Excel file
         const data = await file.arrayBuffer();
         const workbook = read(data, { cellDates: true });
-        
-        // Get first sheet
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        
-        // Convert to JSON, skipping first two rows (headers and instructions)
         const rows = utils.sheet_to_json<any>(worksheet);
         const events = rows.slice(2).map(row => {
-          // Format dates properly
           let startDate = '';
           let endDate = '';
-          
           if (row['Start Date']) {
             const startDateObj = new Date(row['Start Date']);
             startDate = startDateObj.toISOString().split('T')[0];
           }
-          
           if (row['End Date']) {
             const endDateObj = new Date(row['End Date']);
             endDate = endDateObj.toISOString().split('T')[0];
           } else {
             endDate = startDate;
           }
-          
-          // Find matching category
           const categoryLabel = row['Category'];
-          const category = categories.find(c => 
+          const category = categories.find(c =>
             c.label.toLowerCase() === categoryLabel?.toLowerCase()
           );
-          
           return {
             title: row['Event Title'] || '',
             startDate,
@@ -161,7 +136,7 @@ export function TimelineSettingsPanel({
             category: category?.id || categories[0]?.id
           };
         }).filter(event => event.title && event.startDate && event.category);
-        
+
         if (events.length > 0) {
           const result = onImportEvents(events);
           if (result.added === 0) {
@@ -177,8 +152,7 @@ export function TimelineSettingsPanel({
       console.error('Error importing file:', error);
       alert('Error importing file. Please check the format and try again.');
     }
-    
-    // Reset file input
+
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -193,111 +167,103 @@ export function TimelineSettingsPanel({
         accept=".xlsx,.xls"
         style={{ display: 'none' }}
       />
-      <div 
-        className={`fixed inset-0 bg-black/50 z-40 transition-opacity duration-250 ease-in-out ${
-          isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        }`}
-        onClick={onClose}
-      />
-      
-      <div 
-        className={`fixed right-0 top-0 h-full w-[400px] min-w-[360px] bg-gray-800 z-50 shadow-xl transform transition-transform duration-250 ease-in-out ${
-          isOpen ? 'translate-x-0' : 'translate-x-full'
-        }`}
-      >
-        <div className="flex justify-between items-center px-6 py-4 border-b border-gray-700">
-          <h2 className="text-xl font-semibold text-white">Settings</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors p-2 rounded-full hover:bg-gray-700"
-          >
-            <X size={20} />
-          </button>
-        </div>
 
-        <div className="p-4 space-y-4 max-h-[calc(100vh-5rem)] overflow-y-auto scrollbar-hide">
-          <div>
-            <label htmlFor="timelineTitle" className="block text-sm font-medium text-gray-300 mb-1">
-              Timeline Title
-            </label>
-            <input
-              type="text"
-              id="timelineTitle"
-              value={timelineTitle}
-              onChange={handleTitleChange}
-              className="w-full px-3 py-2 bg-gray-700 rounded-md text-white border border-gray-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-            />
-          </div>
+      <Sheet open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+        <SheetContent side="right" className="w-[400px] min-w-[360px] p-0">
+          <SheetDescription className="sr-only">Timeline settings panel</SheetDescription>
+          <div className="h-full flex flex-col">
+            <SheetHeader className="px-6 py-4 border-b">
+              <SheetTitle className="text-xl font-semibold">Settings</SheetTitle>
+            </SheetHeader>
 
-          <div>
-            <label htmlFor="timelineDescription" className="block text-sm font-medium text-gray-300 mb-1">
-              Description <span className="text-gray-400">({timelineDescription.length}/{maxDescriptionLength})</span>
-            </label>
-            <textarea
-              id="timelineDescription"
-              value={timelineDescription}
-              onChange={handleDescriptionChange}
-              rows={3}
-              maxLength={maxDescriptionLength}
-              className="w-full px-3 py-2 bg-gray-700 rounded-md text-white border border-gray-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none resize-none"
-            />
-          </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide">
+              <div>
+                <Label htmlFor="timelineTitle">Timeline Title</Label>
+                <Input
+                  type="text"
+                  id="timelineTitle"
+                  value={timelineTitle}
+                  onChange={handleTitleChange}
+                  className="mt-1"
+                />
+              </div>
 
-          <div className="border-t border-gray-700 pt-4">
-            <ScaleSelector value={scale} onChange={onScaleChange} />
-          </div>
+              <div>
+                <Label htmlFor="timelineDescription">
+                  Description <span className="text-muted-foreground">({timelineDescription.length}/{maxDescriptionLength})</span>
+                </Label>
+                <textarea
+                  id="timelineDescription"
+                  value={timelineDescription}
+                  onChange={handleDescriptionChange}
+                  rows={3}
+                  maxLength={maxDescriptionLength}
+                  className="mt-1 w-full px-3 py-2 bg-background rounded-md border border-input focus:border-ring focus:ring-1 focus:ring-ring outline-none resize-none text-foreground"
+                />
+              </div>
 
-          <div className="border-t border-gray-700 pt-4">
-            <h3 className="block text-sm font-medium text-gray-300">Import / Export</h3>
-            <div className="space-y-2 mt-3">
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full flex items-center justify-between px-4 py-3 bg-gray-700 hover:bg-gray-600 rounded-md transition-colors"
-              >
-                <span className="text-white">Import Data</span>
-                <FileUp size={20} className="text-gray-400" />
-              </button>
-              
-              <button
-                onClick={handleDownloadTemplate}
-                className="w-full flex items-center justify-between px-4 py-3 bg-gray-700 hover:bg-gray-600 rounded-md transition-colors"
-              >
-                <span className="text-white">Download Template to Import Data</span>
-                <Download size={20} className="text-gray-400" />
-              </button>
-              
-              <button
-                onClick={handleExportExcel}
-                className="w-full flex items-center justify-between px-4 py-3 bg-gray-700 hover:bg-gray-600 rounded-md transition-colors"
-              >
-                <span className="text-white">Export Data</span>
-                <FileDown size={20} className="text-gray-400" />
-              </button>
+              <div className="border-t pt-4">
+                <ScaleSelector value={scale} onChange={onScaleChange} />
+              </div>
+
+              <div className="border-t pt-4">
+                <Label>Import / Export</Label>
+                <div className="space-y-2 mt-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full justify-between px-4 py-3 h-auto"
+                  >
+                    <span>Import Data</span>
+                    <FileUp size={20} className="text-muted-foreground" />
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    onClick={handleDownloadTemplate}
+                    className="w-full justify-between px-4 py-3 h-auto"
+                  >
+                    <span>Download Template to Import Data</span>
+                    <Download size={20} className="text-muted-foreground" />
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    onClick={handleExportExcel}
+                    className="w-full justify-between px-4 py-3 h-auto"
+                  >
+                    <span>Export Data</span>
+                    <FileDown size={20} className="text-muted-foreground" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="border-t pt-4">
+                <Label>Danger Zone</Label>
+                <div className="space-y-2 mt-3">
+                  <Button
+                    variant="destructive"
+                    onClick={() => setShowClearConfirmation(true)}
+                    className="w-full justify-between px-4 py-3 h-auto"
+                  >
+                    <span>Clear Timeline</span>
+                    <Trash2 size={20} />
+                  </Button>
+
+                  <Button
+                    variant="destructive"
+                    onClick={() => setShowResetConfirmation(true)}
+                    className="w-full justify-between px-4 py-3 h-auto"
+                  >
+                    <span>Reset All Data</span>
+                    <RotateCcw size={20} />
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
-
-          <div className="border-t border-gray-700 pt-4">
-            <h3 className="block text-sm font-medium text-gray-300">Danger Zone</h3>
-            <div className="space-y-2 mt-3">
-              <button
-                onClick={() => setShowClearConfirmation(true)}
-                className="w-full flex items-center justify-between px-4 py-3 bg-red-950/50 hover:bg-red-900/50 rounded-md transition-colors"
-              >
-                <span className="text-red-400">Clear Timeline</span>
-                <Trash2 size={20} className="text-red-400" />
-              </button>
-              
-              <button
-                onClick={() => setShowResetConfirmation(true)}
-                className="w-full flex items-center justify-between px-4 py-3 bg-red-950/50 hover:bg-red-900/50 rounded-md transition-colors"
-              >
-                <span className="text-red-400">Reset All Data</span>
-                <RotateCcw size={20} className="text-red-400" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+        </SheetContent>
+      </Sheet>
 
       <ConfirmationModal
         isOpen={showClearConfirmation}

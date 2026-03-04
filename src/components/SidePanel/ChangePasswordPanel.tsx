@@ -1,7 +1,13 @@
 import React, { useState } from 'react';
 import { ArrowLeft, KeyRound } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 
 interface ChangePasswordPanelProps {
   onBack: () => void;
@@ -21,7 +27,6 @@ export function ChangePasswordPanel({ onBack }: ChangePasswordPanelProps) {
     setIsLoading(true);
 
     try {
-      // First verify the current password
       const { data: { user } } = await supabase.auth.getUser();
       const email = user?.email || '';
       const { error: signInError } = await supabase.auth.signInWithPassword({
@@ -33,7 +38,6 @@ export function ChangePasswordPanel({ onBack }: ChangePasswordPanelProps) {
         throw new Error('Current password is incorrect');
       }
 
-      // Update to the new password
       const { error: updateError } = await supabase.auth.updateUser({
         password: newPassword
       });
@@ -43,8 +47,7 @@ export function ChangePasswordPanel({ onBack }: ChangePasswordPanelProps) {
       setSuccess(true);
       setCurrentPassword('');
       setNewPassword('');
-      
-      // Go back to main panel after 2 seconds
+
       setTimeout(() => {
         onBack();
       }, 2000);
@@ -57,19 +60,18 @@ export function ChangePasswordPanel({ onBack }: ChangePasswordPanelProps) {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex items-center gap-2 p-4 border-b border-gray-700">
+      <SheetHeader className="px-6 py-4 border-b">
         <button
           onClick={onBack}
-          className="text-gray-400 hover:text-white transition-colors flex items-center gap-2"
+          className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-2"
         >
           <ArrowLeft size={20} />
           <span>Back</span>
         </button>
-      </div>
+        <SheetTitle className="text-xl font-semibold">Change Password</SheetTitle>
+      </SheetHeader>
 
       <form onSubmit={handleSubmit} className="flex-1 p-4">
-        <h2 className="text-xl font-semibold mb-6">Change Password</h2>
-
         {error && (
           <div className="mb-4 p-3 bg-red-900/30 border border-red-500 rounded text-red-500">
             {error}
@@ -84,50 +86,46 @@ export function ChangePasswordPanel({ onBack }: ChangePasswordPanelProps) {
 
         <div className="space-y-4">
           <div>
-            <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-300 mb-1">
-              Current Password
-            </label>
-            <div className="relative">
-              <input
+            <Label htmlFor="currentPassword">Current Password</Label>
+            <div className="relative mt-1">
+              <Input
                 type="password"
                 id="currentPassword"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
-                className="w-full pl-10 pr-3 py-2 bg-gray-700 rounded-md text-white"
+                className="pl-10"
                 required
                 minLength={6}
               />
-              <KeyRound size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <KeyRound size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             </div>
           </div>
 
           <div>
-            <label htmlFor="newPassword" className="block text-sm font-medium text-gray-300 mb-1">
-              New Password
-            </label>
-            <div className="relative">
-              <input
+            <Label htmlFor="newPassword">New Password</Label>
+            <div className="relative mt-1">
+              <Input
                 type="password"
                 id="newPassword"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full pl-10 pr-3 py-2 bg-gray-700 rounded-md text-white"
+                className="pl-10"
                 required
                 minLength={6}
               />
-              <KeyRound size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <KeyRound size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             </div>
           </div>
         </div>
 
         <div className="mt-6">
-          <button
+          <Button
             type="submit"
             disabled={isLoading}
-            className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-blue-800 disabled:cursor-not-allowed"
+            className="w-full"
           >
             {isLoading ? 'Changing Password...' : 'Change Password'}
-          </button>
+          </Button>
         </div>
       </form>
     </div>

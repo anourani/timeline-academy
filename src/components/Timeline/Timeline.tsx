@@ -12,8 +12,13 @@ import { calculateEventStacks } from '../../utils/eventStacking';
 import { useTimelineScroll } from '../../hooks/useTimelineScroll';
 import { useEventDrag } from '../../hooks/useEventDrag';
 import { EVENT_HEIGHT, CATEGORY_PADDING, CATEGORY_MIN_HEIGHT } from '../../constants/timeline';
-import { Modal } from '../Modal/Modal';
 import { EventForm } from '../EventForm/EventForm';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface TimelineProps {
   events: ITimelineEvent[];
@@ -253,23 +258,31 @@ export function Timeline({
         )}
       </div>
 
-      {/* Event Modal */}
-      <Modal
-        isOpen={showEventModal}
-        onClose={() => {
-          setShowEventModal(false);
-          setEditingEvent(null);
-          setSelectedDate(null);
+      {/* Event Dialog */}
+      <Dialog
+        open={showEventModal}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowEventModal(false);
+            setEditingEvent(null);
+            setSelectedDate(null);
+          }
         }}
-        title={editingEvent ? 'Edit Event' : 'Add New Event'}
       >
-        <EventForm 
-          onSubmit={handleSubmit}
-          categories={visibleCategories}
-          initialStartDate={selectedDate}
-          initialEvent={editingEvent}
-        />
-      </Modal>
+        <DialogContent className="bg-gray-800 border-gray-700 max-w-[550px]">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold text-white">
+              {editingEvent ? 'Edit Event' : 'Add New Event'}
+            </DialogTitle>
+          </DialogHeader>
+          <EventForm
+            onSubmit={handleSubmit}
+            categories={visibleCategories}
+            initialStartDate={selectedDate}
+            initialEvent={editingEvent}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

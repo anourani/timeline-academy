@@ -1,8 +1,14 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Plus } from 'lucide-react';
-import { Modal } from '../Modal/Modal';
 import { EventForm } from '../EventForm/EventForm';
 import { TimelineEvent, CategoryConfig } from '../../types/event';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface AddEventButtonProps {
   onAddEvent: (event: Omit<TimelineEvent, 'id'>) => void;
@@ -19,21 +25,19 @@ export function AddEventButton({ onAddEvent, categories }: AddEventButtonProps) 
 
   return (
     <>
-      <button
-        onClick={() => setIsModalOpen(true)}
-        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors"
-      >
+      <Button onClick={() => setIsModalOpen(true)} className="gap-2">
         <Plus size={20} />
         Add Event
-      </button>
-      
-      <Modal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title="Add New Event"
-      >
-        <EventForm onSubmit={handleSubmit} categories={categories} />
-      </Modal>
+      </Button>
+
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="max-w-[550px]">
+          <DialogHeader>
+            <DialogTitle>Add New Event</DialogTitle>
+          </DialogHeader>
+          <EventForm onSubmit={handleSubmit} categories={categories} />
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

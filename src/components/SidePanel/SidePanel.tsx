@@ -1,14 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, KeyRound, LogOut, AlertTriangle } from 'lucide-react';
-import { OptionButton } from './OptionButton';
+import { User, KeyRound, LogOut, AlertTriangle } from 'lucide-react';
 import { ConfirmationModal } from '../Modal/ConfirmationModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTimelines } from '../../hooks/useTimelines';
 import { TimelineList } from '../Timeline/TimelineList';
 import { AccountDetailsPanel } from './AccountDetailsPanel';
 import { ChangePasswordPanel } from './ChangePasswordPanel';
-import { lockScroll, unlockScroll } from '../../utils/scrollLock';
 import { supabase } from '../../lib/supabase';
+import { Button } from '@/components/ui/button';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet';
 
 type SubPanel = 'main' | 'account' | 'password';
 
@@ -34,19 +40,11 @@ export function SidePanel({
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [timelineToDelete, setTimelineToDelete] = useState<string | null>(null);
 
-  // Only refresh timelines when panel opens
   useEffect(() => {
     if (isOpen && user) {
       loadTimelines();
     }
-  }, [isOpen, user]); // Only depend on isOpen and user, not loadTimelines
-
-  useEffect(() => {
-    if (isOpen) {
-      lockScroll();
-      return () => unlockScroll();
-    }
-  }, [isOpen]);
+  }, [isOpen, user]);
 
   const handleTimelineSelect = (selectedTimelineId: string) => {
     if (selectedTimelineId !== timelineId) {
@@ -77,16 +75,12 @@ export function SidePanel({
 
   const handleDeleteTimeline = async () => {
     if (!timelineToDelete) return;
-
     try {
       const { error: deleteError } = await supabase
         .from('timelines')
         .delete()
         .eq('id', timelineToDelete);
-
       if (deleteError) throw deleteError;
-
-      // If we're deleting the active timeline, switch to another one or create new
       if (timelineToDelete === timelineId) {
         const remainingTimeline = timelines.find(t => t.id !== timelineToDelete);
         if (remainingTimeline) {
@@ -95,8 +89,6 @@ export function SidePanel({
           onTimelineSwitch('new');
         }
       }
-
-      // Refresh the timelines list
       loadTimelines();
     } catch (error) {
       console.error('Error deleting timeline:', error);
@@ -116,25 +108,19 @@ export function SidePanel({
     if (!user) {
       return (
         <div className="text-center py-8 px-4">
-          <h3 className="text-lg font-medium text-white mb-2">
+          <h3 className="text-lg font-medium mb-2">
             Sign in to access your timelines
           </h3>
-          <p className="text-gray-400 mb-6">
+          <p className="text-muted-foreground mb-6">
             Create up to 3 timelines and access them from anywhere
           </p>
           <div className="space-y-2">
-            <button
-              onClick={() => handleAuthClick(false)}
-              className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-            >
+            <Button onClick={() => handleAuthClick(false)} className="w-full">
               Sign In
-            </button>
-            <button
-              onClick={() => handleAuthClick(true)}
-              className="w-full py-2 px-4 bg-gray-700 text-white rounded-md hover:bg-gray-600 transition-colors"
-            >
+            </Button>
+            <Button variant="secondary" onClick={() => handleAuthClick(true)} className="w-full">
               Create Account
-            </button>
+            </Button>
           </div>
         </div>
       );
@@ -143,24 +129,21 @@ export function SidePanel({
     if (error) {
       return (
         <div className="text-center py-8 px-4">
-          <div className="flex items-center justify-center gap-2 text-red-400 mb-4">
+          <div className="flex items-center justify-center gap-2 text-destructive mb-4">
             <AlertTriangle size={24} />
             <p className="text-lg font-medium">Connection Error</p>
           </div>
-          <p className="text-gray-300 mb-4">{error}</p>
-          <button
-            onClick={() => loadTimelines()}
-            className="px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-600 transition-colors"
-          >
+          <p className="text-muted-foreground mb-4">{error}</p>
+          <Button variant="secondary" onClick={() => loadTimelines()}>
             Try Again
-          </button>
+          </Button>
         </div>
       );
     }
 
     if (isLoading) {
       return (
-        <div className="text-gray-400 text-center py-4">Loading timelines...</div>
+        <div className="text-muted-foreground text-center py-4">Loading timelines...</div>
       );
     }
 
@@ -177,65 +160,55 @@ export function SidePanel({
 
   return (
     <>
-      <div 
-        className={`fixed inset-0 bg-black/50 z-40 transition-opacity duration-250 ease-in-out ${
-          isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        }`}
-        onClick={onClose}
-      />
-      
-      <div 
-        className={`fixed left-0 top-0 h-full w-[400px] min-w-[360px] bg-gray-800 z-50 shadow-xl transform transition-transform duration-250 ease-in-out ${
-          isOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
-      >
-        {currentPanel === 'main' ? (
-          <div className="h-full flex flex-col">
-            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-700">
-              <h2 className="text-xl font-semibold text-white">
-                Timelines
-              </h2>
-              <button
-                onClick={onClose}
-                className="text-gray-400 hover:text-white transition-colors p-2 rounded-full hover:bg-gray-700"
-              >
-                <X size={20} />
-              </button>
-            </div>
+      <Sheet open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+        <SheetContent side="left" className="w-[400px] min-w-[360px] p-0">
+          <SheetDescription className="sr-only">Timeline navigation panel</SheetDescription>
+          {currentPanel === 'main' ? (
+            <div className="h-full flex flex-col">
+              <SheetHeader className="px-6 py-4 border-b">
+                <SheetTitle className="text-xl font-semibold">Timelines</SheetTitle>
+              </SheetHeader>
 
-            <div className="flex-1 overflow-auto p-4">
-              {renderContent()}
-            </div>
-
-            {user && (
-              <div className="p-4 border-t border-gray-700">
-                <div className="space-y-2">
-                  <OptionButton
-                    label="Account Details"
-                    onClick={() => setCurrentPanel('account')}
-                    icon={<User size={20} />}
-                  />
-                  <OptionButton
-                    label="Change Password"
-                    onClick={() => setCurrentPanel('password')}
-                    icon={<KeyRound size={20} />}
-                  />
-                  <OptionButton
-                    label="Sign Out"
-                    onClick={() => setShowSignOutConfirmation(true)}
-                    icon={<LogOut size={20} />}
-                    variant="danger"
-                  />
-                </div>
+              <div className="flex-1 overflow-auto p-4">
+                {renderContent()}
               </div>
-            )}
-          </div>
-        ) : currentPanel === 'account' ? (
-          <AccountDetailsPanel onBack={() => setCurrentPanel('main')} />
-        ) : currentPanel === 'password' ? (
-          <ChangePasswordPanel onBack={() => setCurrentPanel('main')} />
-        ) : null}
-      </div>
+
+              {user && (
+                <div className="p-4 border-t space-y-1">
+                  <Button
+                    variant="ghost"
+                    onClick={() => setCurrentPanel('account')}
+                    className="w-full justify-between px-4 py-3 h-auto"
+                  >
+                    <span>Account Details</span>
+                    <User size={20} className="text-muted-foreground" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => setCurrentPanel('password')}
+                    className="w-full justify-between px-4 py-3 h-auto"
+                  >
+                    <span>Change Password</span>
+                    <KeyRound size={20} className="text-muted-foreground" />
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => setShowSignOutConfirmation(true)}
+                    className="w-full justify-between px-4 py-3 h-auto"
+                  >
+                    <span>Sign Out</span>
+                    <LogOut size={20} />
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : currentPanel === 'account' ? (
+            <AccountDetailsPanel onBack={() => setCurrentPanel('main')} />
+          ) : currentPanel === 'password' ? (
+            <ChangePasswordPanel onBack={() => setCurrentPanel('main')} />
+          ) : null}
+        </SheetContent>
+      </Sheet>
 
       <ConfirmationModal
         isOpen={showSignOutConfirmation}

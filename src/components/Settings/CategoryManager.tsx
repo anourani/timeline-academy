@@ -1,6 +1,16 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { GripVertical, Eye, EyeOff, Trash2 } from 'lucide-react';
+import { GripVertical, Eye, EyeOff, Trash2, Plus } from 'lucide-react';
 import { CategoryConfig } from '../../types/event';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 const CATEGORY_COLORS = [
   { label: 'Purple', value: '#A770EC' },
@@ -22,7 +32,6 @@ export function CategoryManager({ categories, onCategoriesChange }: CategoryMana
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
-  // Update editing values when categories change
   useEffect(() => {
     setEditingValues(
       categories.reduce((acc, cat) => ({ ...acc, [cat.id]: cat.label }), {})
@@ -38,13 +47,13 @@ export function CategoryManager({ categories, onCategoriesChange }: CategoryMana
     setError(null);
     const category = categories[index];
     const normalizedNewName = editingValues[category.id].trim();
-    
+
     if (!normalizedNewName) {
       setError('Category name cannot be empty');
       setEditingValues(prev => ({ ...prev, [category.id]: category.label }));
       return;
     }
-    
+
     const isDuplicate = categories.some(
       (cat, i) => i !== index && cat.label.toLowerCase() === normalizedNewName.toLowerCase()
     );
@@ -56,8 +65,8 @@ export function CategoryManager({ categories, onCategoriesChange }: CategoryMana
     }
 
     const newCategories = [...categories];
-    newCategories[index] = { 
-      ...newCategories[index], 
+    newCategories[index] = {
+      ...newCategories[index],
       label: normalizedNewName
     };
     onCategoriesChange(newCategories);
@@ -97,11 +106,11 @@ export function CategoryManager({ categories, onCategoriesChange }: CategoryMana
       setError('Maximum of 4 categories allowed');
       return;
     }
-    
+
     const defaultName = 'New Category';
     let uniqueName = defaultName;
     let counter = 1;
-    
+
     while (categories.some(cat => cat.label.toLowerCase() === uniqueName.toLowerCase())) {
       uniqueName = `${defaultName} ${counter}`;
       counter++;
@@ -113,7 +122,7 @@ export function CategoryManager({ categories, onCategoriesChange }: CategoryMana
       color: CATEGORY_COLORS[categories.length % CATEGORY_COLORS.length].value,
       visible: true
     };
-    
+
     const newCategories = [...categories, newCategory];
     onCategoriesChange(newCategories);
     setEditingValues(prev => ({ ...prev, [newCategory.id]: newCategory.label }));
@@ -150,15 +159,15 @@ export function CategoryManager({ categories, onCategoriesChange }: CategoryMana
   return (
     <div className="space-y-4">
       {error && (
-        <div className="text-sm text-red-400 bg-red-900/30 border border-red-500/50 rounded p-2">
+        <div role="alert" className="text-sm text-destructive bg-destructive/10 border border-destructive/50 rounded p-2">
           {error}
         </div>
       )}
-      <div className="space-y-2">
+      <div className="space-y-3">
         {categories.map((category, index) => (
           <div
             key={`category-${category.id}`}
-            className={`relative bg-gray-700 rounded-lg overflow-hidden ${
+            className={`relative rounded-lg border border-border/60 bg-card overflow-hidden ${
               draggedIndex === index ? 'opacity-50' : ''
             }`}
             draggable
@@ -168,74 +177,108 @@ export function CategoryManager({ categories, onCategoriesChange }: CategoryMana
             onDrop={(e) => handleDrop(e, index)}
           >
             {dragOverIndex === index && (
-              <div className="absolute inset-0 border-2 border-blue-500 rounded-lg pointer-events-none" />
+              <div className="absolute inset-0 border-2 border-primary rounded-lg pointer-events-none" />
             )}
-            <div className="grid grid-cols-[48px_1fr]">
+            <div className="grid grid-cols-[40px_1fr]">
               {/* Left Column - Grip Handle */}
-              <div className="flex items-center justify-center bg-gray-800/50">
-                <div className="cursor-move p-2 rounded hover:bg-gray-600/50 transition-colors">
-                  <GripVertical size={20} className="text-gray-400" />
-                </div>
+              <div
+                className="flex items-center justify-center border-r border-border/40 cursor-move"
+                aria-label={`Drag to reorder ${category.label}`}
+                role="button"
+                tabIndex={0}
+              >
+                <GripVertical size={18} className="text-muted-foreground/80" />
               </div>
 
               {/* Right Column - Category Controls */}
-              <div className="p-4 space-y-3">
+              <div className="p-3 space-y-3">
                 {/* Name Input */}
-                <input
-                  type="text"
-                  value={editingValues[category.id] || ''}
-                  onChange={(e) => handleNameChange(index, e.target.value)}
-                  onBlur={() => handleNameBlur(index)}
-                  className="w-full bg-gray-600 px-3 py-2 rounded-lg text-white border border-gray-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
-                  placeholder="Category Name"
-                />
+                <div>
+                  <Label htmlFor={`category-name-${category.id}`} className="sr-only">
+                    Category name
+                  </Label>
+                  <Input
+                    type="text"
+                    id={`category-name-${category.id}`}
+                    value={editingValues[category.id] || ''}
+                    onChange={(e) => handleNameChange(index, e.target.value)}
+                    onBlur={() => handleNameBlur(index)}
+                    placeholder="Category Name"
+                    className="border-border/60 bg-background"
+                    aria-label={`Name for category ${index + 1}`}
+                  />
+                </div>
 
                 {/* Color Selector */}
-                <div className="flex items-center gap-2">
-                  <select
+                <div>
+                  <Label htmlFor={`category-color-${category.id}`} className="sr-only">
+                    Category color
+                  </Label>
+                  <Select
                     value={category.color}
-                    onChange={(e) => handleColorChange(index, e.target.value)}
-                    className="w-full bg-gray-600 px-3 py-2 rounded-lg text-white border border-gray-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none"
+                    onValueChange={(value) => handleColorChange(index, value)}
                   >
-                    {CATEGORY_COLORS.map(color => (
-                      <option key={color.value} value={color.value}>
-                        {color.label}
-                      </option>
-                    ))}
-                  </select>
-                  <div 
-                    className="w-6 h-6 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: category.color }}
-                  />
+                    <SelectTrigger
+                      id={`category-color-${category.id}`}
+                      className="border-border/60 bg-background"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-4 h-4 rounded-full flex-shrink-0 ring-1 ring-white/20"
+                          style={{ backgroundColor: category.color }}
+                        />
+                        <SelectValue />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CATEGORY_COLORS.map(color => (
+                        <SelectItem key={color.value} value={color.value}>
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-3 h-3 rounded-full ring-1 ring-white/20"
+                              style={{ backgroundColor: color.value }}
+                            />
+                            {color.label}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* Action Buttons */}
                 <div className="flex gap-2">
-                  <button
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => handleVisibilityToggle(index)}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded-md transition-colors"
                     disabled={categories.length <= 1}
+                    className="flex-1 gap-1.5 border-border/60"
+                    aria-label={category.visible ? `Hide ${category.label}` : `Show ${category.label}`}
                   >
                     {category.visible ? (
                       <>
-                        <EyeOff size={16} />
+                        <EyeOff size={14} />
                         Hide
                       </>
                     ) : (
                       <>
-                        <Eye size={16} />
+                        <Eye size={14} />
                         Show
                       </>
                     )}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => handleDelete(index)}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-950/50 text-red-400 hover:bg-red-900/50 rounded-md transition-colors"
                     disabled={categories.length <= 1}
+                    className="flex-1 gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    aria-label={`Delete ${category.label}`}
                   >
-                    <Trash2 size={16} />
+                    <Trash2 size={14} />
                     Delete
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -243,12 +286,14 @@ export function CategoryManager({ categories, onCategoriesChange }: CategoryMana
         ))}
       </div>
       {categories.length < 4 && (
-        <button
+        <Button
+          variant="outline"
           onClick={handleAdd}
-          className="w-full py-2 px-4 border border-dashed border-gray-600 rounded-md text-gray-400 hover:text-white hover:border-gray-500 hover:bg-gray-700"
+          className="w-full gap-2 border-dashed border-border/60 hover:border-foreground/40"
         >
+          <Plus size={16} />
           Add Category
-        </button>
+        </Button>
       )}
     </div>
   );

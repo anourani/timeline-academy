@@ -2,6 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, User, Mail, Check } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 
 interface AccountDetailsPanelProps {
   onBack: () => void;
@@ -31,7 +38,6 @@ export function AccountDetailsPanel({ onBack }: AccountDetailsPanelProps) {
 
     setIsLoading(true);
     try {
-      // Update user metadata (name)
       if (name !== initialName) {
         const { error: metadataError } = await supabase.auth.updateUser({
           data: { name }
@@ -39,7 +45,6 @@ export function AccountDetailsPanel({ onBack }: AccountDetailsPanelProps) {
         if (metadataError) throw metadataError;
       }
 
-      // Update email if changed
       if (email !== initialEmail) {
         const { error: emailError } = await supabase.auth.updateUser({
           email: email
@@ -47,15 +52,10 @@ export function AccountDetailsPanel({ onBack }: AccountDetailsPanelProps) {
         if (emailError) throw emailError;
       }
 
-      // Show success message
       setShowSuccess(true);
-      
-      // Hide success message after 3 seconds
       setTimeout(() => {
         setShowSuccess(false);
       }, 3000);
-      
-      // Reset changes state
       setHasChanges(false);
     } catch (error) {
       console.error('Error updating account:', error);
@@ -67,74 +67,64 @@ export function AccountDetailsPanel({ onBack }: AccountDetailsPanelProps) {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex items-center gap-2 p-4 border-b border-gray-700">
+      <SheetHeader className="px-6 py-4 border-b">
         <button
           onClick={onBack}
-          className="text-gray-400 hover:text-white transition-colors flex items-center gap-2"
+          className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-2"
         >
           <ArrowLeft size={20} />
           <span>Back</span>
         </button>
-      </div>
+        <SheetTitle className="text-xl font-semibold">Account Details</SheetTitle>
+      </SheetHeader>
 
       <form onSubmit={handleSubmit} className="flex-1 p-4 space-y-6">
         <div>
-          <h2 className="text-xl font-semibold mb-6">Account Details</h2>
-          
           {showSuccess && (
             <div className="mb-4 p-3 bg-green-900/30 border border-green-500 rounded text-green-500 flex items-center gap-2">
               <Check size={16} />
               Account details updated successfully
             </div>
           )}
-          
+
           <div className="space-y-4">
             <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-1">
-                Name
-              </label>
-              <div className="relative">
-                <input
+              <Label htmlFor="name">Name</Label>
+              <div className="relative mt-1">
+                <Input
                   type="text"
                   id="name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full pl-10 pr-3 py-2 bg-gray-700 rounded-md text-white"
+                  className="pl-10"
                 />
-                <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               </div>
             </div>
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">
-                Email
-              </label>
-              <div className="relative">
-                <input
+              <Label htmlFor="email">Email</Label>
+              <div className="relative mt-1">
+                <Input
                   type="email"
                   id="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-3 py-2 bg-gray-700 rounded-md text-white"
+                  className="pl-10"
                 />
-                <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               </div>
             </div>
           </div>
         </div>
 
         <div className="flex justify-end">
-          <button
+          <Button
             type="submit"
             disabled={!hasChanges || isLoading}
-            className={`px-4 py-2 rounded-md transition-colors ${
-              hasChanges && !isLoading
-                ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                : 'bg-gray-700 text-gray-400 cursor-not-allowed'
-            }`}
           >
             {isLoading ? 'Saving...' : 'Save Changes'}
-          </button>
+          </Button>
         </div>
       </form>
     </div>

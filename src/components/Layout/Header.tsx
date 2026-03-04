@@ -6,11 +6,16 @@ import { TimelineSettingsPanel } from '../Settings/TimelineSettingsPanel';
 import { EventTableEditor } from '../EventTableEditor/EventTableEditor';
 import { CategoriesPanel } from '../Categories/CategoriesPanel';
 import { FloatingToolbar } from '../FloatingToolbar/FloatingToolbar';
-import { Modal } from '../Modal/Modal';
 import { EventForm } from '../EventForm/EventForm';
 import { TimelineEvent, CategoryConfig } from '../../types/event';
 import { useAuth } from '../../contexts/AuthContext';
 import { AuthModal } from '../Auth/AuthModal';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import type { SaveStatus } from '../SaveStatusIndicator/SaveStatusIndicator';
 import type { AddEventsResult } from '../../hooks/useEvents';
 
@@ -110,18 +115,19 @@ export function Header({
         />
       </header>
 
-      {showAddEventModal && (
-        <Modal
-          isOpen={showAddEventModal}
-          onClose={() => setShowAddEventModal(false)}
-          title="Add New Event"
-        >
+      <Dialog open={showAddEventModal} onOpenChange={setShowAddEventModal}>
+        <DialogContent className="bg-gray-800 border-gray-700 max-w-[550px]">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold text-white">
+              Add New Event
+            </DialogTitle>
+          </DialogHeader>
           <EventForm
             onSubmit={handleAddEventSubmit}
             categories={categories.filter(c => c.visible)}
           />
-        </Modal>
-      )}
+        </DialogContent>
+      </Dialog>
 
       <AuthModal
         isOpen={showAuthModal}
