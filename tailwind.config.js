@@ -14,9 +14,6 @@ export default {
         mono: ['IBM Plex Mono', 'monospace'],
       },
       colors: {
-        dark: {
-          DEFAULT: '#0D1016',
-        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -57,10 +54,6 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       keyframes: {
-        'toolbar-in': {
-          '0%': { opacity: '0', transform: 'translateY(8px)' },
-          '100%': { opacity: '1', transform: 'translateY(0)' },
-        },
         "accordion-down": {
           from: { height: "0" },
           to: { height: "var(--radix-accordion-content-height)" },
@@ -71,7 +64,6 @@ export default {
         },
       },
       animation: {
-        'toolbar-in': 'toolbar-in 0.4s ease-out',
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
       },

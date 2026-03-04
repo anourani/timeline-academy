@@ -24,21 +24,16 @@ export function FeedbackPanel({ open, onOpenChange }: FeedbackPanelProps) {
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="right"
-        className="w-[400px] min-w-[360px] bg-gray-800 border-gray-700"
-      >
-        <SheetHeader className="border-b border-gray-700 pb-4">
-          <SheetTitle className="text-xl font-semibold text-white">
-            Feedback
-          </SheetTitle>
+      <SheetContent side="right" className="w-[400px] min-w-[360px]">
+        <SheetHeader className="border-b pb-4">
+          <SheetTitle className="text-xl font-semibold">Feedback</SheetTitle>
           <SheetDescription className="sr-only">
             Send feedback about timeline.academy
           </SheetDescription>
         </SheetHeader>
 
-        <div className="p-6 text-gray-300 space-y-4">
-          <p className="text-white font-medium">Hi, I'm Alex.</p>
+        <div className="p-6 text-muted-foreground space-y-4">
+          <p className="text-foreground font-medium">Hi, I'm Alex.</p>
 
           <p>
             I'm obsessed with timelines and how they transform the way we
@@ -61,18 +56,11 @@ export function FeedbackPanel({ open, onOpenChange }: FeedbackPanelProps) {
           <p>Thanks!</p>
 
           <div className="pt-4 space-y-3">
-            <Button
-              onClick={handleEmailClick}
-              className="w-full bg-blue-600 hover:bg-blue-700"
-            >
+            <Button onClick={handleEmailClick} className="w-full">
               Give Feedback
             </Button>
 
-            <Button
-              variant="secondary"
-              asChild
-              className="w-full bg-gray-700 hover:bg-gray-600"
-            >
+            <Button variant="secondary" asChild className="w-full">
               <a
                 href="https://buymeacoffee.com/ttjs81madp"
                 target="_blank"

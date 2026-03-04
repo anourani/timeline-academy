@@ -22,17 +22,15 @@ export function HomepageNav({ onSignInClick, onSignUpClick }: HomepageNavProps) 
   };
 
   return (
-    <div className="bg-black">
+    <div className="bg-background">
       <div className="mx-auto px-8 py-2 flex justify-between items-center">
-        {/* Left side */}
-        <span className="text-gray-400 text-sm">Timelines</span>
+        <span className="text-muted-foreground text-sm">Timelines</span>
 
-        {/* Right side */}
         <div className="flex items-center gap-4">
           <Button
             variant="ghost"
             onClick={() => setIsFeedbackOpen(true)}
-            className="text-gray-400 hover:text-white text-sm h-auto px-2 py-1"
+            className="text-muted-foreground hover:text-foreground text-sm h-auto px-2 py-1"
           >
             Feedback
           </Button>
@@ -41,7 +39,7 @@ export function HomepageNav({ onSignInClick, onSignUpClick }: HomepageNavProps) 
             <Button
               variant="ghost"
               onClick={handleSignOut}
-              className="text-gray-400 hover:text-white text-sm h-auto px-2 py-1"
+              className="text-muted-foreground hover:text-foreground text-sm h-auto px-2 py-1"
             >
               Sign Out
             </Button>
@@ -50,14 +48,11 @@ export function HomepageNav({ onSignInClick, onSignUpClick }: HomepageNavProps) 
               <Button
                 variant="ghost"
                 onClick={onSignInClick}
-                className="text-gray-400 hover:text-white text-sm h-auto px-2 py-1"
+                className="text-muted-foreground hover:text-foreground text-sm h-auto px-2 py-1"
               >
                 Sign In
               </Button>
-              <Button
-                onClick={onSignUpClick}
-                className="bg-blue-600 text-white hover:bg-blue-700 text-sm h-auto px-4 py-1.5"
-              >
+              <Button onClick={onSignUpClick} className="text-sm h-auto px-4 py-1.5">
                 Create Account
               </Button>
             </>
@@ -65,7 +60,6 @@ export function HomepageNav({ onSignInClick, onSignUpClick }: HomepageNavProps) 
         </div>
       </div>
 
-      {/* Feedback Panel */}
       <FeedbackPanel open={isFeedbackOpen} onOpenChange={setIsFeedbackOpen} />
     </div>
   );

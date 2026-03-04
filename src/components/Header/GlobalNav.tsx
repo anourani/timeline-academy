@@ -58,9 +58,8 @@ export function GlobalNav({
   };
 
   return (
-    <div className="bg-black">
+    <div className="bg-background">
       <div className="mx-auto px-8 py-2 flex justify-between items-center relative">
-        {/* Left side - Sidebar toggle and breadcrumbs */}
         <div className="flex items-center gap-3">
           <TooltipProvider>
             <Tooltip>
@@ -69,13 +68,13 @@ export function GlobalNav({
                   variant="ghost"
                   size="icon"
                   onClick={onViewTimelinesClick}
-                  className="text-gray-400 hover:text-white hover:bg-gray-800"
+                  className="text-muted-foreground hover:text-foreground"
                   aria-label="View Timelines"
                 >
                   <PanelLeft size={20} />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom" className="bg-gray-800 text-white border-gray-700">
+              <TooltipContent side="bottom">
                 <p>View Timelines</p>
               </TooltipContent>
             </Tooltip>
@@ -88,37 +87,34 @@ export function GlobalNav({
                   <BreadcrumbLink asChild>
                     <button
                       onClick={() => navigate('/timelines')}
-                      className="text-gray-400 hover:text-white transition-colors"
+                      className="text-muted-foreground hover:text-foreground transition-colors"
                     >
                       Timelines
                     </button>
                   </BreadcrumbLink>
                 </BreadcrumbItem>
-                <BreadcrumbSeparator className="text-gray-500" />
+                <BreadcrumbSeparator />
                 <BreadcrumbItem>
-                  <BreadcrumbPage className="text-white font-medium">
-                    {title}
-                  </BreadcrumbPage>
+                  <BreadcrumbPage>{title}</BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>
             </Breadcrumb>
           ) : (
             <button
               onClick={() => navigate('/timelines')}
-              className="text-gray-400 hover:text-white transition-colors text-sm"
+              className="text-muted-foreground hover:text-foreground transition-colors text-sm"
             >
               Timelines
             </button>
           )}
         </div>
 
-        {/* Right side - Controls */}
         <div className="flex items-center gap-4">
           {!user && (
             <Button
               variant="ghost"
               onClick={() => setIsVideoTutorialOpen(true)}
-              className="text-gray-400 hover:text-white text-sm h-auto px-2 py-1"
+              className="text-muted-foreground hover:text-foreground text-sm h-auto px-2 py-1"
             >
               How it Works
             </Button>
@@ -127,7 +123,7 @@ export function GlobalNav({
           <Button
             variant="ghost"
             onClick={() => setIsFeedbackOpen(true)}
-            className="text-gray-400 hover:text-white text-sm h-auto px-2 py-1"
+            className="text-muted-foreground hover:text-foreground text-sm h-auto px-2 py-1"
           >
             Feedback
           </Button>
@@ -136,7 +132,7 @@ export function GlobalNav({
             <Button
               variant="ghost"
               onClick={onPresentMode}
-              className="text-gray-400 hover:text-white text-sm h-auto px-2 py-1 gap-1.5"
+              className="text-muted-foreground hover:text-foreground text-sm h-auto px-2 py-1 gap-1.5"
             >
               <Play size={16} />
               Present
@@ -147,7 +143,7 @@ export function GlobalNav({
             <Button
               onClick={handleShare}
               disabled={!timelineId}
-              className="bg-blue-600 text-white hover:bg-blue-700 text-sm h-auto px-4 py-1.5"
+              className="text-sm h-auto px-4 py-1.5"
             >
               Share
             </Button>
@@ -155,33 +151,28 @@ export function GlobalNav({
         </div>
       </div>
 
-      {/* Feedback Panel */}
       <FeedbackPanel open={isFeedbackOpen} onOpenChange={setIsFeedbackOpen} />
 
-      {/* Video Tutorial Dialog */}
       <Dialog open={isVideoTutorialOpen} onOpenChange={setIsVideoTutorialOpen}>
-        <DialogContent className="bg-gray-800 border-gray-700 max-w-[550px]">
+        <DialogContent className="max-w-[550px]">
           <DialogHeader>
-            <DialogTitle className="text-xl font-semibold text-white">
-              Quick Tutorial to Get Started
-            </DialogTitle>
+            <DialogTitle>Quick Tutorial to Get Started</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <p className="text-gray-300">
+            <p className="text-muted-foreground">
               This video tutorial walks through how to start building your timeline by adding events, editing categories, customizing timeline settings, and importing or exporting data to build faster.
             </p>
-
             <div className="aspect-video">
               <a
                 href="https://www.loom.com/share/f19575818a9341d4a266c482af981ba2"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block w-full h-full bg-gray-700 rounded-lg flex items-center justify-center text-white hover:bg-gray-600 transition-colors"
+                className="block w-full h-full bg-secondary rounded-lg flex items-center justify-center hover:bg-secondary/80 transition-colors"
               >
                 <div className="text-center p-6">
                   <Video size={48} className="mx-auto mb-4" />
                   <p>Click to watch the tutorial video on Loom</p>
-                  <p className="text-sm text-gray-400 mt-2">The video will open in a new tab</p>
+                  <p className="text-sm text-muted-foreground mt-2">The video will open in a new tab</p>
                 </div>
               </a>
             </div>

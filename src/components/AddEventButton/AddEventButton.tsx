@@ -25,20 +25,15 @@ export function AddEventButton({ onAddEvent, categories }: AddEventButtonProps) 
 
   return (
     <>
-      <Button
-        onClick={() => setIsModalOpen(true)}
-        className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
-      >
+      <Button onClick={() => setIsModalOpen(true)} className="gap-2">
         <Plus size={20} />
         Add Event
       </Button>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="bg-gray-800 border-gray-700 max-w-[550px]">
+        <DialogContent className="max-w-[550px]">
           <DialogHeader>
-            <DialogTitle className="text-xl font-semibold text-white">
-              Add New Event
-            </DialogTitle>
+            <DialogTitle>Add New Event</DialogTitle>
           </DialogHeader>
           <EventForm onSubmit={handleSubmit} categories={categories} />
         </DialogContent>
