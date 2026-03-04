@@ -68,7 +68,6 @@ export function GlobalNav({
                   variant="ghost"
                   size="icon"
                   onClick={onViewTimelinesClick}
-                  className="text-muted-foreground hover:text-foreground"
                   aria-label="View Timelines"
                 >
                   <PanelLeft size={20} />
@@ -112,27 +111,24 @@ export function GlobalNav({
         <div className="flex items-center gap-4">
           {!user && (
             <Button
-              variant="ghost"
+              variant="outline"
               onClick={() => setIsVideoTutorialOpen(true)}
-              className="text-muted-foreground hover:text-foreground text-sm h-auto px-2 py-1"
             >
               How it Works
             </Button>
           )}
 
           <Button
-            variant="ghost"
+            variant="outline"
             onClick={() => setIsFeedbackOpen(true)}
-            className="text-muted-foreground hover:text-foreground text-sm h-auto px-2 py-1"
           >
             Feedback
           </Button>
 
           {user && (
             <Button
-              variant="ghost"
+              variant="outline"
               onClick={onPresentMode}
-              className="text-muted-foreground hover:text-foreground text-sm h-auto px-2 py-1 gap-1.5"
             >
               <Play size={16} />
               Present
@@ -143,7 +139,6 @@ export function GlobalNav({
             <Button
               onClick={handleShare}
               disabled={!timelineId}
-              className="text-sm h-auto px-4 py-1.5"
             >
               Share
             </Button>
