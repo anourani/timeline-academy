@@ -18,12 +18,12 @@
     --secondary-foreground: 0 0% 98%;
     --muted: 217 33% 17%;
     --muted-foreground: 218 11% 65%;
-    --accent: 217 33% 17%;
+    --accent: 215 25% 25%;
     --accent-foreground: 0 0% 98%;
     --destructive: 0 63% 31%;
     --destructive-foreground: 0 0% 98%;
-    --border: 215 25% 27%;
-    --input: 215 25% 27%;
+    --border: 215 20% 34%;
+    --input: 215 20% 34%;
     --ring: 221 83% 53%;
     --radius: 0.375rem;
   }
