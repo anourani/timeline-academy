@@ -2,6 +2,12 @@ import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { Button } from '@/components/ui/button';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+} from '@/components/ui/breadcrumb';
 import { FeedbackPanel } from '@/components/FeedbackPanel/FeedbackPanel';
 
 interface HomepageNavProps {
@@ -24,11 +30,18 @@ export function HomepageNav({ onSignInClick, onSignUpClick }: HomepageNavProps) 
   return (
     <div className="bg-background">
       <div className="mx-auto px-8 py-2 flex justify-between items-center">
-        <span className="text-muted-foreground text-sm">Timelines</span>
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem>
+              <BreadcrumbPage>Timelines</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
           <Button
             variant="outline"
+            size="sm"
             onClick={() => setIsFeedbackOpen(true)}
           >
             Feedback
@@ -37,6 +50,7 @@ export function HomepageNav({ onSignInClick, onSignUpClick }: HomepageNavProps) 
           {user ? (
             <Button
               variant="outline"
+              size="sm"
               onClick={handleSignOut}
             >
               Sign Out
@@ -45,11 +59,12 @@ export function HomepageNav({ onSignInClick, onSignUpClick }: HomepageNavProps) 
             <>
               <Button
                 variant="outline"
+                size="sm"
                 onClick={onSignInClick}
               >
                 Sign In
               </Button>
-              <Button onClick={onSignUpClick}>
+              <Button size="sm" onClick={onSignUpClick}>
                 Create Account
               </Button>
             </>
