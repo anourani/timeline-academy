@@ -1,55 +1,43 @@
-import { Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface EmptyStateProps {
   variant: 'logged-out' | 'no-timelines';
   onSignInClick?: () => void;
   onSignUpClick?: () => void;
-  onCreateClick?: () => void;
 }
 
-export function EmptyState({ variant, onSignInClick, onSignUpClick, onCreateClick }: EmptyStateProps) {
+export function EmptyState({ variant, onSignInClick, onSignUpClick }: EmptyStateProps) {
   if (variant === 'logged-out') {
     return (
-      <div className="text-center py-12">
-        <h3 className="text-lg font-medium text-white mb-2">
-          Sign in to access your timelines
-        </h3>
-        <p className="text-gray-400 mb-6">
-          Create up to 3 timelines and access them from anywhere
-        </p>
-        <div className="space-y-2 max-w-xs mx-auto">
-          <button
+      <div className="bg-[#1A1A1A] rounded-xl px-5 py-6 flex items-center justify-between">
+        <span className="font-medium text-base text-white">
+          Log in to see your timelines
+        </span>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
             onClick={onSignInClick}
-            className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
           >
-            Sign In
-          </button>
-          <button
+            Log in
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             onClick={onSignUpClick}
-            className="w-full py-2 px-4 bg-gray-700 text-white rounded-md hover:bg-gray-600 transition-colors"
           >
-            Create Account
-          </button>
+            Sign up
+          </Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="text-center py-12">
-      <h3 className="text-lg font-medium text-white mb-2">
-        No timelines yet
-      </h3>
-      <p className="text-gray-400 mb-6">
-        Create your first timeline to get started
-      </p>
-      <button
-        onClick={onCreateClick}
-        className="inline-flex items-center gap-2 py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-      >
-        <Plus size={18} />
-        Create Your First Timeline
-      </button>
+    <div className="bg-[#1A1A1A] rounded-xl px-5 py-6 text-center">
+      <span className="font-medium text-base text-white">
+        Start a timeline to see it here
+      </span>
     </div>
   );
 }

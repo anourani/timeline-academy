@@ -1,13 +1,8 @@
 import { useState } from 'react';
+import { LayoutList } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { Button } from '@/components/ui/button';
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbList,
-  BreadcrumbPage,
-} from '@/components/ui/breadcrumb';
 import { FeedbackPanel } from '@/components/FeedbackPanel/FeedbackPanel';
 
 interface HomepageNavProps {
@@ -29,14 +24,11 @@ export function HomepageNav({ onSignInClick, onSignUpClick }: HomepageNavProps) 
 
   return (
     <div className="bg-background">
-      <div className="mx-auto px-8 py-2 flex justify-between items-center">
-        <Breadcrumb>
-          <BreadcrumbList>
-            <BreadcrumbItem>
-              <BreadcrumbPage>Timelines</BreadcrumbPage>
-            </BreadcrumbItem>
-          </BreadcrumbList>
-        </Breadcrumb>
+      <div className="mx-auto px-8 py-3 flex justify-between items-center">
+        <div className="flex items-center gap-2">
+          <LayoutList size={20} className="text-muted-foreground" />
+          <span className="text-sm font-medium text-foreground">Timelines</span>
+        </div>
 
         <div className="flex items-center gap-2">
           <Button
@@ -53,7 +45,7 @@ export function HomepageNav({ onSignInClick, onSignUpClick }: HomepageNavProps) 
               size="sm"
               onClick={handleSignOut}
             >
-              Sign Out
+              Log Out
             </Button>
           ) : (
             <>
@@ -62,10 +54,10 @@ export function HomepageNav({ onSignInClick, onSignUpClick }: HomepageNavProps) 
                 size="sm"
                 onClick={onSignInClick}
               >
-                Sign In
+                Log In
               </Button>
               <Button size="sm" onClick={onSignUpClick}>
-                Create Account
+                Sign Up
               </Button>
             </>
           )}
