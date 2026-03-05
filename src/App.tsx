@@ -68,6 +68,7 @@ export function App() {
   // Hydrate from localStorage draft if logged out
   useEffect(() => {
     if (!user && !draftHydrated) {
+      const routeState = location.state as { timelineId?: string; skipCreationScreen?: boolean } | null;
       const draft = loadDraft();
       if (draft && draft.events.length > 0) {
         setTitle(draft.title);
@@ -75,11 +76,16 @@ export function App() {
         setEvents(draft.events);
         updateCategories(draft.categories);
         handleScaleChange(draft.scale);
+      } else if (routeState?.skipCreationScreen) {
+        // "Build From Scratch" — skip creation screen, show empty timeline
       } else {
         // No draft exists — show creation screen for first-time visitors
         setShowCreationScreen(true);
       }
       setDraftHydrated(true);
+      if (routeState?.timelineId) {
+        routerNavigate('/', { replace: true, state: {} });
+      }
     }
   }, [user, draftHydrated]);
 
@@ -122,10 +128,12 @@ export function App() {
 
   // Handle navigation from Homepage with a specific timeline to load
   useEffect(() => {
-    const state = location.state as { timelineId?: string } | null;
+    const state = location.state as { timelineId?: string; skipCreationScreen?: boolean } | null;
     if (state?.timelineId && user && !handledRouteStateRef.current) {
       handledRouteStateRef.current = true;
-      if (state.timelineId === 'new') {
+      if (state.timelineId === 'new' && state.skipCreationScreen) {
+        switchTimeline('new');
+      } else if (state.timelineId === 'new') {
         setShowCreationScreen(true);
       } else {
         switchTimeline(state.timelineId);
