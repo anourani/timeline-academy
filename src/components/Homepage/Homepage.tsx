@@ -42,6 +42,10 @@ export function Homepage() {
     navigate('/', { state: { timelineId: 'new', skipCreationScreen: true } });
   };
 
+  const handleBuildWithAI = () => {
+    navigate('/', { state: { timelineId: 'new' } });
+  };
+
   const handleAuthClick = (signUp: boolean) => {
     setIsSignUp(signUp);
     setShowAuthModal(true);
@@ -252,7 +256,7 @@ export function Homepage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled
+                  onClick={handleBuildWithAI}
                 >
                   Coming Soon
                 </Button>
