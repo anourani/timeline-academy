@@ -122,10 +122,12 @@ export function App() {
 
   // Handle navigation from Homepage with a specific timeline to load
   useEffect(() => {
-    const state = location.state as { timelineId?: string } | null;
+    const state = location.state as { timelineId?: string; skipCreationScreen?: boolean } | null;
     if (state?.timelineId && user && !handledRouteStateRef.current) {
       handledRouteStateRef.current = true;
-      if (state.timelineId === 'new') {
+      if (state.timelineId === 'new' && state.skipCreationScreen) {
+        switchTimeline('new');
+      } else if (state.timelineId === 'new') {
         setShowCreationScreen(true);
       } else {
         switchTimeline(state.timelineId);

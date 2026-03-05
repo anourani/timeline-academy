@@ -39,7 +39,7 @@ export function Homepage() {
   };
 
   const handleGetStarted = () => {
-    navigate('/', { state: { timelineId: 'new' } });
+    navigate('/', { state: { timelineId: 'new', skipCreationScreen: true } });
   };
 
   const handleAuthClick = (signUp: boolean) => {

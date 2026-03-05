@@ -31,22 +31,23 @@ export function HomepageNav({ onSignInClick, onSignUpClick }: HomepageNavProps) 
         </div>
 
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setIsFeedbackOpen(true)}
-          >
-            Feedback
-          </Button>
-
           {user ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSignOut}
-            >
-              Log Out
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsFeedbackOpen(true)}
+              >
+                Feedback
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSignOut}
+              >
+                Log Out
+              </Button>
+            </>
           ) : (
             <>
               <Button
