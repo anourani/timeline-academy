@@ -35,7 +35,7 @@ export function TimelineTile({ id, title, eventCount, yearRange, onClick, onShar
         className="flex-1 text-left px-5 py-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-l-xl"
       >
         <div className="flex items-center justify-between">
-          <span className="font-['Aleo'] font-normal text-[16px] text-white">
+          <span className="font-normal text-[16px] text-white" style={{ fontFamily: 'Aleo' }}>
             {title || DEFAULT_TIMELINE_TITLE}
           </span>
           <div className="flex items-center gap-6 font-mono text-xs font-light text-gray-400">

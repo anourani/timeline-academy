@@ -209,13 +209,13 @@ export function Homepage() {
       <main className="max-w-3xl mx-auto px-8 pt-[72px] pb-20">
         {/* Select A Path Forward */}
         <section className="mb-6">
-          <h2 className="font-['Aleo'] text-[32px] font-normal text-[#FBFBFB] text-center mb-6">
+          <h2 className="text-[32px] font-normal text-[#FBFBFB] text-center mb-6" style={{ fontFamily: 'Aleo' }}>
             Select A Path Forward
           </h2>
           <div className="flex justify-center gap-6">
             <Card className="w-[280px] h-[220px] bg-[#1A1A1A] border-gray-800 text-white flex flex-col rounded-xl">
               <CardHeader>
-                <CardTitle className="font-['Aleo'] text-[20px] font-normal text-[#F3F3F3] leading-[1.4]">Build From Scratch</CardTitle>
+                <CardTitle className="tracking-normal text-[20px] font-normal text-[#F3F3F3] leading-[1.4]" style={{ fontFamily: 'Aleo' }}>Build From Scratch</CardTitle>
                 <CardDescription className="font-avenir text-[14px] leading-[20px] text-[#D1D5DB]">
                   Build a timeline from scratch or import a pre-filled excel file in the format of our{' '}
                   <button
@@ -240,7 +240,7 @@ export function Homepage() {
 
             <Card className="w-[280px] h-[220px] bg-[#1A1A1A] border-gray-800 text-white flex flex-col rounded-xl">
               <CardHeader>
-                <CardTitle className="font-['Aleo'] text-[20px] font-normal text-[#F3F3F3] leading-[1.4]">Build with AI</CardTitle>
+                <CardTitle className="tracking-normal text-[20px] font-normal text-[#F3F3F3] leading-[1.4]" style={{ fontFamily: 'Aleo' }}>Build with AI</CardTitle>
                 <CardDescription className="font-avenir text-[14px] leading-[20px] text-[#D1D5DB]">
                   Consider this a jump start. Type any name or event and we will build a timeline of that individual or event.
                 </CardDescription>
@@ -262,7 +262,7 @@ export function Homepage() {
         {/* Your Timelines */}
         <section>
           {user && (
-            <h2 className="font-['Aleo'] text-[32px] font-normal text-[#FBFBFB] text-center mb-6">
+            <h2 className="text-[32px] font-normal text-[#FBFBFB] text-center mb-6" style={{ fontFamily: 'Aleo' }}>
               Your Timelines
             </h2>
           )}

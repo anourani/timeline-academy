@@ -10,7 +10,7 @@ export function EmptyState({ variant, onSignInClick, onSignUpClick }: EmptyState
   if (variant === 'logged-out') {
     return (
       <div className="max-w-[584px] mx-auto bg-[#1A1A1A] border border-gray-800 rounded-xl px-[21px] py-[25px] flex items-center justify-between">
-        <span className="font-['Aleo'] text-[20px] font-normal text-[#F3F3F3]">
+        <span className="text-[20px] font-normal text-[#F3F3F3]" style={{ fontFamily: 'Aleo' }}>
           Log in to see your timelines
         </span>
         <div className="flex items-center gap-2">
