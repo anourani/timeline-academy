@@ -9,8 +9,8 @@ interface EmptyStateProps {
 export function EmptyState({ variant, onSignInClick, onSignUpClick }: EmptyStateProps) {
   if (variant === 'logged-out') {
     return (
-      <div className="bg-[#1A1A1A] rounded-xl px-5 py-6 flex items-center justify-between">
-        <span className="font-medium text-base text-white">
+      <div className="max-w-[584px] mx-auto bg-[#1A1A1A] border border-gray-800 rounded-xl px-[21px] py-[25px] flex items-center justify-between">
+        <span className="font-['Aleo'] text-[20px] font-normal text-[#F3F3F3]">
           Log in to see your timelines
         </span>
         <div className="flex items-center gap-2">
@@ -34,7 +34,7 @@ export function EmptyState({ variant, onSignInClick, onSignUpClick }: EmptyState
   }
 
   return (
-    <div className="bg-[#1A1A1A] rounded-xl px-5 py-6 text-center">
+    <div className="max-w-[584px] mx-auto bg-[#1A1A1A] border border-gray-800 rounded-xl px-5 py-6 text-center">
       <span className="font-medium text-base text-white">
         Start a timeline to see it here
       </span>
