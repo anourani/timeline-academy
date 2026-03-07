@@ -77,7 +77,7 @@ export function GlobalNav({
             <BreadcrumbList>
               <BreadcrumbItem>
                 <BreadcrumbLink asChild>
-                  <button onClick={() => navigate('/timelines')}>
+                  <button onClick={() => navigate('/')}>
                     Timelines
                   </button>
                 </BreadcrumbLink>
