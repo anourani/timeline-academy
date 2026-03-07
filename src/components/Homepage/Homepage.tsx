@@ -35,11 +35,11 @@ export function Homepage() {
   const metadata = useTimelineMetadata(timelineIds);
 
   const handleTileClick = (timelineId: string) => {
-    navigate('/', { state: { timelineId } });
+    navigate('/editor', { state: { timelineId } });
   };
 
   const handleGetStarted = () => {
-    navigate('/', { state: { timelineId: 'new', skipCreationScreen: true } });
+    navigate('/editor', { state: { timelineId: 'new', skipCreationScreen: true } });
   };
 
   const handleAuthClick = (signUp: boolean) => {

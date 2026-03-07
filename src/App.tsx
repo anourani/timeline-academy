@@ -84,7 +84,7 @@ export function App() {
       }
       setDraftHydrated(true);
       if (routeState?.timelineId) {
-        routerNavigate('/', { replace: true, state: {} });
+        routerNavigate('/editor', { replace: true, state: {} });
       }
     }
   }, [user, draftHydrated]);
@@ -139,7 +139,7 @@ export function App() {
         switchTimeline(state.timelineId);
       }
       // Clear the state so refreshing doesn't re-trigger
-      routerNavigate('/', { replace: true, state: {} });
+      routerNavigate('/editor', { replace: true, state: {} });
     }
   }, [location.state, user]);
 
