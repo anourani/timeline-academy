@@ -212,7 +212,7 @@ export function Homepage() {
       <HomepageNav />
       <main className="max-w-[792px] mx-auto px-8 pt-[72px] pb-20">
         {/* Welcome Heading */}
-        <h1 className="header-large text-text-primary text-center mb-8">
+        <h1 className="header-medium text-text-primary text-center mb-8">
           {firstName ? `Welcome, ${firstName}` : 'Welcome'}
         </h1>
 
