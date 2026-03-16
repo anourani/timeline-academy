@@ -218,17 +218,17 @@ export function Homepage() {
 
         {/* Start a New Timeline */}
         <section className="mb-6">
-          <div className="bg-surface-secondary rounded-2xl p-6">
-            <h2 className="header-xsmall text-text-secondary mb-4">
+          <div className="flex flex-col gap-3 bg-[#151617] rounded-[20px] pt-5 pb-4 px-4">
+            <h2 className="header-xsmall text-text-secondary">
               Start a New Timeline
             </h2>
-            <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex flex-col sm:flex-row items-stretch gap-4 w-full">
               <button
                 onClick={handleGetStarted}
-                className="flex-1 bg-surface-tertiary rounded-xl p-5 text-left hover:bg-[#1a1b1c] transition-colors"
+                className="flex-1 flex flex-col gap-1 bg-neutral-950 rounded-xl border border-neutral-800 p-4 text-left cursor-pointer hover:border-neutral-600 transition-colors"
               >
-                <h3 className="font-aleo text-[18px] font-normal text-text-primary mb-1">Build From Scratch</h3>
-                <p className="font-avenir text-sm leading-5 text-text-tertiary">
+                <h3 className="header-xsmall text-[#dadee5]">Build From Scratch</h3>
+                <p className="font-avenir text-sm leading-5 text-[#9b9ea3]">
                   Build a timeline from scratch or import a pre-filled excel file in the format of our{' '}
                   <span
                     onClick={handleDownloadTemplate}
@@ -241,11 +241,10 @@ export function Homepage() {
               </button>
 
               <div
-                className="flex-1 bg-surface-tertiary rounded-xl p-5 text-left opacity-60 cursor-not-allowed"
-                aria-disabled="true"
+                className="flex-1 flex flex-col gap-1 bg-neutral-950 rounded-xl border border-neutral-800 p-4 text-left cursor-pointer hover:border-neutral-600 transition-colors"
               >
-                <h3 className="font-aleo text-[18px] font-normal text-text-primary mb-1">Build with AI</h3>
-                <p className="font-avenir text-sm leading-5 text-text-tertiary">
+                <h3 className="header-xsmall text-[#dadee5]">Build with AI</h3>
+                <p className="font-avenir text-sm leading-5 text-[#9b9ea3]">
                   Use AI as a jump start to build out a timeline of any well-known individual or event.
                 </p>
               </div>
