@@ -10,14 +10,15 @@ import { HomepageNav } from './HomepageNav';
 import { TimelineTile } from './TimelineTile';
 import { EmptyState } from './EmptyState';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardFooter,
-} from '@/components/ui/card';
 import { utils, writeFile } from 'xlsx';
+import type { User } from '@supabase/supabase-js';
+
+function getUserFirstName(user: User): string | null {
+  const meta = user.user_metadata
+  if (meta?.full_name) return meta.full_name.split(' ')[0]
+  if (meta?.name) return meta.name.split(' ')[0]
+  return null
+}
 
 export function Homepage() {
   const { user } = useAuth();
@@ -34,6 +35,8 @@ export function Homepage() {
   );
   const metadata = useTimelineMetadata(timelineIds);
 
+  const firstName = user ? getUserFirstName(user) : null
+
   const handleTileClick = (timelineId: string) => {
     navigate('/editor', { state: { timelineId } });
   };
@@ -47,7 +50,8 @@ export function Homepage() {
     setShowAuthModal(true);
   };
 
-  const handleDownloadTemplate = () => {
+  const handleDownloadTemplate = (e: React.MouseEvent) => {
+    e.stopPropagation();
     const wb = utils.book_new();
     const headers = ['Event Title', 'Start Date', 'End Date', 'Category'];
     const instructions = [
@@ -144,7 +148,7 @@ export function Homepage() {
     setShowDeleteConfirmation(true);
   };
 
-  const renderTimelines = () => {
+  const renderTimelinesContent = () => {
     if (!user) {
       return (
         <EmptyState
@@ -157,7 +161,7 @@ export function Homepage() {
 
     if (isLoading) {
       return (
-        <div className="text-gray-400 text-center py-8">Loading timelines...</div>
+        <div className="text-text-tertiary text-center py-8">Loading timelines...</div>
       );
     }
 
@@ -204,69 +208,56 @@ export function Homepage() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-surface-primary text-white">
       <HomepageNav />
-      <main className="max-w-3xl mx-auto px-8 pt-[72px] pb-20">
-        {/* Select A Path Forward */}
+      <main className="max-w-[792px] mx-auto px-8 pt-[72px] pb-20">
+        {/* Welcome Heading */}
+        <h1 className="header-medium text-text-primary text-center mb-8">
+          {firstName ? `Welcome, ${firstName}` : 'Welcome'}
+        </h1>
+
+        {/* Start a New Timeline */}
         <section className="mb-6">
-          <h2 className="text-[32px] font-normal text-[#FBFBFB] text-center mb-6" style={{ fontFamily: 'Aleo' }}>
-            Select A Path Forward
-          </h2>
-          <div className="flex justify-center gap-6">
-            <Card className="w-[280px] h-[220px] bg-[#1A1A1A] border-gray-800 text-white flex flex-col rounded-xl">
-              <CardHeader>
-                <CardTitle className="tracking-normal text-[20px] font-normal text-[#F3F3F3] leading-[1.4]" style={{ fontFamily: 'Aleo' }}>Build From Scratch</CardTitle>
-                <CardDescription className="font-avenir text-[14px] leading-[20px] text-[#D1D5DB]">
+          <div className="flex flex-col gap-3 bg-[#151617] rounded-[20px] pt-5 pb-4 px-4">
+            <h2 className="header-xsmall text-text-secondary">
+              Start a New Timeline
+            </h2>
+            <div className="flex flex-col sm:flex-row items-stretch gap-4 w-full">
+              <button
+                onClick={handleGetStarted}
+                className="flex-1 flex flex-col gap-1 bg-neutral-950 rounded-xl border border-neutral-800 p-4 text-left cursor-pointer hover:border-neutral-600 transition-colors"
+              >
+                <h3 className="header-xsmall text-[#dadee5]">Build From Scratch</h3>
+                <p className="font-avenir text-sm leading-5 text-[#9b9ea3]">
                   Build a timeline from scratch or import a pre-filled excel file in the format of our{' '}
-                  <button
+                  <span
                     onClick={handleDownloadTemplate}
-                    className="underline underline-offset-2 hover:text-white transition-colors"
+                    className="underline underline-offset-2 hover:text-text-primary transition-colors cursor-pointer"
                   >
                     template
-                  </button>
+                  </span>
                   .
-                </CardDescription>
-              </CardHeader>
-              <CardFooter className="mt-auto">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleGetStarted}
-                >
-                  Get Started
-                </Button>
-              </CardFooter>
-            </Card>
+                </p>
+              </button>
 
-            <Card className="w-[280px] h-[220px] bg-[#1A1A1A] border-gray-800 text-white flex flex-col rounded-xl">
-              <CardHeader>
-                <CardTitle className="tracking-normal text-[20px] font-normal text-[#F3F3F3] leading-[1.4]" style={{ fontFamily: 'Aleo' }}>Build with AI</CardTitle>
-                <CardDescription className="font-avenir text-[14px] leading-[20px] text-[#D1D5DB]">
-                  Consider this a jump start. Type any name or event and we will build a timeline of that individual or event.
-                </CardDescription>
-              </CardHeader>
-              <CardFooter className="mt-auto">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled
-                  className="opacity-50"
-                >
-                  Coming Soon
-                </Button>
-              </CardFooter>
-            </Card>
+              <div
+                className="flex-1 flex flex-col gap-1 bg-neutral-950 rounded-xl border border-neutral-800 p-4 text-left cursor-pointer hover:border-neutral-600 transition-colors"
+              >
+                <h3 className="header-xsmall text-[#dadee5]">Build with AI</h3>
+                <p className="font-avenir text-sm leading-5 text-[#9b9ea3]">
+                  Use AI as a jump start to build out a timeline of any well-known individual or event.
+                </p>
+              </div>
+            </div>
           </div>
         </section>
 
         {/* Your Timelines */}
         <section>
-          {user && (
-            <h2 className="text-[32px] font-normal text-[#FBFBFB] text-center mb-6" style={{ fontFamily: 'Aleo' }}>
-              Your Timelines
-            </h2>
-          )}
-          {renderTimelines()}
+          <h2 className="header-xsmall text-text-secondary mb-4">
+            Your Timelines
+          </h2>
+          {renderTimelinesContent()}
         </section>
       </main>
 

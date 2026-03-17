@@ -25,17 +25,24 @@ export function HomepageNav() {
   };
 
   return (
-    <div className="bg-black">
+    <div className="bg-surface-primary">
       <div className="mx-auto px-6 py-3 flex justify-between items-center">
         <div className="flex items-center gap-2">
-          <LayoutList size={20} className="text-muted-foreground" />
+          <LayoutList size={20} className="text-text-tertiary" />
           {user && (
-            <span className="text-sm font-medium text-foreground">Timelines</span>
+            <span className="text-sm font-medium text-text-primary">Timelines</span>
           )}
         </div>
 
         <div className="flex items-center gap-2">
-          {user ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsVideoTutorialOpen(true)}
+          >
+            How It Works
+          </Button>
+          {user && (
             <>
               <Button
                 variant="outline"
@@ -52,14 +59,6 @@ export function HomepageNav() {
                 Log Out
               </Button>
             </>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsVideoTutorialOpen(true)}
-            >
-              How It Works
-            </Button>
           )}
         </div>
       </div>

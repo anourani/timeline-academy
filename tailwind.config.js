@@ -11,6 +11,7 @@ export default {
     extend: {
       fontFamily: {
         avenir: ['Avenir', 'sans-serif'],
+        aleo: ['Aleo', 'serif'],
         mono: ['IBM Plex Mono', 'monospace'],
       },
       colors: {
@@ -47,6 +48,12 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        'text-primary': 'var(--text-color-primary)',
+        'text-secondary': 'var(--text-color-secondary)',
+        'text-tertiary': 'var(--text-color-tertiary)',
+        'surface-primary': 'var(--surface-color-primary)',
+        'surface-secondary': 'var(--surface-color-secondary)',
+        'surface-tertiary': 'var(--surface-color-tertiary)',
       },
       borderRadius: {
         lg: "var(--radius)",
