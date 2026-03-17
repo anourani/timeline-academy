@@ -218,7 +218,7 @@ export function Homepage() {
 
         {/* Start a New Timeline */}
         <section className="mb-6">
-          <div className="flex flex-col gap-3 bg-[#151617] rounded-[20px] pt-5 pb-4 px-4">
+          <div className="flex flex-col gap-3 bg-[#151617] rounded-[20px] pt-5 pb-4 px-4 shadow-[inset_4px_4px_24px_0px_rgba(156,163,175,0.1)]">
             <h2 className="header-xsmall text-text-secondary">
               Start a New Timeline
             </h2>
