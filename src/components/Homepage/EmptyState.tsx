@@ -7,7 +7,7 @@ interface EmptyStateProps {
 export function EmptyState({ variant, onSignInClick, onSignUpClick }: EmptyStateProps) {
   if (variant === 'logged-out') {
     return (
-      <div className="flex flex-col h-[120px] items-center justify-center gap-3 p-4 bg-[#151617] rounded-[20px]">
+      <div className="flex flex-col h-[120px] items-center justify-center gap-3 p-4 bg-[#151617] rounded-[20px] shadow-[inset_4px_4px_24px_0px_rgba(156,163,175,0.1)]">
         <p className="header-xsmall text-[#dadee5] text-center whitespace-nowrap">
           Log in to see your timelines
         </p>
@@ -30,7 +30,7 @@ export function EmptyState({ variant, onSignInClick, onSignUpClick }: EmptyState
   }
 
   return (
-    <div className="flex flex-col h-[120px] items-center justify-center gap-3 p-4 bg-[#151617] rounded-[20px]">
+    <div className="flex flex-col h-[120px] items-center justify-center gap-3 p-4 bg-[#151617] rounded-[20px] shadow-[inset_4px_4px_24px_0px_rgba(156,163,175,0.1)]">
       <p className="header-xsmall text-[#dadee5] text-center whitespace-nowrap">
         No Timelines. Start a timeline to see it here.
       </p>
