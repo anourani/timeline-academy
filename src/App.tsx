@@ -2,15 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Header } from './components/Layout/Header';
 import { GlobalNav } from './components/Header/GlobalNav';
-import { TimelineContainer } from './components/Timeline/TimelineContainer';
+import { Timeline } from './components/Timeline/Timeline';
 import { SampleTimelineView } from './components/SampleTimeline/SampleTimelineView';
-import { useEvents } from './hooks/useEvents';
-import { useTimelineTitle } from './hooks/useTimelineTitle';
-import { useTimelineChanges } from './hooks/useTimelineChanges';
+import { useTimelineState } from './hooks/useTimelineState';
 import { useTimeline } from './hooks/useTimeline';
-import { useTimelineScale } from './hooks/useTimelineScale';
 import { useAuth } from './contexts/AuthContext';
-import { useCategories } from './hooks/useCategories';
 import { useAutosave } from './hooks/useAutosave';
 import { AuthModal } from './components/Auth/AuthModal';
 import { UnsavedChangesModal } from './components/Modal/UnsavedChangesModal';
@@ -20,10 +16,12 @@ import { useAIMode } from './hooks/useAIMode';
 import { TimelineEvent } from './types/event';
 
 export function App() {
-  const { events, addEvent, addEvents, clearEvents, setEvents, updateEvent } = useEvents();
-  const { title, description, setTitle, setDescription, resetTitle } = useTimelineTitle();
-  const { categories, updateCategories, resetCategories } = useCategories();
-  const { scale, currentScale, handleScaleChange } = useTimelineScale();
+  const {
+    events, addEvent, addEvents, clearEvents, setEvents, updateEvent,
+    title, description, setTitle, setDescription, resetTitle,
+    categories, updateCategories, resetCategories,
+    scale, currentScale, handleScaleChange,
+  } = useTimelineState();
   const { user } = useAuth();
   const { saveTimeline, timelineId, loadTimeline, error: timelineError, retryInitialLoad } = useTimeline();
   const location = useLocation();
@@ -329,15 +327,17 @@ export function App() {
           </div>
         </div>
       ) : (
-        <TimelineContainer
-          events={events}
-          categories={categories}
-          onAddEvent={addEvent}
-          onUpdateEvent={handleUpdateEvent}
-          scale={currentScale}
-          pendingScrollDate={pendingScrollDate}
-          onScrollComplete={() => setPendingScrollDate(null)}
-        />
+        <main className="timeline-container relative mt-16">
+          <Timeline
+            events={events}
+            categories={categories}
+            onAddEvent={addEvent}
+            onUpdateEvent={handleUpdateEvent}
+            scale={currentScale}
+            pendingScrollDate={pendingScrollDate}
+            onScrollComplete={() => setPendingScrollDate(null)}
+          />
+        </main>
       )}
       <SampleTimelineView 
         isOpen={showSampleTimeline}

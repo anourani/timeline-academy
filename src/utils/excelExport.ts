@@ -1,5 +1,6 @@
 import { utils, writeFile } from 'xlsx';
 import { TimelineEvent } from '../types/event';
+import { formatDateForCSV } from './dateUtils';
 
 export function exportEventsToExcel(events: TimelineEvent[], timelineTitle: string): void {
   // Create workbook
@@ -14,20 +15,11 @@ export function exportEventsToExcel(events: TimelineEvent[], timelineTitle: stri
     'Must match a timeline category'
   ];
   
-  // Format dates as MM/DD/YYYY
-  const formatDate = (isoDate: string) => {
-    const date = new Date(isoDate);
-    const month = date.getMonth() + 1;
-    const day = date.getDate();
-    const year = date.getFullYear();
-    return `${month}/${day}/${year}`;
-  };
-  
   // Convert events to rows
   const eventRows = events.map(event => [
     event.title,
-    formatDate(event.startDate),
-    formatDate(event.endDate),
+    formatDateForCSV(event.startDate),
+    formatDateForCSV(event.endDate),
     event.category
   ]);
   

@@ -75,6 +75,24 @@ export const TimelineEvent = memo(function TimelineEvent({
     }
   };
 
+  const eventContent = (
+    <div
+      className="flex items-center h-full w-full rounded"
+      style={{
+        backgroundColor: isSingleDay ? 'transparent' : `${categoryColor}73`,
+        padding: '2px 2px'
+      }}
+    >
+      <div
+        className="h-full w-[8px] rounded flex-shrink-0"
+        style={{ backgroundColor: categoryColor }}
+      />
+      <div className="pl-1 whitespace-nowrap text-base font-medium overflow-visible">
+        {event.title}
+      </div>
+    </div>
+  );
+
   return (
     <>
       {/* Ghost placeholder at original position during drag */}
@@ -91,21 +109,7 @@ export const TimelineEvent = memo(function TimelineEvent({
             opacity: 0.3,
           }}
         >
-          <div
-            className="flex items-center h-full w-full rounded"
-            style={{
-              backgroundColor: isSingleDay ? 'transparent' : `${categoryColor}73`,
-              padding: '2px 2px'
-            }}
-          >
-            <div
-              className="h-full w-[8px] rounded flex-shrink-0"
-              style={{ backgroundColor: categoryColor }}
-            />
-            <div className="pl-1 whitespace-nowrap text-base font-medium overflow-visible">
-              {event.title}
-            </div>
-          </div>
+          {eventContent}
         </div>
       )}
 
@@ -137,21 +141,7 @@ export const TimelineEvent = memo(function TimelineEvent({
         onDragStart={(e) => e.preventDefault()}
         title={`${event.title} (${event.startDate}${event.endDate !== event.startDate ? ` to ${event.endDate}` : ''})`}
       >
-        <div
-          className="flex items-center h-full w-full rounded"
-          style={{
-            backgroundColor: isSingleDay ? 'transparent' : `${categoryColor}73`,
-            padding: '2px 2px'
-          }}
-        >
-          <div
-            className="h-full w-[8px] rounded flex-shrink-0"
-            style={{ backgroundColor: categoryColor }}
-          />
-          <div className="pl-1 whitespace-nowrap text-base font-medium overflow-visible">
-            {event.title}
-          </div>
-        </div>
+        {eventContent}
       </div>
     </>
   );
