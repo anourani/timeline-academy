@@ -346,7 +346,7 @@ Each quarter represents approximately 7–8 days. The mapping is approximate but
 
 ## Timeline Range Calculation
 
-**File:** `src/utils/timelineRange.ts`
+**File:** `src/utils/dateUtils.ts`
 
 Determines which months to render based on event dates.
 
@@ -371,25 +371,23 @@ This array is the backbone of the entire grid — its length determines column c
 ### Hooks Architecture
 
 ```
-useTimeline         ← Loads/saves timeline record + events from/to Supabase
+useTimelineState    ← Composes all timeline state hooks into a single entry point
   ├── useEvents     ← Local event state (add, update, delete, batch)
   ├── useCategories ← Category labels/colors/visibility
   ├── useTimelineTitle ← Title + description state
   └── useTimelineScale ← Scale toggle (large/small)
 
+useTimeline         ← Loads/saves timeline record + events from/to Supabase
 useAutosave         ← Watches for changes, debounced save (2000ms)
-useTimelineChanges  ← Tracks dirty state vs last saved baseline
 useLocalDraft       ← localStorage backup for unsaved work
 useTimelineScroll   ← Scroll position tracking for indicator + mini-map
 useEventDrag        ← Drag interaction state machine
-useCategoryHeights  ← Computes category section heights from stacking
 ```
 
 ### Save Flow
 
 1. User makes a change (edit event, drag, rename, etc.)
-2. `useTimelineChanges` detects diff from baseline (JSON comparison)
-3. `useAutosave.handleChange()` is called, starts 2000ms debounce timer
+2. `useAutosave.handleChange()` is called, starts 2000ms debounce timer
 4. Save status → `'saving'`
 5. `saveTimelineEvents()` performs **diff-based sync**:
    - Fetches current server events
@@ -504,16 +502,15 @@ interface StackedEvent extends TimelineEvent {
 
 | Hook | File | Purpose |
 |------|------|---------|
+| `useTimelineState` | `hooks/useTimelineState.ts` | Composes events, title, categories, and scale into a single state hook |
 | `useTimeline` | `hooks/useTimeline.ts` | Load/save timeline records and events from Supabase |
 | `useEvents` | `hooks/useEvents.ts` | Local event CRUD state management |
 | `useAutosave` | `hooks/useAutosave.ts` | Debounced persistence with status tracking |
 | `useTimelineScale` | `hooks/useTimelineScale.ts` | Scale toggle (large/small) |
 | `useCategories` | `hooks/useCategories.ts` | Category config state |
-| `useCategoryHeights` | `hooks/useCategoryHeights.ts` | Dynamic category section heights |
 | `useTimelineTitle` | `hooks/useTimelineTitle.ts` | Title and description state |
 | `useEventDrag` | `hooks/useEventDrag.ts` | Drag-and-drop interaction handling |
 | `useTimelineScroll` | `hooks/useTimelineScroll.ts` | Scroll position and visible range tracking |
-| `useTimelineChanges` | `hooks/useTimelineChanges.ts` | Dirty state detection (JSON diff) |
 | `useLocalDraft` | `hooks/useLocalDraft.ts` | localStorage draft backup |
 | `useAIMode` | `hooks/useAIMode.ts` | AI-powered timeline generation |
 | `useTimelines` | `hooks/useTimelines.ts` | Timeline list with real-time subscription |

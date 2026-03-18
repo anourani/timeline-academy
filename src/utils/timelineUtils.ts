@@ -5,16 +5,7 @@ export function getUniqueYears(months: Month[]): number[] {
   return Array.from(new Set(months.map(month => month.year))).sort();
 }
 
-export function getMonthsInYear(months: Month[], year: number): Month[] {
-  return months.filter(month => month.year === year);
-}
-
-export function calculateYearWidth(months: Month[], year: number): number {
-  const yearMonths = getMonthsInYear(months, year);
-  return (yearMonths.length / months.length) * 100;
-}
-
-export function getMonthPosition(
+function getMonthPosition(
   monthIndex: number,
   totalMonths: number,
   contentWidth: number

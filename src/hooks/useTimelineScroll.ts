@@ -1,4 +1,5 @@
 import { useState, useEffect, RefObject } from 'react';
+import { debounce } from '../utils/debounce';
 
 interface TimelineScrollState {
   scrollLeft: number;
@@ -7,17 +8,6 @@ interface TimelineScrollState {
   visibleRange: {
     start: number;
     end: number;
-  };
-}
-
-function debounce<T extends (...args: any[]) => void>(
-  func: T,
-  wait: number
-): (...args: Parameters<T>) => void {
-  let timeout: NodeJS.Timeout;
-  return (...args: Parameters<T>) => {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => func(...args), wait);
   };
 }
 
