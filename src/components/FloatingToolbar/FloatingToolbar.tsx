@@ -1,58 +1,12 @@
-import React from 'react';
-import { Plus, Columns3, Layers, Settings } from 'lucide-react';
+import { Plus, Columns3, Layers, Settings } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 interface FloatingToolbarProps {
-  onAddEventClick: () => void;
-  onEventsClick: () => void;
-  onCategoriesClick: () => void;
-  onSettingsClick: () => void;
-  activePanel: 'events' | 'categories' | 'settings' | null;
-}
-
-interface ToolbarButtonProps {
-  icon: React.ReactNode;
-  label: string;
-  isActive: boolean;
-  onClick: () => void;
-}
-
-function ToolbarButton({ icon, label, isActive, onClick }: ToolbarButtonProps) {
-  return (
-    <button
-      onClick={onClick}
-      className={`
-        flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-medium
-        transition-all duration-200 ease-out
-        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500
-        ${isActive
-          ? 'bg-[#2A2A2A] text-white'
-          : 'bg-[#1A1A1A] text-white hover:bg-[#252525] active:bg-[#151515]'
-        }
-      `}
-    >
-      {icon}
-      {label}
-    </button>
-  );
-}
-
-function MobileToolbarButton({ icon, label, isActive, onClick }: ToolbarButtonProps) {
-  return (
-    <button
-      onClick={onClick}
-      className={`
-        flex flex-col items-center gap-1 px-3 py-2 rounded-xl text-[11px] font-medium
-        transition-all duration-200 ease-out
-        ${isActive
-          ? 'bg-[#2A2A2A] text-white'
-          : 'bg-[#1A1A1A] text-gray-300'
-        }
-      `}
-    >
-      {icon}
-      {label}
-    </button>
-  );
+  onAddEventClick: () => void
+  onEventsClick: () => void
+  onCategoriesClick: () => void
+  onSettingsClick: () => void
+  activePanel: 'events' | 'categories' | 'settings' | null
 }
 
 export function FloatingToolbar({
@@ -65,62 +19,75 @@ export function FloatingToolbar({
   return (
     <>
       {/* Desktop */}
-      <div className="sticky top-[44px] z-30 hidden md:flex justify-center py-3">
-        <div className="inline-flex items-center gap-3">
-          <ToolbarButton
-            icon={<Plus size={18} />}
-            label="Add Event"
-            isActive={false}
-            onClick={onAddEventClick}
-          />
-          <ToolbarButton
-            icon={<Columns3 size={18} />}
-            label="Events"
-            isActive={activePanel === 'events'}
-            onClick={onEventsClick}
-          />
-          <ToolbarButton
-            icon={<Layers size={18} />}
-            label="Categories"
-            isActive={activePanel === 'categories'}
-            onClick={onCategoriesClick}
-          />
-          <ToolbarButton
-            icon={<Settings size={18} />}
-            label="Settings"
-            isActive={activePanel === 'settings'}
-            onClick={onSettingsClick}
-          />
-        </div>
+      <div className="hidden md:flex items-center gap-2.5">
+        <Button variant="glass" size="none" onClick={onAddEventClick}>
+          <Plus size={18} />
+          Add Event
+        </Button>
+        <Button
+          variant="glass" size="none"
+          data-active={activePanel === 'events'}
+          onClick={onEventsClick}
+        >
+          <Columns3 size={18} />
+          Event
+        </Button>
+        <Button
+          variant="glass" size="none"
+          data-active={activePanel === 'categories'}
+          onClick={onCategoriesClick}
+        >
+          <Layers size={18} />
+          Categories
+        </Button>
+        <Button
+          variant="glass" size="none"
+          data-active={activePanel === 'settings'}
+          onClick={onSettingsClick}
+        >
+          <Settings size={18} />
+          Settings
+        </Button>
       </div>
 
       {/* Mobile: Fixed bottom bar */}
       <div className="fixed bottom-0 left-0 right-0 z-30 flex md:hidden justify-center items-center gap-2 px-4 pt-2 pb-6 bg-black">
-        <MobileToolbarButton
-          icon={<Plus size={20} />}
-          label="Add"
-          isActive={false}
+        <Button
+          variant="glass" size="none"
+          className="flex-col gap-1 h-auto px-3 py-2 text-[11px] min-w-0"
           onClick={onAddEventClick}
-        />
-        <MobileToolbarButton
-          icon={<Columns3 size={20} />}
-          label="Events"
-          isActive={activePanel === 'events'}
+        >
+          <Plus size={20} />
+          Add
+        </Button>
+        <Button
+          variant="glass" size="none"
+          className="flex-col gap-1 h-auto px-3 py-2 text-[11px] min-w-0"
+          data-active={activePanel === 'events'}
           onClick={onEventsClick}
-        />
-        <MobileToolbarButton
-          icon={<Layers size={20} />}
-          label="Categories"
-          isActive={activePanel === 'categories'}
+        >
+          <Columns3 size={20} />
+          Events
+        </Button>
+        <Button
+          variant="glass" size="none"
+          className="flex-col gap-1 h-auto px-3 py-2 text-[11px] min-w-0"
+          data-active={activePanel === 'categories'}
           onClick={onCategoriesClick}
-        />
-        <MobileToolbarButton
-          icon={<Settings size={20} />}
-          label="Settings"
-          isActive={activePanel === 'settings'}
+        >
+          <Layers size={20} />
+          Categories
+        </Button>
+        <Button
+          variant="glass" size="none"
+          className="flex-col gap-1 h-auto px-3 py-2 text-[11px] min-w-0"
+          data-active={activePanel === 'settings'}
           onClick={onSettingsClick}
-        />
+        >
+          <Settings size={20} />
+          Settings
+        </Button>
       </div>
     </>
-  );
+  )
 }

@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { TimelineTitle } from '../TimelineTitle/TimelineTitle';
 import { SaveStatusIndicator } from '../SaveStatusIndicator/SaveStatusIndicator';
 import { SidePanel } from '../SidePanel/SidePanel';
 import { TimelineSettingsPanel } from '../Settings/TimelineSettingsPanel';
@@ -10,6 +9,7 @@ import { EventForm } from '../EventForm/EventForm';
 import { TimelineEvent, CategoryConfig } from '../../types/event';
 import { useAuth } from '../../contexts/AuthContext';
 import { AuthModal } from '../Auth/AuthModal';
+import { getTimelineYearRange } from '../../utils/timelineUtils';
 import {
   Dialog,
   DialogContent,
@@ -42,12 +42,12 @@ interface HeaderProps {
   lastSavedTime?: Date;
 }
 
-export function Header({ 
-  title, 
+export function Header({
+  title,
   description,
   onTitleChange,
   onDescriptionChange,
-  onAddEvent, 
+  onAddEvent,
   onImportEvents,
   onClearTimeline,
   events,
@@ -91,28 +91,51 @@ export function Header({
     setShowAuthModal(true);
   };
 
+  const timelineRange = getTimelineYearRange(events);
+
   return (
     <>
       <header>
-        <div className="px-[120px] pt-[40px] pb-8 flex flex-col items-center relative">
-          <TimelineTitle
-            title={title}
-            description={description}
-            events={events}
-            onTitleChange={onTitleChange}
-          />
-          <div className="absolute right-8 top-[40px] shrink-0">
+        <div className="flex items-start px-10 md:px-20 py-12 relative">
+          {/* Left: Title with vertical divider */}
+          <div className="flex items-center gap-3 pr-2 shrink-0">
+            <div className="w-0.5 h-[120px] bg-[#3d3e40]" />
+            <div className="flex flex-col gap-3">
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => onTitleChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    (e.target as HTMLInputElement).blur();
+                  }
+                }}
+                className="bg-transparent text-[32px] leading-[1.25] text-[#dadee5] font-['Aleo'] font-normal border-none outline-none focus:outline-none caret-white min-w-0"
+                style={{ width: `${Math.max(title.length, 1)}ch` }}
+              />
+              <div className="flex items-center gap-8 stats-m text-[#c9ced4]">
+                <span>{events.length} {events.length === 1 ? 'event' : 'events'}</span>
+                <span>{timelineRange}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Center: Timeline controls */}
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+            <FloatingToolbar
+              onAddEventClick={handleAddEventClick}
+              onEventsClick={() => togglePanel('events')}
+              onCategoriesClick={() => togglePanel('categories')}
+              onSettingsClick={() => togglePanel('settings')}
+              activePanel={activePanel}
+            />
+          </div>
+
+          {/* Right: Save status */}
+          <div className="ml-auto shrink-0">
             <SaveStatusIndicator status={saveStatus} lastSaved={lastSavedTime} />
           </div>
         </div>
-
-        <FloatingToolbar
-          onAddEventClick={handleAddEventClick}
-          onEventsClick={() => togglePanel('events')}
-          onCategoriesClick={() => togglePanel('categories')}
-          onSettingsClick={() => togglePanel('settings')}
-          activePanel={activePanel}
-        />
       </header>
 
       <Dialog open={showAddEventModal} onOpenChange={setShowAddEventModal}>

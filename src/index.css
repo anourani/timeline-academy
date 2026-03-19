@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Aleo:wght@400;500&family=IBM+Plex+Mono:wght@300;400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Aleo:wght@400;500&family=IBM+Plex+Mono:wght@300;400&family=JetBrains+Mono:wght@300;400&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -123,5 +123,12 @@
     font-weight: 400;
     font-size: 18px;
     line-height: 140%;
+  }
+
+  .stats-m {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 300;
+    font-size: 14px;
+    line-height: 20px;
   }
 }
