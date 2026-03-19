@@ -20,12 +20,12 @@ export function FloatingToolbar({
     <>
       {/* Desktop */}
       <div className="hidden md:flex items-center gap-2.5">
-        <Button variant="glass" onClick={onAddEventClick}>
+        <Button variant="glass" size="none" onClick={onAddEventClick}>
           <Plus size={18} />
           Add Event
         </Button>
         <Button
-          variant="glass"
+          variant="glass" size="none"
           data-active={activePanel === 'events'}
           onClick={onEventsClick}
         >
@@ -33,7 +33,7 @@ export function FloatingToolbar({
           Event
         </Button>
         <Button
-          variant="glass"
+          variant="glass" size="none"
           data-active={activePanel === 'categories'}
           onClick={onCategoriesClick}
         >
@@ -41,7 +41,7 @@ export function FloatingToolbar({
           Categories
         </Button>
         <Button
-          variant="glass"
+          variant="glass" size="none"
           data-active={activePanel === 'settings'}
           onClick={onSettingsClick}
         >
@@ -53,7 +53,7 @@ export function FloatingToolbar({
       {/* Mobile: Fixed bottom bar */}
       <div className="fixed bottom-0 left-0 right-0 z-30 flex md:hidden justify-center items-center gap-2 px-4 pt-2 pb-6 bg-black">
         <Button
-          variant="glass"
+          variant="glass" size="none"
           className="flex-col gap-1 h-auto px-3 py-2 text-[11px] min-w-0"
           onClick={onAddEventClick}
         >
@@ -61,7 +61,7 @@ export function FloatingToolbar({
           Add
         </Button>
         <Button
-          variant="glass"
+          variant="glass" size="none"
           className="flex-col gap-1 h-auto px-3 py-2 text-[11px] min-w-0"
           data-active={activePanel === 'events'}
           onClick={onEventsClick}
@@ -70,7 +70,7 @@ export function FloatingToolbar({
           Events
         </Button>
         <Button
-          variant="glass"
+          variant="glass" size="none"
           className="flex-col gap-1 h-auto px-3 py-2 text-[11px] min-w-0"
           data-active={activePanel === 'categories'}
           onClick={onCategoriesClick}
@@ -79,7 +79,7 @@ export function FloatingToolbar({
           Categories
         </Button>
         <Button
-          variant="glass"
+          variant="glass" size="none"
           className="flex-col gap-1 h-auto px-3 py-2 text-[11px] min-w-0"
           data-active={activePanel === 'settings'}
           onClick={onSettingsClick}
