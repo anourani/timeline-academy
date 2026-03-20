@@ -49,7 +49,7 @@ export function GlobalNav({
       <div className="flex h-[60px] items-center justify-between px-6 py-3">
         <div className="flex items-center">
           <Button
-            variant="glass"
+            variant={variant === 'timeline' ? 'glass' : 'glass-sm'}
             size="none"
             onClick={() => navigate('/')}
           >
@@ -61,7 +61,7 @@ export function GlobalNav({
           {variant === 'default' && (
             <>
               <Button
-                variant="glass"
+                variant="glass-sm"
                 size="none"
                 onClick={() => setIsVideoTutorialOpen(true)}
               >
@@ -70,14 +70,14 @@ export function GlobalNav({
               {user && (
                 <>
                   <Button
-                    variant="glass"
+                    variant="glass-sm"
                     size="none"
                     onClick={() => setIsFeedbackOpen(true)}
                   >
                     Feedback
                   </Button>
                   <Button
-                    variant="glass"
+                    variant="glass-sm"
                     size="none"
                     onClick={handleSignOut}
                   >
