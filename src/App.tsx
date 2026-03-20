@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Header } from './components/Layout/Header';
-import { GlobalNav } from './components/Header/GlobalNav';
+import { GlobalNav } from '@/components/Navigation/GlobalNav';
 import { Timeline } from './components/Timeline/Timeline';
 import { SampleTimelineView } from './components/SampleTimeline/SampleTimelineView';
 import { useTimelineState } from './hooks/useTimelineState';
@@ -267,10 +267,9 @@ export function App() {
   return (
     <div className="app-container min-h-screen bg-black text-white overflow-auto">
       <GlobalNav
-        onViewTimelinesClick={() => setShowSidePanel(true)}
+        variant="timeline"
         onPresentMode={handlePresentMode}
         timelineId={timelineId}
-        title={title}
       />
       <Header
         title={title} 
