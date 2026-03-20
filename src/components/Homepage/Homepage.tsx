@@ -6,7 +6,7 @@ import { useTimelineMetadata } from '../../hooks/useTimelineMetadata';
 import { supabase } from '../../lib/supabase';
 import { AuthModal } from '../Auth/AuthModal';
 import { ConfirmationModal } from '../Modal/ConfirmationModal';
-import { HomepageNav } from './HomepageNav';
+import { GlobalNav } from '@/components/Navigation/GlobalNav';
 import { TimelineTile } from './TimelineTile';
 import { EmptyState } from './EmptyState';
 import { Button } from '@/components/ui/button';
@@ -209,7 +209,7 @@ export function Homepage() {
 
   return (
     <div className="min-h-screen bg-surface-primary text-white">
-      <HomepageNav />
+      <GlobalNav />
       <main className="max-w-[792px] mx-auto px-8 pt-[72px] pb-20">
         {/* Welcome Heading */}
         <h1 className="header-medium text-text-primary text-center mb-8">
