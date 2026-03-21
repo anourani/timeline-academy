@@ -12,7 +12,7 @@ interface TimelineCategoryLabelsProps {
 
 export function TimelineCategoryLabels({ categories, customCategories }: TimelineCategoryLabelsProps) {
   return (
-    <div className="relative h-full backdrop-blur-[2px]">
+    <div className="relative h-full">
       {categories.map((categoryData) => {
         const category = customCategories.find(c => c.id === categoryData.id);
         if (!category) return null;
@@ -24,13 +24,13 @@ export function TimelineCategoryLabels({ categories, customCategories }: Timelin
             style={{ height: `${categoryData.height}px` }}
           >
             <div
-              className="rounded-[4px] p-2"
+              className="rounded-[4px] p-2 backdrop-blur-[2px]"
               style={{
                 backgroundColor: `${category.color}4D`,
               }}
             >
               <span
-                className="text-sm font-black uppercase whitespace-nowrap"
+                className="text-xs font-medium uppercase whitespace-nowrap"
                 style={{
                   color: '#c9ced4',
                   fontFamily: 'Avenir, sans-serif',
