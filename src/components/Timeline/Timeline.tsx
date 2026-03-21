@@ -161,22 +161,21 @@ export function Timeline({
 
   return (
     <div className={isFullScreen ? 'h-[calc(100vh-6rem)]' : 'relative mb-16'}>
-      <div 
-        className="absolute left-0 top-[64px] w-[150px] z-10 bg-black" 
+      <div
+        className="absolute left-0 top-[64px] z-10 pointer-events-none"
         style={{ height: categoryData.totalHeight }}
       >
-        <TimelineCategoryLabels 
-          categories={categoryData.categories} 
+        <TimelineCategoryLabels
+          categories={categoryData.categories}
           customCategories={visibleCategories}
         />
       </div>
-      
+
       <div className="relative">
-        <div className="overflow-hidden" style={{ marginLeft: '150px' }}>
-          <div 
-            ref={scrollContainerRef} 
+        <div className="overflow-hidden">
+          <div
+            ref={scrollContainerRef}
             className="overflow-x-auto scrollbar-hide"
-            style={{ marginLeft: '-150px', paddingLeft: '150px' }}
           >
             <div 
               className="relative timeline-grid transition-all duration-200 ease-in-out"

@@ -1,4 +1,3 @@
-import React from 'react';
 import { CategoryConfig } from '../../types/event';
 
 interface CategoryData {
@@ -13,38 +12,34 @@ interface TimelineCategoryLabelsProps {
 
 export function TimelineCategoryLabels({ categories, customCategories }: TimelineCategoryLabelsProps) {
   return (
-    <div className="relative h-full ml-3">
+    <div className="relative h-full backdrop-blur-[2px]">
       {categories.map((categoryData) => {
         const category = customCategories.find(c => c.id === categoryData.id);
         if (!category) return null;
-        
+
         return (
           <div
             key={`category-${categoryData.id}`}
-            className="relative"
+            className="flex items-start pt-2 pl-6"
             style={{ height: `${categoryData.height}px` }}
           >
             <div
-              className="px-1.5 pt-2 rounded-md mr-2 border-2 border-black"
+              className="rounded-[4px] p-2"
               style={{
-                height: `${categoryData.height}px`,
-                backgroundColor: `${category.color}47`,
+                backgroundColor: `${category.color}4D`,
               }}
             >
-              <span 
-                className="text-sm font-medium uppercase break-words"
-                style={{ 
-                  color: '#fbfbfb',
-                  lineHeight: '100%'
+              <span
+                className="text-sm font-black uppercase whitespace-nowrap"
+                style={{
+                  color: '#c9ced4',
+                  fontFamily: 'Avenir, sans-serif',
+                  lineHeight: '1.2',
                 }}
               >
                 {category.label}
               </span>
             </div>
-            <div 
-              className="absolute top-0 right-0 w-1 h-full"
-              style={{ backgroundColor: category.color }}
-            />
           </div>
         );
       })}
