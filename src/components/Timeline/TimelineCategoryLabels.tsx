@@ -29,14 +29,7 @@ export function TimelineCategoryLabels({ categories, customCategories }: Timelin
                 backgroundColor: `${category.color}4D`,
               }}
             >
-              <span
-                className="text-xs font-medium uppercase whitespace-nowrap"
-                style={{
-                  color: '#c9ced4',
-                  fontFamily: 'Avenir, sans-serif',
-                  lineHeight: '1.2',
-                }}
-              >
+              <span className="label-small-allcaps whitespace-nowrap">
                 {category.label}
               </span>
             </div>
