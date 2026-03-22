@@ -11,7 +11,7 @@ import { getTimelineRange, shiftEventDates } from '../../utils/dateUtils';
 import { calculateEventStacks } from '../../utils/eventStacking';
 import { useTimelineScroll } from '../../hooks/useTimelineScroll';
 import { useEventDrag } from '../../hooks/useEventDrag';
-import { EVENT_HEIGHT, CATEGORY_PADDING, CATEGORY_MIN_HEIGHT } from '../../constants/timeline';
+import { EVENT_HEIGHT, CATEGORY_PADDING, CATEGORY_MIN_HEIGHT, SCROLL_INDICATOR_HEIGHT, HEADER_HEIGHT } from '../../constants/timeline';
 import { EventForm } from '../EventForm/EventForm';
 import {
   Dialog,
@@ -54,12 +54,7 @@ export function Timeline({
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [editingEvent, setEditingEvent] = useState<ITimelineEvent | null>(null);
   
-  const {
-    scrollLeft,
-    containerWidth,
-    contentWidth,
-    visibleRange
-  } = useTimelineScroll(scrollContainerRef, months.length * 4);
+  const { visibleRange } = useTimelineScroll(scrollContainerRef, months.length * 4);
 
   const scrollToDate = useCallback((dateStr: string) => {
     if (!months.length || !scrollContainerRef.current) return;
@@ -162,8 +157,8 @@ export function Timeline({
   return (
     <div className={isFullScreen ? 'h-[calc(100vh-6rem)]' : 'relative mb-16'}>
       <div
-        className="absolute left-0 top-[64px] z-10 pointer-events-none"
-        style={{ height: categoryData.totalHeight }}
+        className="absolute left-0 z-10 pointer-events-none"
+        style={{ top: SCROLL_INDICATOR_HEIGHT + HEADER_HEIGHT, height: categoryData.totalHeight }}
       >
         <TimelineCategoryLabels
           categories={categoryData.categories}
@@ -172,6 +167,10 @@ export function Timeline({
       </div>
 
       <div className="relative">
+        <TimelineScrollIndicator
+          months={months}
+          visibleRange={visibleRange}
+        />
         <div className="overflow-hidden">
           <div
             ref={scrollContainerRef}
@@ -239,21 +238,13 @@ export function Timeline({
         </div>
 
         {!isFullScreen && (
-          <>
-            <TimelineScrollIndicator
-              months={months}
-              scrollLeft={scrollLeft}
-              containerWidth={containerWidth}
-              contentWidth={contentWidth}
-            />
-            <TimelineOverview
-              months={months}
-              events={visibleEvents}
-              visibleRange={visibleRange}
-              categories={visibleCategories}
-              scale={scale}
-            />
-          </>
+          <TimelineOverview
+            months={months}
+            events={visibleEvents}
+            visibleRange={visibleRange}
+            categories={visibleCategories}
+            scale={scale}
+          />
         )}
       </div>
 

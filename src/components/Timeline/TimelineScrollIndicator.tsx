@@ -1,38 +1,24 @@
-import React from 'react';
-import { Month } from '../../types/timeline';
-import { getCurrentTimelinePosition } from '../../utils/timelineUtils';
+import { Month } from '../../types/timeline'
+import { SCROLL_INDICATOR_HEIGHT } from '../../constants/timeline'
 
 interface TimelineScrollIndicatorProps {
-  months: Month[];
-  scrollLeft: number;
-  containerWidth: number;
-  contentWidth: number;
+  months: Month[]
+  visibleRange: { start: number; end: number }
 }
 
-export function TimelineScrollIndicator({ 
-  months, 
-  scrollLeft, 
-  containerWidth, 
-  contentWidth 
+export function TimelineScrollIndicator({
+  months,
+  visibleRange
 }: TimelineScrollIndicatorProps) {
-  if (!months.length || !contentWidth || !containerWidth) {
-    return null;
-  }
-
-  const { currentMonth, isDecemberEnding } = getCurrentTimelinePosition(
-    scrollLeft,
-    months,
-    contentWidth
-  );
-
-  const displayYear = isDecemberEnding ? currentMonth.year + 1 : currentMonth.year;
+  const startMonthIndex = Math.max(0, Math.floor(visibleRange.start / 4))
+  const leftYear = months[startMonthIndex]?.year
 
   return (
-    <div className="timeline-scroll-indicator absolute left-[150px] top-[32px] bottom-[32px] w-[4px] bg-white rounded-full -translate-x-full pointer-events-none">
-      <div className="timeline-scroll-indicator-upper absolute bottom-[calc(100%+40px)] left-0 w-full h-[24px] bg-white rounded-full" />
-      <div className="timeline-scroll-indicator-year absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 font-mono text-2xl" style={{ color: '#FBFBFB' }}>
-        {displayYear}
-      </div>
+    <div
+      className="flex items-start px-[24px] pointer-events-none font-mono text-[24px] text-[#9b9ea3] whitespace-nowrap"
+      style={{ height: SCROLL_INDICATOR_HEIGHT }}
+    >
+      {leftYear != null && <span>{leftYear}</span>}
     </div>
-  );
+  )
 }
