@@ -54,12 +54,7 @@ export function Timeline({
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [editingEvent, setEditingEvent] = useState<ITimelineEvent | null>(null);
   
-  const {
-    scrollLeft,
-    containerWidth,
-    contentWidth,
-    visibleRange
-  } = useTimelineScroll(scrollContainerRef, months.length * 4);
+  const { visibleRange } = useTimelineScroll(scrollContainerRef, months.length * 4);
 
   const scrollToDate = useCallback((dateStr: string) => {
     if (!months.length || !scrollContainerRef.current) return;
@@ -172,6 +167,10 @@ export function Timeline({
       </div>
 
       <div className="relative">
+        <TimelineScrollIndicator
+          months={months}
+          visibleRange={visibleRange}
+        />
         <div className="overflow-hidden">
           <div
             ref={scrollContainerRef}
@@ -239,21 +238,13 @@ export function Timeline({
         </div>
 
         {!isFullScreen && (
-          <>
-            <TimelineScrollIndicator
-              months={months}
-              scrollLeft={scrollLeft}
-              containerWidth={containerWidth}
-              contentWidth={contentWidth}
-            />
-            <TimelineOverview
-              months={months}
-              events={visibleEvents}
-              visibleRange={visibleRange}
-              categories={visibleCategories}
-              scale={scale}
-            />
-          </>
+          <TimelineOverview
+            months={months}
+            events={visibleEvents}
+            visibleRange={visibleRange}
+            categories={visibleCategories}
+            scale={scale}
+          />
         )}
       </div>
 
