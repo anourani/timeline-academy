@@ -1,4 +1,5 @@
 import { Month } from '../../types/timeline'
+import { SCROLL_INDICATOR_HEIGHT } from '../../constants/timeline'
 
 interface TimelineScrollIndicatorProps {
   months: Month[]
@@ -9,24 +10,21 @@ export function TimelineScrollIndicator({
   months,
   visibleRange
 }: TimelineScrollIndicatorProps) {
-  if (!months.length) {
-    return null
-  }
+  // visibleRange indices are quarter-based (useTimelineScroll receives months.length * 4)
+  // Convert to month indices by dividing by 4
+  const startMonthIndex = Math.max(0, Math.floor(visibleRange.start / 4))
+  const endMonthIndex = Math.min(months.length - 1, Math.floor(Math.max(0, visibleRange.end - 1) / 4))
 
-  const startIndex = Math.max(0, visibleRange.start)
-  const endIndex = Math.min(months.length - 1, Math.max(0, visibleRange.end - 1))
-
-  const leftYear = months[startIndex]?.year
-  const rightYear = months[endIndex]?.year
-
-  if (leftYear == null || rightYear == null) {
-    return null
-  }
+  const leftYear = months[startMonthIndex]?.year
+  const rightYear = months[endMonthIndex]?.year
 
   return (
-    <div className="flex items-start justify-between px-[24px] pointer-events-none font-mono text-[24px] text-[#9b9ea3] whitespace-nowrap">
-      <span>{leftYear}</span>
-      <span>{rightYear}</span>
+    <div
+      className="flex items-start justify-between px-[24px] pointer-events-none font-mono text-[24px] text-[#9b9ea3] whitespace-nowrap"
+      style={{ height: SCROLL_INDICATOR_HEIGHT }}
+    >
+      {leftYear != null && <span>{leftYear}</span>}
+      {rightYear != null && <span>{rightYear}</span>}
     </div>
   )
 }
