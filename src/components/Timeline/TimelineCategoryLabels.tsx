@@ -24,7 +24,7 @@ export function TimelineCategoryLabels({ categories, customCategories }: Timelin
             style={{ height: `${categoryData.height}px` }}
           >
             <div
-              className="rounded-[4px] p-2 backdrop-blur-[2px]"
+              className="rounded-[4px] p-2 backdrop-blur-[2px] leading-none"
               style={{
                 backgroundColor: `${category.color}4D`,
               }}
