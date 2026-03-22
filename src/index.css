@@ -131,4 +131,13 @@
     font-size: 14px;
     line-height: 20px;
   }
+
+  .label-small-allcaps {
+    font-family: 'Avenir', sans-serif;
+    font-weight: 500;
+    font-size: 12px;
+    line-height: 14.4px;
+    text-transform: uppercase;
+    color: var(--text-color-secondary);
+  }
 }
