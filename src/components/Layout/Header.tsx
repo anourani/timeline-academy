@@ -121,7 +121,7 @@ export function Header({
           </div>
 
           {/* Center: Timeline controls */}
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+          <div className="hidden md:block absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
             <FloatingToolbar
               onAddEventClick={handleAddEventClick}
               onEventsClick={() => togglePanel('events')}
@@ -137,6 +137,17 @@ export function Header({
           </div>
         </div>
       </header>
+
+      {/* Mobile: toolbar rendered outside header for clean fixed positioning */}
+      <div className="md:hidden">
+        <FloatingToolbar
+          onAddEventClick={handleAddEventClick}
+          onEventsClick={() => togglePanel('events')}
+          onCategoriesClick={() => togglePanel('categories')}
+          onSettingsClick={() => togglePanel('settings')}
+          activePanel={activePanel}
+        />
+      </div>
 
       <Dialog open={showAddEventModal} onOpenChange={setShowAddEventModal}>
         <DialogContent className="bg-gray-800 border-gray-700 max-w-[550px]">
