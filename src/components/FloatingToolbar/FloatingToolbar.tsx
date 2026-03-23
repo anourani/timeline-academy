@@ -51,7 +51,7 @@ export function FloatingToolbar({
       </div>
 
       {/* Mobile: Fixed bottom bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 flex md:hidden justify-center items-center gap-2 px-4 pt-2 pb-6 bg-black">
+      <div className="fixed bottom-0 left-0 right-0 z-30 w-full flex md:hidden justify-around items-center gap-2 px-4 pt-2 pb-6 bg-black border-t border-[#3d3e40]">
         <Button
           variant="glass" size="none"
           className="flex-col gap-1 h-auto px-3 py-2 text-[11px] min-w-0"

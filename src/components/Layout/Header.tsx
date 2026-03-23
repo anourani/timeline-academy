@@ -96,11 +96,11 @@ export function Header({
   return (
     <>
       <header>
-        <div className="flex items-start px-10 md:px-20 py-12 relative">
+        <div className="flex items-start px-4 py-3 md:px-6 md:py-10 relative">
           {/* Left: Title with vertical divider */}
           <div className="flex items-center gap-3 pr-2 shrink-0">
-            <div className="w-0.5 h-[120px] bg-[#3d3e40]" />
-            <div className="flex flex-col gap-3">
+            <div className="w-0.5 h-[100px] md:h-[110px] bg-[#3d3e40]" />
+            <div className="flex flex-col gap-1 md:gap-2">
               <input
                 type="text"
                 value={title}
@@ -110,10 +110,10 @@ export function Header({
                     (e.target as HTMLInputElement).blur();
                   }
                 }}
-                className="bg-transparent text-[32px] leading-[1.25] text-[#dadee5] font-['Aleo'] font-normal border-none outline-none focus:outline-none caret-white min-w-0"
+                className="bg-transparent text-[32px] leading-[1.25] text-[#c9ced4] font-['Aleo'] font-normal border-none outline-none focus:outline-none caret-white min-w-0"
                 style={{ width: `${Math.max(title.length, 1)}ch` }}
               />
-              <div className="flex items-center gap-8 stats-m text-[#c9ced4]">
+              <div className="flex items-center gap-6 stats-m text-[#9b9ea3]">
                 <span>{events.length} {events.length === 1 ? 'event' : 'events'}</span>
                 <span>{timelineRange}</span>
               </div>
@@ -121,7 +121,7 @@ export function Header({
           </div>
 
           {/* Center: Timeline controls */}
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+          <div className="hidden md:block absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
             <FloatingToolbar
               onAddEventClick={handleAddEventClick}
               onEventsClick={() => togglePanel('events')}
@@ -137,6 +137,17 @@ export function Header({
           </div>
         </div>
       </header>
+
+      {/* Mobile: toolbar rendered outside header for clean fixed positioning */}
+      <div className="md:hidden">
+        <FloatingToolbar
+          onAddEventClick={handleAddEventClick}
+          onEventsClick={() => togglePanel('events')}
+          onCategoriesClick={() => togglePanel('categories')}
+          onSettingsClick={() => togglePanel('settings')}
+          activePanel={activePanel}
+        />
+      </div>
 
       <Dialog open={showAddEventModal} onOpenChange={setShowAddEventModal}>
         <DialogContent className="bg-gray-800 border-gray-700 max-w-[550px]">
