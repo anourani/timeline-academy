@@ -240,14 +240,15 @@ export function Homepage() {
                 </p>
               </button>
 
-              <div
+              <button
+                onClick={() => navigate('/editor', { state: { timelineId: 'new' } })}
                 className="flex-1 flex flex-col gap-1 bg-neutral-950 rounded-xl border border-neutral-800 p-4 text-left cursor-pointer hover:border-neutral-600 transition-colors"
               >
                 <h3 className="header-xsmall text-[#dadee5]">Build with AI</h3>
                 <p className="font-avenir text-sm leading-5 text-[#9b9ea3]">
                   Use AI as a jump start to build out a timeline of any well-known individual or event.
                 </p>
-              </div>
+              </button>
             </div>
           </div>
         </section>
