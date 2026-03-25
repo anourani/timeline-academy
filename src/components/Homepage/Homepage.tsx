@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTimelines } from '../../hooks/useTimelines';
@@ -11,6 +11,9 @@ import { TimelineTile } from './TimelineTile';
 import { EmptyState } from './EmptyState';
 import { Button } from '@/components/ui/button';
 import { utils, writeFile } from 'xlsx';
+import { getAllDrafts, deleteDraft as deleteLocalDraft } from '../../utils/draftStorage';
+import { getTimelineYearRange } from '../../utils/timelineUtils';
+import type { LocalDraft } from '../../utils/draftStorage';
 import type { User } from '@supabase/supabase-js';
 
 function getUserFirstName(user: User): string | null {
@@ -28,6 +31,8 @@ export function Homepage() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [timelineToDelete, setTimelineToDelete] = useState<string | null>(null);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [localDrafts, setLocalDrafts] = useState<LocalDraft[]>([]);
+  const [deletingLocalDraft, setDeletingLocalDraft] = useState(false);
 
   const timelineIds = useMemo(
     () => timelines.map(t => t.id),
@@ -37,12 +42,40 @@ export function Homepage() {
 
   const firstName = user ? getUserFirstName(user) : null
 
+  // Load local drafts for logged-out users
+  useEffect(() => {
+    if (!user) {
+      setLocalDrafts(getAllDrafts());
+    } else {
+      setLocalDrafts([]);
+    }
+  }, [user]);
+
+  const currentCount = user ? timelines.length : localDrafts.length;
+  const atLimit = currentCount >= 3;
+
   const handleTileClick = (timelineId: string) => {
     navigate('/editor', { state: { timelineId } });
   };
 
+  const handleLocalDraftClick = (draftId: string) => {
+    navigate('/editor', { state: { draftId } });
+  };
+
   const handleGetStarted = () => {
-    navigate('/editor', { state: { timelineId: 'new', skipCreationScreen: true } });
+    if (user) {
+      navigate('/editor', { state: { timelineId: 'new', skipCreationScreen: true } });
+    } else {
+      navigate('/editor', { state: { newTimeline: true, skipCreationScreen: true } });
+    }
+  };
+
+  const handleBuildWithAI = () => {
+    if (user) {
+      navigate('/editor', { state: { timelineId: 'new' } });
+    } else {
+      navigate('/editor', { state: { newTimeline: true } });
+    }
   };
 
   const handleAuthClick = (signUp: boolean) => {
@@ -127,6 +160,17 @@ export function Homepage() {
 
   const handleDeleteTimeline = async () => {
     if (!timelineToDelete) return;
+
+    // Check if this is a local draft deletion
+    if (deletingLocalDraft) {
+      deleteLocalDraft(timelineToDelete);
+      setLocalDrafts(getAllDrafts());
+      setTimelineToDelete(null);
+      setShowDeleteConfirmation(false);
+      setDeletingLocalDraft(false);
+      return;
+    }
+
     try {
       const { error: deleteError } = await supabase
         .from('timelines')
@@ -145,17 +189,60 @@ export function Homepage() {
 
   const confirmDeleteTimeline = (id: string) => {
     setTimelineToDelete(id);
+    setDeletingLocalDraft(false);
+    setShowDeleteConfirmation(true);
+  };
+
+  const confirmDeleteLocalDraft = (id: string) => {
+    setTimelineToDelete(id);
+    setDeletingLocalDraft(true);
     setShowDeleteConfirmation(true);
   };
 
   const renderTimelinesContent = () => {
+    // Logged-out users: show local drafts or empty state
     if (!user) {
+      if (localDrafts.length === 0) {
+        return (
+          <EmptyState
+            variant="logged-out"
+            onSignInClick={() => handleAuthClick(false)}
+            onSignUpClick={() => handleAuthClick(true)}
+          />
+        );
+      }
+
       return (
-        <EmptyState
-          variant="logged-out"
-          onSignInClick={() => handleAuthClick(false)}
-          onSignUpClick={() => handleAuthClick(true)}
-        />
+        <div className="flex flex-col gap-3">
+          {localDrafts.map(draft => {
+            const yearRange = draft.events.length > 0
+              ? getTimelineYearRange(draft.events)
+              : '';
+            return (
+              <TimelineTile
+                key={draft.id}
+                id={draft.id}
+                title={draft.title}
+                eventCount={draft.events.length}
+                yearRange={yearRange}
+                onClick={() => handleLocalDraftClick(draft.id)}
+                onDelete={confirmDeleteLocalDraft}
+                hideShare
+                hideDuplicate
+              />
+            );
+          })}
+          <p className="text-text-tertiary text-sm text-center mt-2">
+            Timelines are saved to this browser.{' '}
+            <button
+              onClick={() => handleAuthClick(true)}
+              className="text-blue-400 underline hover:text-blue-300 transition-colors"
+            >
+              Sign up
+            </button>
+            {' '}to sync across devices.
+          </p>
+        </div>
       );
     }
 
@@ -196,6 +283,7 @@ export function Homepage() {
               title={timeline.title}
               eventCount={meta?.eventCount ?? 0}
               yearRange={meta?.yearRange ?? ''}
+              dominantCategoryColor={meta?.dominantCategoryColor}
               onClick={() => handleTileClick(timeline.id)}
               onShare={handleShareTimeline}
               onDuplicate={handleDuplicateTimeline}
@@ -222,34 +310,40 @@ export function Homepage() {
             <h2 className="header-xsmall text-text-secondary">
               Start a New Timeline
             </h2>
-            <div className="flex flex-col sm:flex-row items-stretch gap-4 w-full">
-              <button
-                onClick={handleGetStarted}
-                className="flex-1 flex flex-col gap-1 bg-neutral-950 rounded-xl border border-neutral-800 p-4 text-left cursor-pointer hover:border-neutral-600 transition-colors"
-              >
-                <h3 className="header-xsmall text-[#dadee5]">Build From Scratch</h3>
-                <p className="font-avenir text-sm leading-5 text-[#9b9ea3]">
-                  Build a timeline from scratch or import a pre-filled excel file in the format of our{' '}
-                  <span
-                    onClick={handleDownloadTemplate}
-                    className="underline underline-offset-2 hover:text-text-primary transition-colors cursor-pointer"
-                  >
-                    template
-                  </span>
-                  .
-                </p>
-              </button>
+            {atLimit ? (
+              <p className="font-avenir text-sm leading-5 text-[#9b9ea3] py-2">
+                You've reached the 3-timeline limit. Delete an existing timeline to create a new one.
+              </p>
+            ) : (
+              <div className="flex flex-col sm:flex-row items-stretch gap-4 w-full">
+                <button
+                  onClick={handleGetStarted}
+                  className="flex-1 flex flex-col gap-1 bg-neutral-950 rounded-xl border border-neutral-800 p-4 text-left cursor-pointer hover:border-neutral-600 transition-colors"
+                >
+                  <h3 className="header-xsmall text-[#dadee5]">Build From Scratch</h3>
+                  <p className="font-avenir text-sm leading-5 text-[#9b9ea3]">
+                    Build a timeline from scratch or import a pre-filled excel file in the format of our{' '}
+                    <span
+                      onClick={handleDownloadTemplate}
+                      className="underline underline-offset-2 hover:text-text-primary transition-colors cursor-pointer"
+                    >
+                      template
+                    </span>
+                    .
+                  </p>
+                </button>
 
-              <button
-                onClick={() => navigate('/editor', { state: { timelineId: 'new' } })}
-                className="flex-1 flex flex-col gap-1 bg-neutral-950 rounded-xl border border-neutral-800 p-4 text-left cursor-pointer hover:border-neutral-600 transition-colors"
-              >
-                <h3 className="header-xsmall text-[#dadee5]">Build with AI</h3>
-                <p className="font-avenir text-sm leading-5 text-[#9b9ea3]">
-                  Use AI as a jump start to build out a timeline of any well-known individual or event.
-                </p>
-              </button>
-            </div>
+                <button
+                  onClick={handleBuildWithAI}
+                  className="flex-1 flex flex-col gap-1 bg-neutral-950 rounded-xl border border-neutral-800 p-4 text-left cursor-pointer hover:border-neutral-600 transition-colors"
+                >
+                  <h3 className="header-xsmall text-[#dadee5]">Build with AI</h3>
+                  <p className="font-avenir text-sm leading-5 text-[#9b9ea3]">
+                    Use AI as a jump start to build out a timeline of any well-known individual or event.
+                  </p>
+                </button>
+              </div>
+            )}
           </div>
         </section>
 
@@ -273,6 +367,7 @@ export function Homepage() {
         onClose={() => {
           setShowDeleteConfirmation(false);
           setTimelineToDelete(null);
+          setDeletingLocalDraft(false);
         }}
         onConfirm={handleDeleteTimeline}
         title="Delete Timeline"
