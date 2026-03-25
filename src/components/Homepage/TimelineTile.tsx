@@ -52,13 +52,13 @@ export function TimelineTile({ id, title, eventCount, yearRange, dominantCategor
         </div>
       </div>
 
-      <div className="relative ml-4 md:ml-8 self-center" ref={menuRef}>
+      <div className="relative ml-4 md:ml-8 flex items-center" ref={menuRef}>
         <button
           onClick={(e) => {
             e.stopPropagation();
             setMenuOpen(!menuOpen);
           }}
-          className="text-text-tertiary hover:text-text-primary transition-colors"
+          className="flex items-center text-text-tertiary hover:text-text-primary transition-colors"
         >
           <MoreVertical className="size-5 md:size-[18px]" />
         </button>
