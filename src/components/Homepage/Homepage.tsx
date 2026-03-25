@@ -11,7 +11,7 @@ import { TimelineTile } from './TimelineTile';
 import { EmptyState } from './EmptyState';
 import { Button } from '@/components/ui/button';
 import { utils, writeFile } from 'xlsx';
-import { migrateFromLegacy, getAllDrafts, deleteDraft as deleteLocalDraft } from '../../utils/draftStorage';
+import { getAllDrafts, deleteDraft as deleteLocalDraft } from '../../utils/draftStorage';
 import { getTimelineYearRange } from '../../utils/timelineUtils';
 import type { LocalDraft } from '../../utils/draftStorage';
 import type { User } from '@supabase/supabase-js';
@@ -45,7 +45,6 @@ export function Homepage() {
   // Load local drafts for logged-out users
   useEffect(() => {
     if (!user) {
-      migrateFromLegacy();
       setLocalDrafts(getAllDrafts());
     } else {
       setLocalDrafts([]);

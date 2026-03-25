@@ -13,7 +13,6 @@ export interface LocalDraft {
 }
 
 const STORAGE_KEY = 'timeline_drafts'
-const LEGACY_STORAGE_KEY = 'timeline_draft'
 export const MAX_DRAFTS = 3
 
 function generateId(): string {
@@ -36,36 +35,6 @@ function writeDrafts(drafts: LocalDraft[]): void {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ drafts }))
   } catch {
     // Storage full or disabled — silently ignore
-  }
-}
-
-/**
- * One-time migration from old timeline_draft key to new format.
- * Only migrates if new key doesn't exist yet. Removes old key after migration.
- */
-export function migrateFromLegacy(): void {
-  try {
-    // Only migrate if new key doesn't exist
-    if (localStorage.getItem(STORAGE_KEY)) return
-
-    const raw = localStorage.getItem(LEGACY_STORAGE_KEY)
-    if (!raw) return
-
-    const legacy = JSON.parse(raw)
-    const draft: LocalDraft = {
-      id: generateId(),
-      title: legacy.title || DEFAULT_TIMELINE_TITLE,
-      description: legacy.description || '',
-      events: legacy.events || [],
-      categories: legacy.categories || DEFAULT_CATEGORIES,
-      scale: legacy.scale || 'large',
-      savedAt: legacy.savedAt || new Date().toISOString(),
-    }
-
-    writeDrafts([draft])
-    localStorage.removeItem(LEGACY_STORAGE_KEY)
-  } catch {
-    // Silently ignore migration errors
   }
 }
 
@@ -130,11 +99,10 @@ export function deleteDraft(id: string): void {
   writeDrafts(drafts.filter(d => d.id !== id))
 }
 
-/** Removes both timeline_drafts and legacy timeline_draft keys. Used after login migration. */
+/** Removes the timeline_drafts key. Used after login migration. */
 export function clearAllDrafts(): void {
   try {
     localStorage.removeItem(STORAGE_KEY)
-    localStorage.removeItem(LEGACY_STORAGE_KEY)
   } catch {
     // Silently ignore
   }

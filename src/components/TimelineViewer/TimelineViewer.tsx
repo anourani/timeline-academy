@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { Timeline } from '../Timeline/Timeline';
 import { TimelineTitle } from '../TimelineTitle/TimelineTitle';
 import { SCALES } from '../../constants/scales';
 import { DEFAULT_CATEGORIES } from '../../constants/categories';
 import { TimelineEvent, CategoryConfig } from '../../types/event';
+import { getDraft } from '../../utils/draftStorage';
 
 interface TimelineData {
   title: string;
@@ -17,6 +18,7 @@ interface TimelineData {
 
 export function TimelineViewer() {
   const { timelineId } = useParams();
+  const [searchParams] = useSearchParams();
   const [timeline, setTimeline] = useState<TimelineData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -32,13 +34,13 @@ export function TimelineViewer() {
       // Load from localStorage for logged-out users
       if (timelineId === 'local') {
         try {
-          const raw = localStorage.getItem('timeline_draft');
-          if (!raw) {
+          const draftId = searchParams.get('draftId');
+          const draft = draftId ? getDraft(draftId) : null;
+          if (!draft) {
             setError('No local draft found');
             setLoading(false);
             return;
           }
-          const draft = JSON.parse(raw);
           const categories = (draft.categories || DEFAULT_CATEGORIES).map((cat: CategoryConfig) => ({
             ...cat,
             visible: true

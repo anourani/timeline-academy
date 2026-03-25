@@ -38,7 +38,7 @@ export function App() {
   const [showCreationScreen, setShowCreationScreen] = useState(false);
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   const { isGenerating, error: aiError, generate } = useAIMode();
-  const { loadAllDrafts, loadDraft, saveDraft, createDraft, clearAllDrafts } = useLocalDraft();
+  const { loadAllDrafts, loadDraft, saveDraft, saveDraftImmediate, createDraft, clearAllDrafts } = useLocalDraft();
   const handledRouteStateRef = useRef(false);
 
   const timelineData = {
@@ -248,18 +248,15 @@ export function App() {
   const handlePresentMode = () => {
     if (timelineId) {
       window.open(`/view/${timelineId}`, '_blank');
-    } else {
+    } else if (activeDraftId) {
       // Flush current state to localStorage synchronously so the new tab can read it
-      try {
-        localStorage.setItem('timeline_draft', JSON.stringify({
-          title, description, events, categories,
-          scale: currentScale.value,
-          savedAt: new Date().toISOString()
-        }));
-      } catch {
-        // Ignore storage errors
-      }
-      window.open('/view/local', '_blank');
+      saveDraftImmediate({
+        id: activeDraftId,
+        title, description, events, categories,
+        scale: currentScale.value,
+        savedAt: new Date().toISOString()
+      });
+      window.open(`/view/local?draftId=${activeDraftId}`, '_blank');
     }
   };
 
