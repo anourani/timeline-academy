@@ -63,9 +63,21 @@ export function createDraft(): LocalDraft | null {
   const drafts = readDrafts()
   if (drafts.length >= MAX_DRAFTS) return null
 
+  const existingTitles = new Set(drafts.map(d => d.title))
+  let title = DEFAULT_TIMELINE_TITLE
+  if (existingTitles.has(title)) {
+    for (let i = 2; i <= MAX_DRAFTS; i++) {
+      const candidate = `${DEFAULT_TIMELINE_TITLE} ${i}`
+      if (!existingTitles.has(candidate)) {
+        title = candidate
+        break
+      }
+    }
+  }
+
   const draft: LocalDraft = {
     id: generateId(),
-    title: DEFAULT_TIMELINE_TITLE,
+    title,
     description: '',
     events: [],
     categories: [...DEFAULT_CATEGORIES],
