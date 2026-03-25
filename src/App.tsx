@@ -30,7 +30,6 @@ export function App() {
   const [showSampleTimeline, setShowSampleTimeline] = useState(false);
   const [pendingSwitchTimelineId, setPendingSwitchTimelineId] = useState<string | null>(null);
   const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
   const [showSidePanel, setShowSidePanel] = useState(false);
   const [pendingScrollDate, setPendingScrollDate] = useState<string | null>(null);
   const [draftHydrated, setDraftHydrated] = useState(false);
@@ -52,8 +51,7 @@ export function App() {
 
   const { saveStatus, lastSavedTime, handleChange } = useAutosave(timelineData);
 
-  const handleAuthClick = (signUp: boolean) => {
-    setIsSignUp(signUp);
+  const handleAuthClick = () => {
     setShowAuthModal(true);
   };
 
@@ -340,10 +338,10 @@ export function App() {
           <span className="text-blue-200">
             Your work isn't saved to the cloud yet.{' '}
             <button
-              onClick={() => { setIsSignUp(true); setShowAuthModal(true); }}
+              onClick={() => setShowAuthModal(true)}
               className="text-blue-400 underline hover:text-blue-300"
             >
-              Sign up
+              Sign in
             </button>
             {' '}to save your timeline and access it from any device.
           </span>
@@ -387,7 +385,6 @@ export function App() {
       <AuthModal
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
-        defaultIsSignUp={isSignUp}
       />
       {showCreationScreen && (
         <NewTimelineScreen

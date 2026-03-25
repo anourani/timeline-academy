@@ -23,7 +23,7 @@ interface SidePanelProps {
   onClose: () => void;
   timelineId: string | null;
   onTimelineSwitch: (timelineId: string) => void;
-  onAuthClick: (isSignUp: boolean) => void;
+  onAuthClick: () => void;
 }
 
 export function SidePanel({
@@ -68,8 +68,8 @@ export function SidePanel({
     }
   };
 
-  const handleAuthClick = (signUp: boolean) => {
-    onAuthClick(signUp);
+  const handleAuthClick = () => {
+    onAuthClick();
     onClose();
   };
 
@@ -115,11 +115,8 @@ export function SidePanel({
             Create up to 3 timelines and access them from anywhere
           </p>
           <div className="space-y-2">
-            <Button onClick={() => handleAuthClick(false)} className="w-full">
+            <Button onClick={handleAuthClick} className="w-full">
               Sign In
-            </Button>
-            <Button variant="secondary" onClick={() => handleAuthClick(true)} className="w-full">
-              Create Account
             </Button>
           </div>
         </div>

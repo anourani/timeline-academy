@@ -51,10 +51,8 @@ export function Header({
   const [showTableEditor, setShowTableEditor] = useState(false);
   const { user } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
 
-  const handleAuthClick = (signUp: boolean) => {
-    setIsSignUp(signUp);
+  const handleAuthClick = () => {
     setShowAuthModal(true);
   };
 
@@ -72,21 +70,12 @@ export function Header({
           </div>
           <div className="text-sm">
             {!user ? (
-              <>
-                <button
-                  onClick={() => handleAuthClick(false)}
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  Sign in
-                </button>
-                <span className="text-gray-600 mx-2">or</span>
-                <button
-                  onClick={() => handleAuthClick(true)}
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  Create an account
-                </button>
-              </>
+              <button
+                onClick={handleAuthClick}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                Sign in
+              </button>
             ) : null}
           </div>
         </div>
@@ -121,10 +110,9 @@ export function Header({
         </div>
       </header>
 
-      <AuthModal 
+      <AuthModal
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
-        defaultIsSignUp={isSignUp}
       />
 
       <SidePanel 

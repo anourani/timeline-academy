@@ -28,7 +28,6 @@ export function Homepage() {
   const navigate = useNavigate();
   const { timelines, isLoading, error, loadTimelines } = useTimelines();
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
   const [timelineToDelete, setTimelineToDelete] = useState<string | null>(null);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [localDrafts, setLocalDrafts] = useState<LocalDraft[]>([]);
@@ -78,8 +77,7 @@ export function Homepage() {
     }
   };
 
-  const handleAuthClick = (signUp: boolean) => {
-    setIsSignUp(signUp);
+  const handleAuthClick = () => {
     setShowAuthModal(true);
   };
 
@@ -206,8 +204,7 @@ export function Homepage() {
         return (
           <EmptyState
             variant="logged-out"
-            onSignInClick={() => handleAuthClick(false)}
-            onSignUpClick={() => handleAuthClick(true)}
+            onSignInClick={handleAuthClick}
           />
         );
       }
@@ -235,10 +232,10 @@ export function Homepage() {
           <p className="text-text-tertiary text-sm text-center mt-2">
             Timelines are saved to this browser.{' '}
             <button
-              onClick={() => handleAuthClick(true)}
+              onClick={handleAuthClick}
               className="text-blue-400 underline hover:text-blue-300 transition-colors"
             >
-              Sign up
+              Sign in
             </button>
             {' '}to sync across devices.
           </p>
@@ -359,7 +356,6 @@ export function Homepage() {
       <AuthModal
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
-        defaultIsSignUp={isSignUp}
       />
 
       <ConfirmationModal
