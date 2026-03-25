@@ -36,7 +36,7 @@ export function TimelineTile({ id, title, eventCount, yearRange, dominantCategor
   return (
     <div
       onClick={onClick}
-      className="group w-full flex items-center pt-4 pb-3 md:pb-[14px] px-4 rounded-[12px] bg-[#151617] hover:bg-[#242526] border border-[rgba(65,150,228,0.1)] hover:border-[rgba(65,150,228,0.25)] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4),inset_0px_1px_0px_0px_rgba(255,255,255,0.1)] transition-all duration-200 ease-out cursor-pointer"
+      className="group w-full flex items-center py-3 md:py-[14px] px-4 rounded-[12px] bg-[#151617] hover:bg-[#242526] border border-[rgba(65,150,228,0.1)] hover:border-[rgba(65,150,228,0.25)] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4),inset_0px_1px_0px_0px_rgba(255,255,255,0.1)] transition-all duration-200 ease-out cursor-pointer"
     >
       <div className="flex-1 flex flex-col gap-1 md:flex-row md:items-center md:gap-8 min-w-0">
         <span className="flex-1 font-aleo font-normal text-[18px] leading-[1.4] text-text-secondary group-hover:text-text-primary transition-colors truncate">
