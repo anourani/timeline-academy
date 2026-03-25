@@ -31,31 +31,31 @@ export function TimelineTile({ id, title, eventCount, yearRange, onClick, onShar
   }, [menuOpen]);
 
   return (
-    <div className="w-full flex items-center bg-surface-secondary hover:bg-[#1e1e1e] rounded-xl transition-all duration-200 ease-out">
+    <div className="group w-full flex items-center p-[17px] rounded-[12px] bg-[#151617] hover:bg-[#242526] border border-[rgba(65,150,228,0.1)] hover:border-[rgba(65,150,228,0.25)] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4),inset_0px_1px_0px_0px_rgba(255,255,255,0.1)] transition-all duration-200 ease-out">
       <button
         onClick={onClick}
-        className="flex-1 text-left px-5 py-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-l-xl"
+        className="flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-[12px]"
       >
-        <div className="flex items-center justify-between">
-          <span className="font-aleo font-normal text-[16px] text-text-primary">
+        <div className="flex items-center gap-8">
+          <span className="flex-1 font-aleo font-normal text-[18px] leading-[1.4] text-text-secondary group-hover:text-text-primary transition-colors">
             {title || DEFAULT_TIMELINE_TITLE}
           </span>
-          <div className="flex items-center gap-6 font-mono text-xs font-light text-text-tertiary">
-            {yearRange && <span>{yearRange}</span>}
-            <span>{eventCount} {eventCount === 1 ? 'event' : 'events'}</span>
+          <div className="flex items-center gap-4 font-avenir text-[14px] leading-[20px] text-text-tertiary shrink-0">
+            {yearRange && <span className="w-[100px]">{yearRange}</span>}
+            <span className="w-[100px]">{eventCount} {eventCount === 1 ? 'event' : 'events'}</span>
           </div>
         </div>
       </button>
 
-      <div className="relative pr-3" ref={menuRef}>
+      <div className="relative ml-4" ref={menuRef}>
         <button
           onClick={(e) => {
             e.stopPropagation();
             setMenuOpen(!menuOpen);
           }}
-          className="p-2 text-text-tertiary hover:text-text-primary rounded-md transition-colors"
+          className="text-text-tertiary hover:text-text-primary transition-colors"
         >
-          <MoreVertical size={18} />
+          <MoreVertical size={20} />
         </button>
 
         {menuOpen && (
