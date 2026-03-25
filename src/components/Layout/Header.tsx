@@ -35,7 +35,7 @@ interface HeaderProps {
   onEventsChange: (events: TimelineEvent[]) => void;
   showSidePanel: boolean;
   onCloseSidePanel: () => void;
-  onAuthClick: (isSignUp: boolean) => void;
+  onAuthClick: () => void;
   scale: 'large' | 'small';
   onScaleChange: (scale: 'large' | 'small') => void;
   saveStatus: SaveStatus;
@@ -74,7 +74,6 @@ export function Header({
   const closePanel = () => setActivePanel(null);
   const [showAddEventModal, setShowAddEventModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
 
   const handleAddEventClick = () => {
     setActivePanel(null);
@@ -86,10 +85,6 @@ export function Header({
     setShowAddEventModal(false);
   };
 
-  const handleAuthClick = (signUp: boolean) => {
-    setIsSignUp(signUp);
-    setShowAuthModal(true);
-  };
 
   const timelineRange = getTimelineYearRange(events);
 
@@ -166,7 +161,6 @@ export function Header({
       <AuthModal
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
-        defaultIsSignUp={isSignUp}
       />
 
       <SidePanel

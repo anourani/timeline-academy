@@ -1,18 +1,15 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
 import { Modal } from '../Modal/Modal';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabase, isNetworkError, testConnection, getConnectionStatus } from '../../lib/supabase';
+import { isNetworkError, testConnection, getConnectionStatus } from '../../lib/supabase';
 import { OtpInput } from './OtpInput';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  defaultIsSignUp?: boolean;
 }
 
-type AuthMethod = 'phone' | 'email';
-type OtpStep = 'phone_entry' | 'otp_verify';
+type OtpStep = 'email_entry' | 'otp_verify';
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
@@ -63,21 +60,17 @@ function mapErrorMessage(err: unknown): MappedError {
     };
   }
 
-  // Email/password auth errors
-  if (msg.includes('Email not confirmed')) {
-    return { message: 'Please check your email to confirm your account before signing in.', isRetryable: false };
+  // Email validation errors
+  if (msg.includes('Email address is invalid') || msg.includes('invalid email') || msg.includes('Unable to validate email')) {
+    return { message: 'Please enter a valid email address.', isRetryable: false };
   }
-  if (msg.includes('Invalid login credentials')) {
-    return { message: 'Invalid email or password.', isRetryable: false };
-  }
+
+  // Email rate limit
   if (msg.includes('Email rate limit exceeded')) {
     return { message: 'Too many attempts. Please try again later.', isRetryable: false };
   }
 
-  // Phone/OTP errors
-  if (msg.includes('Phone number') || msg.includes('Invalid phone') || msg.includes('phone')) {
-    return { message: 'Please enter a valid phone number with country code (e.g., +1 555 000 0000).', isRetryable: false };
-  }
+  // OTP errors
   if (msg.includes('Token has expired') || msg.includes('otp_expired')) {
     return { message: 'Code expired. Please request a new one.', isRetryable: false };
   }
@@ -93,28 +86,16 @@ function mapErrorMessage(err: unknown): MappedError {
   return { message: msg, isRetryable: false };
 }
 
-export function AuthModal({ isOpen, onClose, defaultIsSignUp = false }: AuthModalProps) {
-  // Shared state
-  const [authMethod, setAuthMethod] = useState<AuthMethod>('phone');
+export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const [error, setError] = useState<MappedError | null>(null);
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-
-  // Email/password state
-  const [isSignUp, setIsSignUp] = useState(defaultIsSignUp);
-  const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [signUpSuccess, setSignUpSuccess] = useState(false);
-
-  // Phone OTP state
-  const [phone, setPhone] = useState('');
-  const [otpStep, setOtpStep] = useState<OtpStep>('phone_entry');
+  const [otpStep, setOtpStep] = useState<OtpStep>('email_entry');
   const [resendCooldown, setResendCooldown] = useState(0);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const { signIn, signUp, signInWithPhone, verifyPhoneOtp } = useAuth();
+  const { signInWithEmail, verifyEmailOtp } = useAuth();
 
   // Clean up cooldown interval
   useEffect(() => {
@@ -126,25 +107,18 @@ export function AuthModal({ isOpen, onClose, defaultIsSignUp = false }: AuthModa
   // Reset all state when modal opens
   useEffect(() => {
     if (isOpen) {
-      setAuthMethod('phone');
       setError(null);
       setMessage('');
       setIsLoading(false);
-      setIsSignUp(defaultIsSignUp);
-      setIsForgotPassword(false);
       setEmail('');
-      setPassword('');
-      setShowPassword(false);
-      setSignUpSuccess(false);
-      setPhone('');
-      setOtpStep('phone_entry');
+      setOtpStep('email_entry');
       setResendCooldown(0);
       if (cooldownRef.current) {
         clearInterval(cooldownRef.current);
         cooldownRef.current = null;
       }
     }
-  }, [isOpen, defaultIsSignUp]);
+  }, [isOpen]);
 
   const startCooldown = useCallback(() => {
     setResendCooldown(RESEND_COOLDOWN_SECONDS);
@@ -187,23 +161,6 @@ export function AuthModal({ isOpen, onClose, defaultIsSignUp = false }: AuthModa
     }
   }, []);
 
-  const switchAuthMethod = (method: AuthMethod) => {
-    setAuthMethod(method);
-    setError(null);
-    setMessage('');
-    setEmail('');
-    setPassword('');
-    setShowPassword(false);
-    setSignUpSuccess(false);
-    setPhone('');
-    setOtpStep('phone_entry');
-    setResendCooldown(0);
-    if (cooldownRef.current) {
-      clearInterval(cooldownRef.current);
-      cooldownRef.current = null;
-    }
-  };
-
   // Check if Supabase is configured
   const isSupabaseConfigured = Boolean(
     import.meta.env.VITE_SUPABASE_URL &&
@@ -221,167 +178,63 @@ export function AuthModal({ isOpen, onClose, defaultIsSignUp = false }: AuthModa
     );
   }
 
-  // --- Phone OTP handlers ---
+  // --- Email OTP handlers ---
 
-  const handleSendOtp = async (e: React.FormEvent) => {
+  const handleSendEmailOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setMessage('');
     setIsLoading(true);
 
-    // Basic client-side phone validation
-    const cleaned = phone.replace(/[\s()-]/g, '');
-    if (!cleaned.startsWith('+') || cleaned.replace(/\D/g, '').length < 10) {
-      setError({ message: 'Please enter a valid phone number with country code (e.g., +1 555 000 0000).', isRetryable: false });
-      setIsLoading(false);
-      return;
-    }
-
     try {
-      await signInWithPhone(cleaned);
+      await signInWithEmail(email);
       setOtpStep('otp_verify');
       startCooldown();
     } catch (err) {
-      console.error('Phone auth error:', err);
+      console.error('Email OTP error:', err);
       setError(mapErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleVerifyOtp = async (code: string) => {
+  const handleVerifyEmailOtp = async (code: string) => {
     setError(null);
     setIsLoading(true);
 
-    const cleaned = phone.replace(/[\s()-]/g, '');
-
     try {
-      await verifyPhoneOtp(cleaned, code);
+      await verifyEmailOtp(email, code);
       onClose();
     } catch (err) {
-      console.error('OTP verification error:', err);
+      console.error('Email OTP verification error:', err);
       setError(mapErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleResendOtp = async () => {
+  const handleResendEmailOtp = async () => {
     if (resendCooldown > 0) return;
     setError(null);
     setIsLoading(true);
 
-    const cleaned = phone.replace(/[\s()-]/g, '');
-
     try {
-      await signInWithPhone(cleaned);
+      await signInWithEmail(email);
       setMessage('A new code has been sent.');
       startCooldown();
     } catch (err) {
-      console.error('Resend OTP error:', err);
+      console.error('Resend email OTP error:', err);
       setError(mapErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
   };
 
-  // --- Email handlers ---
-
-  const handleEmailSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setMessage('');
-    setIsLoading(true);
-
-    try {
-      if (isForgotPassword) {
-        const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/reset-password`
-        });
-
-        if (resetError) {
-          if (resetError.message.includes('rate limit')) {
-            throw new Error('Too many reset attempts. Please try again later.');
-          }
-          throw resetError;
-        }
-
-        setMessage('If an account exists with this email, you will receive password reset instructions.');
-        setEmail('');
-      } else if (isSignUp) {
-        await signUp(email, password);
-        setSignUpSuccess(true);
-        setMessage('Account created! Check your email to confirm your account.');
-      } else {
-        await signIn(email, password);
-        onClose();
-      }
-    } catch (err) {
-      console.error('Auth error:', err);
-      setError(mapErrorMessage(err));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleForgotPassword = () => {
-    setIsForgotPassword(true);
-    setError(null);
-    setMessage('');
-    setPassword('');
-    setSignUpSuccess(false);
-  };
-
-  const handleBackToSignIn = () => {
-    setIsForgotPassword(false);
-    setIsSignUp(false);
-    setError(null);
-    setMessage('');
-    setSignUpSuccess(false);
-  };
-
-  // --- Determine modal title ---
-
-  let title: string;
-  if (authMethod === 'phone') {
-    title = otpStep === 'otp_verify' ? 'Enter Verification Code' : 'Sign In with Phone';
-  } else if (isForgotPassword) {
-    title = 'Reset Password';
-  } else if (signUpSuccess) {
-    title = 'Check Your Email';
-  } else {
-    title = isSignUp ? 'Create Account' : 'Sign In';
-  }
+  const title = otpStep === 'otp_verify' ? 'Enter Verification Code' : 'Sign In';
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title}>
       <div className="space-y-4">
-        {/* Auth method tabs */}
-        <div className="flex border-b border-gray-700">
-          <button
-            type="button"
-            onClick={() => switchAuthMethod('phone')}
-            className={`flex-1 py-2 text-sm font-medium transition-colors ${
-              authMethod === 'phone'
-                ? 'text-blue-400 border-b-2 border-blue-400'
-                : 'text-gray-400 hover:text-gray-300'
-            }`}
-          >
-            Phone
-          </button>
-          <button
-            type="button"
-            onClick={() => switchAuthMethod('email')}
-            className={`flex-1 py-2 text-sm font-medium transition-colors ${
-              authMethod === 'email'
-                ? 'text-blue-400 border-b-2 border-blue-400'
-                : 'text-gray-400 hover:text-gray-300'
-            }`}
-          >
-            Email
-          </button>
-        </div>
-
         {/* Error display */}
         {error && (
           <div
@@ -416,85 +269,9 @@ export function AuthModal({ isOpen, onClose, defaultIsSignUp = false }: AuthModa
           </div>
         )}
 
-        {/* ===== Phone OTP Flow ===== */}
-        {authMethod === 'phone' && otpStep === 'phone_entry' && (
-          <form onSubmit={handleSendOtp} className="space-y-4">
-            <div>
-              <label htmlFor="phone" className="block text-sm font-medium text-gray-300 mb-1">
-                Phone Number
-              </label>
-              <input
-                type="tel"
-                id="phone"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-700 rounded-md text-white"
-                placeholder="+1 (555) 000-0000"
-                required
-                disabled={isLoading}
-              />
-              <p className="mt-1 text-xs text-gray-500">Include your country code (e.g., +1 for US)</p>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed"
-              aria-busy={isLoading}
-            >
-              {isLoading ? <><Spinner /> Sending Code...</> : 'Send Code'}
-            </button>
-          </form>
-        )}
-
-        {authMethod === 'phone' && otpStep === 'otp_verify' && (
-          <div className="space-y-4">
-            <p className="text-sm text-gray-400 text-center">
-              We sent a 6-digit code to <span className="text-white font-medium">{phone}</span>
-            </p>
-
-            <OtpInput onComplete={handleVerifyOtp} disabled={isLoading} />
-
-            {isLoading && (
-              <div className="flex items-center justify-center text-sm text-gray-400">
-                <Spinner /> Verifying...
-              </div>
-            )}
-
-            <div className="flex flex-col items-center gap-2 pt-2">
-              <div className="text-sm">
-                {resendCooldown > 0 ? (
-                  <span className="text-gray-500">Resend code in {resendCooldown}s</span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleResendOtp}
-                    disabled={isLoading}
-                    className="text-blue-400 hover:text-blue-300 disabled:opacity-50"
-                  >
-                    Resend code
-                  </button>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setOtpStep('phone_entry');
-                  setError(null);
-                  setMessage('');
-                }}
-                className="text-sm text-gray-400 hover:text-gray-300"
-                disabled={isLoading}
-              >
-                Use a different phone number
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ===== Email Flow ===== */}
-        {authMethod === 'email' && !signUpSuccess && (
-          <form onSubmit={handleEmailSubmit} className="space-y-4">
+        {/* Email entry */}
+        {otpStep === 'email_entry' && (
+          <form onSubmit={handleSendEmailOtp} className="space-y-4">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">
                 Email
@@ -510,106 +287,60 @@ export function AuthModal({ isOpen, onClose, defaultIsSignUp = false }: AuthModa
               />
             </div>
 
-            {!isForgotPassword && (
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-1">
-                  Password
-                </label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    id="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-3 py-2 pr-10 bg-gray-700 rounded-md text-white"
-                    required
-                    disabled={isLoading}
-                    minLength={6}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    tabIndex={-1}
-                  >
-                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <div className="flex justify-between items-center pt-4">
-              <div className="space-x-4">
-                {isForgotPassword ? (
-                  <button
-                    type="button"
-                    onClick={handleBackToSignIn}
-                    className="text-blue-400 hover:text-blue-300"
-                    disabled={isLoading}
-                  >
-                    Back to Sign In
-                  </button>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsSignUp(!isSignUp);
-                        setError(null);
-                        setMessage('');
-                      }}
-                      className="text-blue-400 hover:text-blue-300"
-                      disabled={isLoading}
-                    >
-                      {isSignUp ? 'Already have an account?' : 'Need an account?'}
-                    </button>
-                    {!isSignUp && (
-                      <button
-                        type="button"
-                        onClick={handleForgotPassword}
-                        className="text-blue-400 hover:text-blue-300"
-                        disabled={isLoading}
-                      >
-                        Forgot Password?
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed"
-                aria-busy={isLoading}
-              >
-                {isLoading ? (
-                  <>
-                    <Spinner />
-                    {isForgotPassword ? 'Sending...' : (isSignUp ? 'Creating...' : 'Signing In...')}
-                  </>
-                ) : (
-                  isForgotPassword ? 'Reset Password' : (isSignUp ? 'Create Account' : 'Sign In')
-                )}
-              </button>
-            </div>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed"
+              aria-busy={isLoading}
+            >
+              {isLoading ? <><Spinner /> Sending Code...</> : 'Send Code'}
+            </button>
           </form>
         )}
 
-        {/* ===== Sign-up success state ===== */}
-        {authMethod === 'email' && signUpSuccess && (
-          <div className="space-y-4 text-center">
-            <p className="text-gray-300">
-              We've sent a confirmation link to <span className="text-white font-medium">{email}</span>. Please check your inbox and click the link to activate your account.
+        {/* OTP verification */}
+        {otpStep === 'otp_verify' && (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-400 text-center">
+              We sent a 6-digit code to <span className="text-white font-medium">{email}</span>
             </p>
-            <button
-              type="button"
-              onClick={handleBackToSignIn}
-              className="text-blue-400 hover:text-blue-300"
-            >
-              Back to Sign In
-            </button>
+
+            <OtpInput onComplete={handleVerifyEmailOtp} disabled={isLoading} />
+
+            {isLoading && (
+              <div className="flex items-center justify-center text-sm text-gray-400">
+                <Spinner /> Verifying...
+              </div>
+            )}
+
+            <div className="flex flex-col items-center gap-2 pt-2">
+              <div className="text-sm">
+                {resendCooldown > 0 ? (
+                  <span className="text-gray-500">Resend code in {resendCooldown}s</span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleResendEmailOtp}
+                    disabled={isLoading}
+                    className="text-blue-400 hover:text-blue-300 disabled:opacity-50"
+                  >
+                    Resend code
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setOtpStep('email_entry');
+                  setError(null);
+                  setMessage('');
+                }}
+                className="text-sm text-gray-400 hover:text-gray-300"
+                disabled={isLoading}
+              >
+                Use a different email
+              </button>
+            </div>
           </div>
         )}
       </div>

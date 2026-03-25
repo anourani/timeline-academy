@@ -4,11 +4,9 @@ import { supabase } from '../lib/supabase';
 
 interface AuthContextType {
   user: User | null;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
+  signInWithEmail: (email: string) => Promise<void>;
+  verifyEmailOtp: (email: string, token: string) => Promise<void>;
   signOut: () => Promise<void>;
-  signInWithPhone: (phone: string) => Promise<void>;
-  verifyPhoneOtp: (phone: string, token: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -43,39 +41,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const handleAuthError = async (error: AuthError) => {
     // Handle specific auth errors
-    if (error.message.includes('refresh_token_not_found') || 
+    if (error.message.includes('refresh_token_not_found') ||
         error.message.includes('invalid refresh token')) {
       console.warn('Invalid refresh token, signing out user');
       await signOut();
     }
   };
 
-  const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const signInWithEmail = async (email: string) => {
+    const { error } = await supabase.auth.signInWithOtp({ email });
     if (error) {
       handleAuthError(error);
       throw error;
     }
   };
 
-  const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({ email, password });
-    if (error) {
-      handleAuthError(error);
-      throw error;
-    }
-  };
-
-  const signInWithPhone = async (phone: string) => {
-    const { error } = await supabase.auth.signInWithOtp({ phone });
-    if (error) {
-      handleAuthError(error);
-      throw error;
-    }
-  };
-
-  const verifyPhoneOtp = async (phone: string, token: string) => {
-    const { error } = await supabase.auth.verifyOtp({ phone, token, type: 'sms' });
+  const verifyEmailOtp = async (email: string, token: string) => {
+    const { error } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
     if (error) {
       handleAuthError(error);
       throw error;
@@ -95,7 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, signIn, signUp, signOut, signInWithPhone, verifyPhoneOtp }}>
+    <AuthContext.Provider value={{ user, signInWithEmail, verifyEmailOtp, signOut }}>
       {children}
     </AuthContext.Provider>
   );

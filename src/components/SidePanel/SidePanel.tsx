@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { User, KeyRound, LogOut, AlertTriangle } from 'lucide-react';
+import { User, LogOut, AlertTriangle } from 'lucide-react';
 import { ConfirmationModal } from '../Modal/ConfirmationModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTimelines } from '../../hooks/useTimelines';
 import { TimelineList } from '../Timeline/TimelineList';
 import { AccountDetailsPanel } from './AccountDetailsPanel';
-import { ChangePasswordPanel } from './ChangePasswordPanel';
 import { supabase } from '../../lib/supabase';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,14 +15,14 @@ import {
   SheetDescription,
 } from '@/components/ui/sheet';
 
-type SubPanel = 'main' | 'account' | 'password';
+type SubPanel = 'main' | 'account';
 
 interface SidePanelProps {
   isOpen: boolean;
   onClose: () => void;
   timelineId: string | null;
   onTimelineSwitch: (timelineId: string) => void;
-  onAuthClick: (isSignUp: boolean) => void;
+  onAuthClick: () => void;
 }
 
 export function SidePanel({
@@ -68,8 +67,8 @@ export function SidePanel({
     }
   };
 
-  const handleAuthClick = (signUp: boolean) => {
-    onAuthClick(signUp);
+  const handleAuthClick = () => {
+    onAuthClick();
     onClose();
   };
 
@@ -115,11 +114,8 @@ export function SidePanel({
             Create up to 3 timelines and access them from anywhere
           </p>
           <div className="space-y-2">
-            <Button onClick={() => handleAuthClick(false)} className="w-full">
+            <Button onClick={handleAuthClick} className="w-full">
               Sign In
-            </Button>
-            <Button variant="secondary" onClick={() => handleAuthClick(true)} className="w-full">
-              Create Account
             </Button>
           </div>
         </div>
@@ -184,14 +180,6 @@ export function SidePanel({
                     <User size={20} className="text-muted-foreground" />
                   </Button>
                   <Button
-                    variant="ghost"
-                    onClick={() => setCurrentPanel('password')}
-                    className="w-full justify-between px-4 py-3 h-auto"
-                  >
-                    <span>Change Password</span>
-                    <KeyRound size={20} className="text-muted-foreground" />
-                  </Button>
-                  <Button
                     variant="destructive"
                     onClick={() => setShowSignOutConfirmation(true)}
                     className="w-full justify-between px-4 py-3 h-auto"
@@ -204,8 +192,6 @@ export function SidePanel({
             </div>
           ) : currentPanel === 'account' ? (
             <AccountDetailsPanel onBack={() => setCurrentPanel('main')} />
-          ) : currentPanel === 'password' ? (
-            <ChangePasswordPanel onBack={() => setCurrentPanel('main')} />
           ) : null}
         </SheetContent>
       </Sheet>
