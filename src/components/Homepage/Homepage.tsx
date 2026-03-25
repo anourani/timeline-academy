@@ -283,6 +283,7 @@ export function Homepage() {
               title={timeline.title}
               eventCount={meta?.eventCount ?? 0}
               yearRange={meta?.yearRange ?? ''}
+              dominantCategoryColor={meta?.dominantCategoryColor}
               onClick={() => handleTileClick(timeline.id)}
               onShare={handleShareTimeline}
               onDuplicate={handleDuplicateTimeline}

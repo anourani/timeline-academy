@@ -7,6 +7,7 @@ interface TimelineTileProps {
   title: string;
   eventCount: number;
   yearRange: string;
+  dominantCategoryColor?: string;
   onClick: () => void;
   onShare?: (id: string) => void;
   onDuplicate?: (id: string) => void;
@@ -15,7 +16,9 @@ interface TimelineTileProps {
   hideDuplicate?: boolean;
 }
 
-export function TimelineTile({ id, title, eventCount, yearRange, onClick, onShare, onDuplicate, onDelete, hideShare, hideDuplicate }: TimelineTileProps) {
+const DEFAULT_DOT_COLOR = '#4196E4';
+
+export function TimelineTile({ id, title, eventCount, yearRange, dominantCategoryColor, onClick, onShare, onDuplicate, onDelete, hideShare, hideDuplicate }: TimelineTileProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -31,25 +34,25 @@ export function TimelineTile({ id, title, eventCount, yearRange, onClick, onShar
   }, [menuOpen]);
 
   return (
-    <div className="group w-full flex items-center pt-4 pb-3 md:pb-[14px] px-4 rounded-[12px] bg-[#151617] hover:bg-[#242526] border border-[rgba(65,150,228,0.1)] hover:border-[rgba(65,150,228,0.25)] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4),inset_0px_1px_0px_0px_rgba(255,255,255,0.1)] transition-all duration-200 ease-out">
-      <button
-        onClick={onClick}
-        className="flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-[12px]"
-      >
-        <div className="flex items-center gap-8">
-          <div className="flex-1 flex flex-col gap-1 md:flex-row md:items-center md:gap-8">
-            <span className="flex-1 font-aleo font-normal text-[18px] leading-[1.4] text-text-secondary group-hover:text-text-primary transition-colors">
-              {title || DEFAULT_TIMELINE_TITLE}
-            </span>
-            <div className="flex items-center gap-4 font-avenir text-[14px] leading-[20px] text-text-tertiary shrink-0">
-              {yearRange && <span className="w-[90px] md:w-[100px]">{yearRange}</span>}
-              <span className="w-[90px] md:w-[100px]">{eventCount} {eventCount === 1 ? 'event' : 'events'}</span>
-            </div>
-          </div>
+    <div
+      onClick={onClick}
+      className="group w-full flex items-center pt-4 pb-3 md:pb-[14px] px-4 rounded-[12px] bg-[#151617] hover:bg-[#242526] border border-[rgba(65,150,228,0.1)] hover:border-[rgba(65,150,228,0.25)] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4),inset_0px_1px_0px_0px_rgba(255,255,255,0.1)] transition-all duration-200 ease-out cursor-pointer"
+    >
+      <div className="flex-1 flex flex-col gap-1 md:flex-row md:items-center md:gap-8 min-w-0">
+        <span className="flex-1 font-aleo font-normal text-[18px] leading-[1.4] text-text-secondary group-hover:text-text-primary transition-colors truncate">
+          {title || DEFAULT_TIMELINE_TITLE}
+        </span>
+        <div className="flex items-center gap-2 font-mono text-[12px] font-light leading-[1.4] text-text-tertiary shrink-0 w-[220px]">
+          {yearRange && <span className="shrink-0 whitespace-nowrap">{yearRange}</span>}
+          <div
+            className="shrink-0 size-[6px] rounded-full"
+            style={{ backgroundColor: dominantCategoryColor || DEFAULT_DOT_COLOR }}
+          />
+          <span className="w-[100px]">{eventCount} {eventCount === 1 ? 'event' : 'events'}</span>
         </div>
-      </button>
+      </div>
 
-      <div className="relative ml-4" ref={menuRef}>
+      <div className="relative ml-4 md:ml-8" ref={menuRef}>
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -57,7 +60,7 @@ export function TimelineTile({ id, title, eventCount, yearRange, onClick, onShar
           }}
           className="text-text-tertiary hover:text-text-primary transition-colors"
         >
-          <MoreVertical size={20} />
+          <MoreVertical className="size-5 md:size-[18px]" />
         </button>
 
         {menuOpen && (
