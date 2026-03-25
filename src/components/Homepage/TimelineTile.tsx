@@ -52,7 +52,7 @@ export function TimelineTile({ id, title, eventCount, yearRange, dominantCategor
         </div>
       </div>
 
-      <div className="relative ml-4 md:ml-8" ref={menuRef}>
+      <div className="relative ml-4 md:ml-8 self-center" ref={menuRef}>
         <button
           onClick={(e) => {
             e.stopPropagation();
