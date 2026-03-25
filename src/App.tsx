@@ -18,7 +18,7 @@ import { TimelineEvent } from './types/event';
 export function App() {
   const {
     events, addEvent, addEvents, clearEvents, setEvents, updateEvent,
-    title, description, setTitle, setDescription, resetTitle,
+    title, description, setTitle, setDescription,
     categories, updateCategories, resetCategories,
     scale, currentScale, handleScaleChange,
   } = useTimelineState();
@@ -36,8 +36,9 @@ export function App() {
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
   const [showCreationScreen, setShowCreationScreen] = useState(false);
+  const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   const { isGenerating, error: aiError, generate } = useAIMode();
-  const { loadDraft, saveDraft, clearDraft } = useLocalDraft();
+  const { loadAllDrafts, loadDraft, saveDraft, createDraft, clearAllDrafts } = useLocalDraft();
   const handledRouteStateRef = useRef(false);
 
   const timelineData = {
@@ -66,31 +67,71 @@ export function App() {
   // Hydrate from localStorage draft if logged out
   useEffect(() => {
     if (!user && !draftHydrated) {
-      const routeState = location.state as { timelineId?: string; skipCreationScreen?: boolean } | null;
-      const draft = loadDraft();
-      if (draft && draft.events.length > 0) {
-        setTitle(draft.title);
-        setDescription(draft.description);
-        setEvents(draft.events);
-        updateCategories(draft.categories);
-        handleScaleChange(draft.scale);
-      } else if (routeState?.skipCreationScreen) {
-        // "Build From Scratch" — skip creation screen, show empty timeline
+      const routeState = location.state as {
+        newTimeline?: boolean;
+        skipCreationScreen?: boolean;
+        draftId?: string;
+        timelineId?: string;
+      } | null;
+
+      if (routeState?.newTimeline) {
+        // "Build from Scratch" or "Build with AI" — always start a new timeline
+        const newDraft = createDraft();
+        if (!newDraft) {
+          alert('You\'ve reached the 3-timeline limit. Delete an existing timeline to create a new one.');
+          routerNavigate('/', { replace: true });
+          setDraftHydrated(true);
+          return;
+        }
+        setActiveDraftId(newDraft.id);
+        setTitle(newDraft.title);
+        setDescription(newDraft.description);
+        setEvents(newDraft.events);
+        updateCategories(newDraft.categories);
+        handleScaleChange(newDraft.scale);
+        if (!routeState.skipCreationScreen) {
+          setShowCreationScreen(true);
+        }
+      } else if (routeState?.draftId) {
+        // Clicking a local draft tile on Homepage
+        const draft = loadDraft(routeState.draftId);
+        if (draft) {
+          setActiveDraftId(draft.id);
+          setTitle(draft.title);
+          setDescription(draft.description);
+          setEvents(draft.events);
+          updateCategories(draft.categories);
+          handleScaleChange(draft.scale);
+        } else {
+          setShowCreationScreen(true);
+        }
       } else {
-        // No draft exists — show creation screen for first-time visitors
-        setShowCreationScreen(true);
+        // No route state — load most recent draft or show creation screen
+        const allDrafts = loadAllDrafts();
+        if (allDrafts.length > 0) {
+          const mostRecent = allDrafts[0];
+          setActiveDraftId(mostRecent.id);
+          setTitle(mostRecent.title);
+          setDescription(mostRecent.description);
+          setEvents(mostRecent.events);
+          updateCategories(mostRecent.categories);
+          handleScaleChange(mostRecent.scale);
+        } else {
+          setShowCreationScreen(true);
+        }
       }
+
       setDraftHydrated(true);
-      if (routeState?.timelineId) {
-        routerNavigate('/editor', { replace: true, state: {} });
-      }
+      // Clear the route state so refreshing doesn't re-trigger
+      routerNavigate('/editor', { replace: true, state: {} });
     }
   }, [user, draftHydrated]);
 
   // Save to localStorage when logged out
   useEffect(() => {
-    if (!user && draftHydrated) {
+    if (!user && draftHydrated && activeDraftId) {
       saveDraft({
+        id: activeDraftId,
         title,
         description,
         events,
@@ -99,27 +140,34 @@ export function App() {
         savedAt: new Date().toISOString()
       });
     }
-  }, [user, draftHydrated, title, description, events, categories, currentScale.value]);
+  }, [user, draftHydrated, activeDraftId, title, description, events, categories, currentScale.value]);
 
-  // Migrate localStorage draft to Supabase as a new timeline on login
+  // Migrate localStorage drafts to Supabase on login
   useEffect(() => {
     if (user && draftHydrated) {
-      const draft = loadDraft();
-      if (draft && draft.events.length > 0) {
-        saveTimeline(draft.title, draft.events, draft.scale)
-          .then(() => {
-            clearDraft();
-          })
-          .catch((err) => {
-            if (err.message === 'Maximum limit of 3 timelines reached') {
-              alert('You\'ve reached the 3-timeline limit. Your draft couldn\'t be saved. Delete an existing timeline to make room.');
-            } else {
-              console.error('Failed to migrate draft:', err);
-              clearDraft();
+      const allDrafts = loadAllDrafts();
+      const draftsWithEvents = allDrafts.filter(d => d.events.length > 0);
+
+      if (draftsWithEvents.length > 0) {
+        (async () => {
+          for (const draft of draftsWithEvents) {
+            try {
+              await saveTimeline(draft.title, draft.events, draft.scale);
+            } catch (err: unknown) {
+              if (err instanceof Error && err.message === 'Maximum limit of 3 timelines reached') {
+                alert('You\'ve reached the 3-timeline limit. Some drafts couldn\'t be saved. Delete an existing timeline to make room.');
+                break;
+              } else {
+                console.error('Failed to migrate draft:', err);
+              }
             }
-          });
+          }
+          clearAllDrafts();
+          setActiveDraftId(null);
+        })();
       } else {
-        clearDraft();
+        clearAllDrafts();
+        setActiveDraftId(null);
       }
     }
   }, [user, draftHydrated]);
@@ -217,9 +265,6 @@ export function App() {
 
   const handleClearTimeline = () => {
     clearEvents();
-    if (!user) {
-      clearDraft();
-    }
   };
 
   const handleUpdateEvent = (updatedEvent: TimelineEvent) => {
@@ -272,7 +317,7 @@ export function App() {
         timelineId={timelineId}
       />
       <Header
-        title={title} 
+        title={title}
         description={description}
         onTitleChange={setTitle}
         onDescriptionChange={setDescription}
@@ -338,11 +383,11 @@ export function App() {
           />
         </main>
       )}
-      <SampleTimelineView 
+      <SampleTimelineView
         isOpen={showSampleTimeline}
         onClose={() => setShowSampleTimeline(false)}
       />
-      <AuthModal 
+      <AuthModal
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
         defaultIsSignUp={isSignUp}

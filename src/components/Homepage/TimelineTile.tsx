@@ -8,12 +8,14 @@ interface TimelineTileProps {
   eventCount: number;
   yearRange: string;
   onClick: () => void;
-  onShare: (id: string) => void;
-  onDuplicate: (id: string) => void;
+  onShare?: (id: string) => void;
+  onDuplicate?: (id: string) => void;
   onDelete: (id: string) => void;
+  hideShare?: boolean;
+  hideDuplicate?: boolean;
 }
 
-export function TimelineTile({ id, title, eventCount, yearRange, onClick, onShare, onDuplicate, onDelete }: TimelineTileProps) {
+export function TimelineTile({ id, title, eventCount, yearRange, onClick, onShare, onDuplicate, onDelete, hideShare, hideDuplicate }: TimelineTileProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -58,28 +60,32 @@ export function TimelineTile({ id, title, eventCount, yearRange, onClick, onShar
 
         {menuOpen && (
           <div className="absolute right-0 top-full mt-1 w-40 bg-surface-tertiary border border-[#3D3E40] rounded-lg shadow-lg z-50 py-1">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onShare(id);
-                setMenuOpen(false);
-              }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:bg-[#333] hover:text-text-primary transition-colors"
-            >
-              <Share2 size={14} />
-              Share
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onDuplicate(id);
-                setMenuOpen(false);
-              }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:bg-[#333] hover:text-text-primary transition-colors"
-            >
-              <Copy size={14} />
-              Duplicate
-            </button>
+            {!hideShare && onShare && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onShare(id);
+                  setMenuOpen(false);
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:bg-[#333] hover:text-text-primary transition-colors"
+              >
+                <Share2 size={14} />
+                Share
+              </button>
+            )}
+            {!hideDuplicate && onDuplicate && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDuplicate(id);
+                  setMenuOpen(false);
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:bg-[#333] hover:text-text-primary transition-colors"
+              >
+                <Copy size={14} />
+                Duplicate
+              </button>
+            )}
             <button
               onClick={(e) => {
                 e.stopPropagation();
