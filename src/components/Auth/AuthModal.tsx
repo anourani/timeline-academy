@@ -9,9 +9,7 @@ interface AuthModalProps {
   onClose: () => void;
 }
 
-type AuthMethod = 'phone' | 'email';
-type OtpStep = 'phone_entry' | 'otp_verify';
-type EmailOtpStep = 'email_entry' | 'otp_verify';
+type OtpStep = 'email_entry' | 'otp_verify';
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
@@ -72,10 +70,7 @@ function mapErrorMessage(err: unknown): MappedError {
     return { message: 'Too many attempts. Please try again later.', isRetryable: false };
   }
 
-  // Phone/OTP errors
-  if (msg.includes('Phone number') || msg.includes('Invalid phone') || msg.includes('phone')) {
-    return { message: 'Please enter a valid phone number with country code (e.g., +1 555 000 0000).', isRetryable: false };
-  }
+  // OTP errors
   if (msg.includes('Token has expired') || msg.includes('otp_expired')) {
     return { message: 'Code expired. Please request a new one.', isRetryable: false };
   }
@@ -92,23 +87,15 @@ function mapErrorMessage(err: unknown): MappedError {
 }
 
 export function AuthModal({ isOpen, onClose }: AuthModalProps) {
-  // Shared state
-  const [authMethod, setAuthMethod] = useState<AuthMethod>('phone');
   const [error, setError] = useState<MappedError | null>(null);
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-
-  // Email OTP state
   const [email, setEmail] = useState('');
-  const [emailOtpStep, setEmailOtpStep] = useState<EmailOtpStep>('email_entry');
-
-  // Phone OTP state
-  const [phone, setPhone] = useState('');
-  const [otpStep, setOtpStep] = useState<OtpStep>('phone_entry');
+  const [otpStep, setOtpStep] = useState<OtpStep>('email_entry');
   const [resendCooldown, setResendCooldown] = useState(0);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const { signInWithEmail, verifyEmailOtp, signInWithPhone, verifyPhoneOtp } = useAuth();
+  const { signInWithEmail, verifyEmailOtp } = useAuth();
 
   // Clean up cooldown interval
   useEffect(() => {
@@ -120,14 +107,11 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   // Reset all state when modal opens
   useEffect(() => {
     if (isOpen) {
-      setAuthMethod('phone');
       setError(null);
       setMessage('');
       setIsLoading(false);
       setEmail('');
-      setEmailOtpStep('email_entry');
-      setPhone('');
-      setOtpStep('phone_entry');
+      setOtpStep('email_entry');
       setResendCooldown(0);
       if (cooldownRef.current) {
         clearInterval(cooldownRef.current);
@@ -177,21 +161,6 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     }
   }, []);
 
-  const switchAuthMethod = (method: AuthMethod) => {
-    setAuthMethod(method);
-    setError(null);
-    setMessage('');
-    setEmail('');
-    setEmailOtpStep('email_entry');
-    setPhone('');
-    setOtpStep('phone_entry');
-    setResendCooldown(0);
-    if (cooldownRef.current) {
-      clearInterval(cooldownRef.current);
-      cooldownRef.current = null;
-    }
-  };
-
   // Check if Supabase is configured
   const isSupabaseConfigured = Boolean(
     import.meta.env.VITE_SUPABASE_URL &&
@@ -209,70 +178,6 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     );
   }
 
-  // --- Phone OTP handlers ---
-
-  const handleSendOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setMessage('');
-    setIsLoading(true);
-
-    // Basic client-side phone validation
-    const cleaned = phone.replace(/[\s()-]/g, '');
-    if (!cleaned.startsWith('+') || cleaned.replace(/\D/g, '').length < 10) {
-      setError({ message: 'Please enter a valid phone number with country code (e.g., +1 555 000 0000).', isRetryable: false });
-      setIsLoading(false);
-      return;
-    }
-
-    try {
-      await signInWithPhone(cleaned);
-      setOtpStep('otp_verify');
-      startCooldown();
-    } catch (err) {
-      console.error('Phone auth error:', err);
-      setError(mapErrorMessage(err));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleVerifyOtp = async (code: string) => {
-    setError(null);
-    setIsLoading(true);
-
-    const cleaned = phone.replace(/[\s()-]/g, '');
-
-    try {
-      await verifyPhoneOtp(cleaned, code);
-      onClose();
-    } catch (err) {
-      console.error('OTP verification error:', err);
-      setError(mapErrorMessage(err));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleResendOtp = async () => {
-    if (resendCooldown > 0) return;
-    setError(null);
-    setIsLoading(true);
-
-    const cleaned = phone.replace(/[\s()-]/g, '');
-
-    try {
-      await signInWithPhone(cleaned);
-      setMessage('A new code has been sent.');
-      startCooldown();
-    } catch (err) {
-      console.error('Resend OTP error:', err);
-      setError(mapErrorMessage(err));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   // --- Email OTP handlers ---
 
   const handleSendEmailOtp = async (e: React.FormEvent) => {
@@ -283,7 +188,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
     try {
       await signInWithEmail(email);
-      setEmailOtpStep('otp_verify');
+      setOtpStep('otp_verify');
       startCooldown();
     } catch (err) {
       console.error('Email OTP error:', err);
@@ -325,44 +230,11 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     }
   };
 
-  // --- Determine modal title ---
-
-  let title: string;
-  if (authMethod === 'phone') {
-    title = otpStep === 'otp_verify' ? 'Enter Verification Code' : 'Sign In with Phone';
-  } else {
-    title = emailOtpStep === 'otp_verify' ? 'Enter Verification Code' : 'Sign In with Email';
-  }
+  const title = otpStep === 'otp_verify' ? 'Enter Verification Code' : 'Sign In';
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title}>
       <div className="space-y-4">
-        {/* Auth method tabs */}
-        <div className="flex border-b border-gray-700">
-          <button
-            type="button"
-            onClick={() => switchAuthMethod('phone')}
-            className={`flex-1 py-2 text-sm font-medium transition-colors ${
-              authMethod === 'phone'
-                ? 'text-blue-400 border-b-2 border-blue-400'
-                : 'text-gray-400 hover:text-gray-300'
-            }`}
-          >
-            Phone
-          </button>
-          <button
-            type="button"
-            onClick={() => switchAuthMethod('email')}
-            className={`flex-1 py-2 text-sm font-medium transition-colors ${
-              authMethod === 'email'
-                ? 'text-blue-400 border-b-2 border-blue-400'
-                : 'text-gray-400 hover:text-gray-300'
-            }`}
-          >
-            Email
-          </button>
-        </div>
-
         {/* Error display */}
         {error && (
           <div
@@ -397,84 +269,8 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           </div>
         )}
 
-        {/* ===== Phone OTP Flow ===== */}
-        {authMethod === 'phone' && otpStep === 'phone_entry' && (
-          <form onSubmit={handleSendOtp} className="space-y-4">
-            <div>
-              <label htmlFor="phone" className="block text-sm font-medium text-gray-300 mb-1">
-                Phone Number
-              </label>
-              <input
-                type="tel"
-                id="phone"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-700 rounded-md text-white"
-                placeholder="+1 (555) 000-0000"
-                required
-                disabled={isLoading}
-              />
-              <p className="mt-1 text-xs text-gray-500">Include your country code (e.g., +1 for US)</p>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed"
-              aria-busy={isLoading}
-            >
-              {isLoading ? <><Spinner /> Sending Code...</> : 'Send Code'}
-            </button>
-          </form>
-        )}
-
-        {authMethod === 'phone' && otpStep === 'otp_verify' && (
-          <div className="space-y-4">
-            <p className="text-sm text-gray-400 text-center">
-              We sent a 6-digit code to <span className="text-white font-medium">{phone}</span>
-            </p>
-
-            <OtpInput onComplete={handleVerifyOtp} disabled={isLoading} />
-
-            {isLoading && (
-              <div className="flex items-center justify-center text-sm text-gray-400">
-                <Spinner /> Verifying...
-              </div>
-            )}
-
-            <div className="flex flex-col items-center gap-2 pt-2">
-              <div className="text-sm">
-                {resendCooldown > 0 ? (
-                  <span className="text-gray-500">Resend code in {resendCooldown}s</span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleResendOtp}
-                    disabled={isLoading}
-                    className="text-blue-400 hover:text-blue-300 disabled:opacity-50"
-                  >
-                    Resend code
-                  </button>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setOtpStep('phone_entry');
-                  setError(null);
-                  setMessage('');
-                }}
-                className="text-sm text-gray-400 hover:text-gray-300"
-                disabled={isLoading}
-              >
-                Use a different phone number
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ===== Email OTP Flow ===== */}
-        {authMethod === 'email' && emailOtpStep === 'email_entry' && (
+        {/* Email entry */}
+        {otpStep === 'email_entry' && (
           <form onSubmit={handleSendEmailOtp} className="space-y-4">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">
@@ -502,7 +298,8 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           </form>
         )}
 
-        {authMethod === 'email' && emailOtpStep === 'otp_verify' && (
+        {/* OTP verification */}
+        {otpStep === 'otp_verify' && (
           <div className="space-y-4">
             <p className="text-sm text-gray-400 text-center">
               We sent a 6-digit code to <span className="text-white font-medium">{email}</span>
@@ -534,7 +331,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
               <button
                 type="button"
                 onClick={() => {
-                  setEmailOtpStep('email_entry');
+                  setOtpStep('email_entry');
                   setError(null);
                   setMessage('');
                 }}
