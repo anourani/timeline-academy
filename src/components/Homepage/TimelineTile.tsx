@@ -31,18 +31,20 @@ export function TimelineTile({ id, title, eventCount, yearRange, onClick, onShar
   }, [menuOpen]);
 
   return (
-    <div className="group w-full flex items-center p-[17px] rounded-[12px] bg-[#151617] hover:bg-[#242526] border border-[rgba(65,150,228,0.1)] hover:border-[rgba(65,150,228,0.25)] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4),inset_0px_1px_0px_0px_rgba(255,255,255,0.1)] transition-all duration-200 ease-out">
+    <div className="group w-full flex items-center pt-[17px] pb-[13px] md:pb-[15px] px-[17px] rounded-[12px] bg-[#151617] hover:bg-[#242526] border border-[rgba(65,150,228,0.1)] hover:border-[rgba(65,150,228,0.25)] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4),inset_0px_1px_0px_0px_rgba(255,255,255,0.1)] transition-all duration-200 ease-out">
       <button
         onClick={onClick}
         className="flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-[12px]"
       >
         <div className="flex items-center gap-8">
-          <span className="flex-1 font-aleo font-normal text-[18px] leading-[1.4] text-text-secondary group-hover:text-text-primary transition-colors">
-            {title || DEFAULT_TIMELINE_TITLE}
-          </span>
-          <div className="flex items-center gap-4 font-avenir text-[14px] leading-[20px] text-text-tertiary shrink-0">
-            {yearRange && <span className="w-[100px]">{yearRange}</span>}
-            <span className="w-[100px]">{eventCount} {eventCount === 1 ? 'event' : 'events'}</span>
+          <div className="flex-1 flex flex-col gap-1 md:flex-row md:items-center md:gap-8">
+            <span className="flex-1 font-aleo font-normal text-[18px] leading-[1.4] text-text-secondary group-hover:text-text-primary transition-colors">
+              {title || DEFAULT_TIMELINE_TITLE}
+            </span>
+            <div className="flex items-center gap-4 font-avenir text-[14px] leading-[20px] text-text-tertiary shrink-0">
+              {yearRange && <span className="w-[90px] md:w-[100px]">{yearRange}</span>}
+              <span className="w-[90px] md:w-[100px]">{eventCount} {eventCount === 1 ? 'event' : 'events'}</span>
+            </div>
           </div>
         </div>
       </button>
