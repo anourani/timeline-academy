@@ -97,7 +97,7 @@ function SortableTab({
       style={style}
       onClick={onClick}
       className={`
-        group relative flex items-center justify-between w-full min-w-[146px] py-[9px] pl-[11px] pr-[3px] rounded-[10px]
+        group relative flex items-center justify-between w-full py-[9px] pl-[11px] pr-[3px] rounded-[10px]
         backdrop-blur-[12px] shadow-[0px_8px_32px_rgba(0,0,0,0.4)] text-left
         font-['Avenir',sans-serif] font-medium text-[14px] leading-[20px] transition-all
         ${isActive
@@ -333,12 +333,12 @@ export function EventTableEditor({
           {/* Content Area: Sidebar + Table */}
           <div className="flex gap-6 mt-6" style={{ height: 'min(500px, calc(100vh - 280px))' }}>
             {/* Category Sidebar */}
-            <div className="w-[146px] shrink-0 bg-[#242526] rounded-[12px] p-2 flex flex-col gap-[2px] overflow-y-auto">
+            <div className="w-[162px] shrink-0 bg-[#242526] rounded-[12px] p-2 flex flex-col gap-[2px] overflow-y-auto">
               {/* All Categories tab (pinned, not draggable) */}
               <button
                 onClick={() => setActiveCategory(null)}
                 className={`
-                  w-full min-w-[146px] py-[9px] pl-[11px] pr-[3px] rounded-[10px]
+                  w-full py-[9px] pl-[11px] pr-[3px] rounded-[10px]
                   backdrop-blur-[12px] shadow-[0px_8px_32px_rgba(0,0,0,0.4)] text-left
                   font-['Avenir',sans-serif] font-medium text-[14px] leading-[20px] transition-all
                   ${activeCategory === null
