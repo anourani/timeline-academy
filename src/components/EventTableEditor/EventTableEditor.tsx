@@ -377,12 +377,12 @@ export function EventTableEditor({
             <div className="flex-1 flex flex-col min-w-0">
               {/* Header Row */}
               <div
-                className="flex items-center px-4 pb-2 gap-[22px] border-b border-[rgba(210,210,210,0.2)]"
+                className="flex items-center pl-[16px] pr-[10px] pb-2 gap-[22px] border-b border-[rgba(210,210,210,0.2)]"
                 style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 300, fontSize: '12px', lineHeight: '1.4', color: '#9b9ea3' }}
               >
-                <div className="w-[246px] shrink-0">Title <span className="text-destructive">*</span></div>
-                <div className="w-[96px] shrink-0">Start Date <span className="text-destructive">*</span></div>
-                <div className="w-[96px] shrink-0">End Date</div>
+                <div className="w-[240px] shrink-0">Title <span className="text-destructive">*</span></div>
+                <div className="w-[90px] shrink-0">Start Date <span className="text-destructive">*</span></div>
+                <div className="w-[90px] shrink-0">End Date</div>
                 <div className="flex-1">Category <span className="text-destructive">*</span></div>
                 <div className="w-[32px] shrink-0"></div>
               </div>
