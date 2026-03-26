@@ -98,11 +98,11 @@ function SortableTab({
       onClick={onClick}
       className={`
         group relative flex items-center justify-between w-full py-[9px] pl-[11px] pr-[3px] rounded-[10px]
-        backdrop-blur-[12px] shadow-[0px_8px_32px_rgba(0,0,0,0.4)] text-left
+        backdrop-blur-[12px] text-left
         font-['Avenir',sans-serif] font-medium text-[14px] leading-[20px] transition-all
         ${isActive
-          ? 'border border-transparent bg-[rgba(37,99,235,0.4)] text-[#dadee5] shadow-[0px_8px_32px_rgba(0,0,0,0.4)]'
-          : 'border border-transparent bg-transparent text-[#c9ced4] shadow-[0px_8px_32px_rgba(0,0,0,0.4)] hover:border-[rgba(255,255,255,0.15)] hover:bg-[rgba(255,255,255,0.1)] hover:text-[#dadee5]'
+          ? 'border border-transparent bg-[rgba(37,99,235,0.4)] text-[#dadee5]'
+          : 'border border-transparent bg-transparent text-[#c9ced4] hover:border-[rgba(255,255,255,0.15)] hover:bg-[rgba(255,255,255,0.1)] hover:text-[#dadee5]'
         }
         ${isDragging ? 'shadow-[0px_12px_40px_rgba(0,0,0,0.6)]' : ''}
       `}
@@ -339,11 +339,11 @@ export function EventTableEditor({
                 onClick={() => setActiveCategory(null)}
                 className={`
                   w-full py-[9px] pl-[11px] pr-[3px] rounded-[10px]
-                  backdrop-blur-[12px] shadow-[0px_8px_32px_rgba(0,0,0,0.4)] text-left
+                  backdrop-blur-[12px] text-left
                   font-['Avenir',sans-serif] font-medium text-[14px] leading-[20px] transition-all
                   ${activeCategory === null
-                    ? 'border border-transparent bg-[rgba(37,99,235,0.4)] text-[#dadee5] shadow-[0px_8px_32px_rgba(0,0,0,0.4)]'
-                    : 'border border-transparent bg-transparent text-[#c9ced4] shadow-[0px_8px_32px_rgba(0,0,0,0.4)] hover:border-[rgba(255,255,255,0.15)] hover:bg-[rgba(255,255,255,0.1)] hover:text-[#dadee5]'
+                    ? 'border border-transparent bg-[rgba(37,99,235,0.4)] text-[#dadee5]'
+                    : 'border border-transparent bg-transparent text-[#c9ced4] hover:border-[rgba(255,255,255,0.15)] hover:bg-[rgba(255,255,255,0.1)] hover:text-[#dadee5]'
                   }
                 `}
               >
