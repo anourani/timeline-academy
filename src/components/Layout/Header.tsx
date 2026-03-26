@@ -200,6 +200,7 @@ export function Header({
         events={events}
         onEventsChange={onEventsChange}
         categories={categories}
+        onCategoriesChange={onCategoriesChange}
       />
     </>
   );
