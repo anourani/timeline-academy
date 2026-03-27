@@ -204,6 +204,7 @@ export function EventTableEditor({
   categories,
   onCategoriesChange,
 }: EventTableEditorProps) {
+  const [activePageTab, setActivePageTab] = useState<'events' | 'categories'>('events')
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [emptyRows, setEmptyRows] = useState<DraftEvent[]>([])
   const [draftEvents, setDraftEvents] = useState<TimelineEvent[]>(events)
@@ -325,13 +326,45 @@ export function EventTableEditor({
         <DialogPrimitive.Content
           className="fixed left-[50%] top-[50%] z-50 w-full max-w-[960px] translate-x-[-50%] translate-y-[-50%] bg-[#171717] border border-[rgba(210,210,210,0.2)] rounded-[20px] p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]"
         >
-          {/* Title */}
-          <DialogPrimitive.Title className="text-center font-['Aleo',serif] font-normal text-[24px] leading-[1.4] text-[#c9ced4]">
-            Events
-          </DialogPrimitive.Title>
+          {/* Accessible title (sr-only) */}
+          <DialogPrimitive.Title className="sr-only">Events</DialogPrimitive.Title>
+
+          {/* Page Tabs */}
+          <div className="flex items-center justify-center h-[48px]">
+            <div className="relative flex items-center">
+              {/* Glass pill indicator */}
+              <div
+                className="absolute top-1/2 -translate-y-1/2 h-[44px] border border-[rgba(255,255,255,0.15)] rounded-[12px] shadow-[0px_8px_32px_rgba(0,0,0,0.4)] pointer-events-none transition-all duration-200"
+                style={{
+                  left: activePageTab === 'events' ? 0 : undefined,
+                  right: activePageTab === 'categories' ? 0 : undefined,
+                  width: activePageTab === 'events' ? '99px' : '139px',
+                }}
+              >
+                <div className="absolute inset-0 backdrop-blur-[12px] bg-[rgba(255,255,255,0.1)] rounded-[12px]" />
+                <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0px_1px_0px_rgba(255,255,255,0.1)]" />
+              </div>
+              <button
+                onClick={() => setActivePageTab('events')}
+                className="relative flex items-start h-[44px] px-[12px] py-[5px] rounded-[4px]"
+              >
+                <span className={`font-['Aleo',serif] font-normal text-[24px] leading-[1.4] whitespace-nowrap transition-colors ${activePageTab === 'events' ? 'text-[#dadee5]' : 'text-[#9b9ea3]'}`}>
+                  Events
+                </span>
+              </button>
+              <button
+                onClick={() => setActivePageTab('categories')}
+                className="relative flex items-start h-[44px] px-[12px] py-[5px] rounded-[4px] cursor-pointer"
+              >
+                <span className={`font-['Aleo',serif] font-normal text-[24px] leading-[1.4] whitespace-nowrap transition-colors ${activePageTab === 'categories' ? 'text-[#dadee5]' : 'text-[#9b9ea3]'}`}>
+                  Categories
+                </span>
+              </button>
+            </div>
+          </div>
 
           {/* Content Area: Sidebar + Table */}
-          <div className="flex gap-6 mt-6" style={{ height: 'min(500px, calc(100vh - 280px))' }}>
+          <div className="flex gap-[16px] mt-8" style={{ height: 'min(520px, calc(100vh - 280px))' }}>
             {/* Category Sidebar */}
             <div className="w-[162px] shrink-0 bg-[#242526] rounded-[12px] p-2 flex flex-col gap-[2px] overflow-y-auto">
               {/* All Categories tab (pinned, not draggable) */}
@@ -500,7 +533,7 @@ export function EventTableEditor({
           </div>
 
           {/* Footer */}
-          <div className="flex justify-between items-center mt-6">
+          <div className="flex justify-between items-center mt-8">
             {/* Add Event (left) */}
             <button
               onClick={handleAddRow}
@@ -544,7 +577,7 @@ export function EventTableEditor({
                   disabled:opacity-50 disabled:pointer-events-none
                 "
               >
-                Save Changes
+                Save
               </button>
             </div>
           </div>
