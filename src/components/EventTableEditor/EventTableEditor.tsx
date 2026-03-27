@@ -334,11 +334,11 @@ export function EventTableEditor({
             <div className="relative flex items-center">
               {/* Glass pill indicator */}
               <div
-                className="absolute top-1/2 -translate-y-1/2 h-[44px] border border-[rgba(255,255,255,0.15)] rounded-[12px] shadow-[0px_8px_32px_rgba(0,0,0,0.4)] pointer-events-none transition-all duration-200"
+                className="absolute top-1/2 -translate-y-1/2 h-[44px] border border-[rgba(255,255,255,0.15)] rounded-[12px] shadow-[0px_8px_32px_rgba(0,0,0,0.4)] pointer-events-none"
                 style={{
-                  left: activePageTab === 'events' ? 0 : undefined,
-                  right: activePageTab === 'categories' ? 0 : undefined,
+                  left: activePageTab === 'events' ? '0px' : '99px',
                   width: activePageTab === 'events' ? '99px' : '139px',
+                  transition: 'left 320ms ease-out, width 320ms ease-out',
                 }}
               >
                 <div className="absolute inset-0 backdrop-blur-[12px] bg-[rgba(255,255,255,0.1)] rounded-[12px]" />
