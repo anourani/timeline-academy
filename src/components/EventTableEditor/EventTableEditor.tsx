@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import { TimelineEvent, CategoryConfig } from '../../types/event'
 import { Trash2, GripVertical } from 'lucide-react'
 import { format } from 'date-fns'
@@ -196,6 +196,57 @@ function DatePickerCell({
   )
 }
 
+// Color palette for categories
+const COLOR_PALETTE = [
+  { label: 'Blue', value: '#4196E4' },
+  { label: 'Purple', value: '#A770EC' },
+  { label: 'Red', value: '#E10000' },
+  { label: 'Green', value: '#259E23' },
+  { label: 'Orange', value: '#FF7D05' },
+]
+
+// Color bar component for category color picker
+function ColorBar({
+  color,
+  isSelected,
+  onClick,
+}: {
+  color: string
+  isSelected: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="relative w-[30px] h-[75px] flex items-center justify-center cursor-pointer group"
+    >
+      <div
+        className={`
+          w-[27px] rounded-[4px] transition-all duration-200
+          ${isSelected
+            ? 'h-[75px] opacity-100'
+            : 'h-[50px] opacity-60 group-hover:h-[60px] group-hover:opacity-80'
+          }
+        `}
+        style={{
+          backgroundColor: color,
+          border: `1px solid ${color}`,
+          boxShadow: 'inset 0px 4px 20px rgba(0,0,0,0.25)',
+        }}
+      />
+    </button>
+  )
+}
+
+// Glass button used in category rows
+const glassButtonClass = `
+  relative min-w-[80px] px-[11px] py-[6px] rounded-[10px]
+  backdrop-blur-[12px] bg-white/10 border border-white/[0.15]
+  shadow-[0px_8px_32px_rgba(0,0,0,0.4),inset_0px_1px_0px_rgba(255,255,255,0.1)]
+  font-['Avenir',sans-serif] font-medium text-[14px] text-[#c9ced4]
+  hover:bg-white/20 hover:text-[#dadee5] transition-all
+`
+
 export function EventTableEditor({
   isOpen,
   onClose,
@@ -307,6 +358,64 @@ export function EventTableEditor({
     }
   }
 
+  // Category management state and handlers
+  const [editingLabels, setEditingLabels] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    setEditingLabels(categories.reduce((acc, cat) => ({ ...acc, [cat.id]: cat.label }), {} as Record<string, string>))
+  }, [categories])
+
+  const handleCategoryLabelChange = useCallback((catId: string, value: string) => {
+    setEditingLabels(prev => ({ ...prev, [catId]: value }))
+  }, [])
+
+  const handleCategoryLabelBlur = useCallback((catId: string) => {
+    const trimmed = (editingLabels[catId] || '').trim()
+    if (!trimmed) {
+      const cat = categories.find(c => c.id === catId)
+      if (cat) setEditingLabels(prev => ({ ...prev, [catId]: cat.label }))
+      return
+    }
+    const isDuplicate = categories.some(c => c.id !== catId && c.label.toLowerCase() === trimmed.toLowerCase())
+    if (isDuplicate) {
+      const cat = categories.find(c => c.id === catId)
+      if (cat) setEditingLabels(prev => ({ ...prev, [catId]: cat.label }))
+      return
+    }
+    onCategoriesChange(categories.map(c => c.id === catId ? { ...c, label: trimmed } : c))
+  }, [categories, editingLabels, onCategoriesChange])
+
+  const handleCategoryColorChange = useCallback((catId: string, color: string) => {
+    onCategoriesChange(categories.map(c => c.id === catId ? { ...c, color } : c))
+  }, [categories, onCategoriesChange])
+
+  const handleCategoryVisibilityToggle = useCallback((catId: string) => {
+    onCategoriesChange(categories.map(c => c.id === catId ? { ...c, visible: !c.visible } : c))
+  }, [categories, onCategoriesChange])
+
+  const handleCategoryDelete = useCallback((catId: string) => {
+    if (categories.length <= 1) return
+    onCategoriesChange(categories.filter(c => c.id !== catId))
+  }, [categories, onCategoriesChange])
+
+  const handleAddCategory = useCallback(() => {
+    if (categories.length >= 4) return
+    let uniqueName = 'New Category'
+    let counter = 1
+    while (categories.some(c => c.label.toLowerCase() === uniqueName.toLowerCase())) {
+      uniqueName = `New Category ${counter}`
+      counter++
+    }
+    const newCat: CategoryConfig = {
+      id: uniqueName.toLowerCase().replace(/\s+/g, '_') as CategoryConfig['id'],
+      label: uniqueName,
+      color: COLOR_PALETTE[categories.length % COLOR_PALETTE.length].value,
+      visible: true,
+    }
+    onCategoriesChange([...categories, newCat])
+    setEditingLabels(prev => ({ ...prev, [newCat.id]: newCat.label }))
+  }, [categories, onCategoriesChange])
+
   const isEmptyRow = (id: string) => emptyRows.some(row => row.id === id)
 
   const isFieldFilled = (event: DraftEvent | TimelineEvent, field: string) => {
@@ -363,205 +472,276 @@ export function EventTableEditor({
             </div>
           </div>
 
-          {/* Content Area: Sidebar + Table */}
-          <div className="flex gap-[16px] mt-8" style={{ height: 'min(520px, calc(100vh - 280px))' }}>
-            {/* Category Sidebar */}
-            <div className="w-[162px] shrink-0 bg-[#242526] rounded-[12px] p-2 flex flex-col gap-[2px] overflow-y-auto">
-              {/* All Categories tab (pinned, not draggable) */}
-              <button
-                onClick={() => setActiveCategory(null)}
-                className={`
-                  w-full py-[9px] pl-[11px] pr-[3px] rounded-[10px]
-                  backdrop-blur-[12px] text-left
-                  font-['Avenir',sans-serif] font-medium text-[14px] leading-[20px] transition-all
-                  ${activeCategory === null
-                    ? 'border border-transparent bg-[rgba(37,99,235,0.4)] text-[#dadee5]'
-                    : 'border border-transparent bg-transparent text-[#c9ced4] hover:border-[rgba(255,255,255,0.15)] hover:bg-[rgba(255,255,255,0.1)] hover:text-[#dadee5]'
-                  }
-                `}
-              >
-                All Categories
-              </button>
+          {/* Content Area */}
+          <div className="mt-8" style={{ height: 'min(520px, calc(100vh - 280px))' }}>
+            {activePageTab === 'events' ? (
+              /* Events Tab Content */
+              <div className="flex gap-[16px] h-full">
+                {/* Category Sidebar */}
+                <div className="w-[162px] shrink-0 bg-[#242526] rounded-[12px] p-2 flex flex-col gap-[2px] overflow-y-auto">
+                  {/* All Categories tab (pinned, not draggable) */}
+                  <button
+                    onClick={() => setActiveCategory(null)}
+                    className={`
+                      w-full py-[9px] pl-[11px] pr-[3px] rounded-[10px]
+                      backdrop-blur-[12px] text-left
+                      font-['Avenir',sans-serif] font-medium text-[14px] leading-[20px] transition-all
+                      ${activeCategory === null
+                        ? 'border border-transparent bg-[rgba(37,99,235,0.4)] text-[#dadee5]'
+                        : 'border border-transparent bg-transparent text-[#c9ced4] hover:border-[rgba(255,255,255,0.15)] hover:bg-[rgba(255,255,255,0.1)] hover:text-[#dadee5]'
+                      }
+                    `}
+                  >
+                    All Categories
+                  </button>
 
-              {/* Draggable category tabs */}
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-                modifiers={[restrictToVerticalAxis, restrictToParentElement]}
-              >
-                <SortableContext
-                  items={categories.map(c => c.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  {categories.map(cat => (
-                    <SortableTab
-                      key={cat.id}
-                      category={cat}
-                      isActive={activeCategory === cat.id}
-                      onClick={() => setActiveCategory(cat.id)}
-                    />
-                  ))}
-                </SortableContext>
-              </DndContext>
-            </div>
-
-            {/* Table Area */}
-            <div className="flex-1 flex flex-col min-w-0">
-              {/* Header Row */}
-              <div
-                className="flex items-center pl-[16px] pr-[10px] pb-2 gap-[22px] border-b border-[rgba(210,210,210,0.2)]"
-                style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 300, fontSize: '12px', lineHeight: '1.4', color: '#9b9ea3' }}
-              >
-                <div className="w-[240px] shrink-0">Title <span className="text-destructive">*</span></div>
-                <div className="w-[90px] shrink-0">Start Date <span className="text-destructive">*</span></div>
-                <div className="w-[90px] shrink-0">End Date</div>
-                <div className="flex-1">Category <span className="text-destructive">*</span></div>
-                <div className="w-[32px] shrink-0"></div>
-              </div>
-
-              {/* Scrollable Event Rows */}
-              <div className="flex-1 overflow-y-auto py-1 pb-4 space-y-1">
-                {displayEvents.map((event) => {
-                  const empty = isEmptyRow(event.id)
-
-                  return (
-                    <div
-                      key={event.id}
-                      className="flex items-center bg-[#242526] rounded-[4px] py-[6px] px-[10px] gap-[22px]"
+                  {/* Draggable category tabs */}
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
+                    modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+                  >
+                    <SortableContext
+                      items={categories.map(c => c.id)}
+                      strategy={verticalListSortingStrategy}
                     >
-                      {/* Title */}
-                      <div className="w-[240px] shrink-0">
-                        <input
-                          type="text"
-                          value={event.title}
-                          onChange={(e) => handleEventChange(event.id, { title: e.target.value })}
-                          placeholder="Event title"
-                          autoComplete="off"
-                          className={`
-                            w-full px-[6px] py-[5px] rounded-[4px] border-none outline-none
-                            font-['Avenir',sans-serif] font-normal text-[14px] leading-[20px]
-                            placeholder:text-[#6b6e73]
-                            ${empty && !isFieldFilled(event, 'title')
-                              ? 'bg-[#151617] text-[#c9ced4]'
-                              : 'bg-transparent text-[#c9ced4] hover:bg-[#151617]'
-                            }
-                            focus:bg-[#151617] transition-colors
-                          `}
+                      {categories.map(cat => (
+                        <SortableTab
+                          key={cat.id}
+                          category={cat}
+                          isActive={activeCategory === cat.id}
+                          onClick={() => setActiveCategory(cat.id)}
                         />
-                      </div>
+                      ))}
+                    </SortableContext>
+                  </DndContext>
+                </div>
 
-                      {/* Start Date */}
-                      <div className="w-[90px] shrink-0">
-                        <DatePickerCell
-                          value={event.startDate}
-                          onChange={(date) => {
-                            handleEventChange(event.id, {
-                              startDate: date,
-                              endDate: event.endDate && event.endDate < date ? date : event.endDate,
-                            })
-                          }}
-                          placeholder="Pick a date"
-                          isEmpty={empty}
-                          isFilled={isFieldFilled(event, 'startDate')}
-                        />
-                      </div>
+                {/* Table Area */}
+                <div className="flex-1 flex flex-col min-w-0">
+                  {/* Header Row */}
+                  <div
+                    className="flex items-center pl-[16px] pr-[10px] pb-2 gap-[22px] border-b border-[rgba(210,210,210,0.2)]"
+                    style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 300, fontSize: '12px', lineHeight: '1.4', color: '#9b9ea3' }}
+                  >
+                    <div className="w-[240px] shrink-0">Title <span className="text-destructive">*</span></div>
+                    <div className="w-[90px] shrink-0">Start Date <span className="text-destructive">*</span></div>
+                    <div className="w-[90px] shrink-0">End Date</div>
+                    <div className="flex-1">Category <span className="text-destructive">*</span></div>
+                    <div className="w-[32px] shrink-0"></div>
+                  </div>
 
-                      {/* End Date */}
-                      <div className="w-[90px] shrink-0">
-                        <DatePickerCell
-                          value={event.endDate}
-                          onChange={(date) => handleEventChange(event.id, { endDate: date })}
-                          placeholder="Pick a date"
-                          disabledBefore={parseDate(event.startDate)}
-                          isEmpty={empty}
-                          isFilled={isFieldFilled(event, 'endDate')}
-                        />
-                      </div>
+                  {/* Scrollable Event Rows */}
+                  <div className="flex-1 overflow-y-auto py-1 pb-4 space-y-1">
+                    {displayEvents.map((event) => {
+                      const empty = isEmptyRow(event.id)
 
-                      {/* Category */}
-                      <div className="flex-1 min-w-0">
-                        <Select
-                          value={event.category || undefined}
-                          onValueChange={(value) => handleEventChange(event.id, { category: value })}
+                      return (
+                        <div
+                          key={event.id}
+                          className="flex items-center bg-[#242526] rounded-[4px] py-[6px] px-[10px] gap-[22px]"
                         >
-                          <SelectTrigger
-                            className={`
-                              w-full h-auto border-none shadow-none px-[6px] py-[5px] rounded-[4px]
-                              font-['Avenir',sans-serif] font-normal text-[14px] leading-[20px]
-                              ${empty && !isFieldFilled(event, 'category')
-                                ? 'bg-[#151617] text-[#c9ced4]'
-                                : 'bg-transparent text-[#c9ced4] hover:bg-[#151617]'
-                              }
-                              focus:bg-[#151617] focus:ring-0 transition-colors
-                              [&>span]:text-[#6b6e73] [&>span[data-placeholder]]:text-[#6b6e73]
-                            `}
-                          >
-                            <SelectValue placeholder="Select category" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-[#242526] border border-[rgba(210,210,210,0.2)] rounded-lg">
-                            {categories.map(cat => (
-                              <SelectItem
-                                key={cat.id}
-                                value={cat.id}
-                                className="text-[#c9ced4] font-['Avenir',sans-serif] text-[14px] hover:bg-[#151617] focus:bg-[#151617] focus:text-[#c9ced4]"
+                          {/* Title */}
+                          <div className="w-[240px] shrink-0">
+                            <input
+                              type="text"
+                              value={event.title}
+                              onChange={(e) => handleEventChange(event.id, { title: e.target.value })}
+                              placeholder="Event title"
+                              autoComplete="off"
+                              className={`
+                                w-full px-[6px] py-[5px] rounded-[4px] border-none outline-none
+                                font-['Avenir',sans-serif] font-normal text-[14px] leading-[20px]
+                                placeholder:text-[#6b6e73]
+                                ${empty && !isFieldFilled(event, 'title')
+                                  ? 'bg-[#151617] text-[#c9ced4]'
+                                  : 'bg-transparent text-[#c9ced4] hover:bg-[#151617]'
+                                }
+                                focus:bg-[#151617] transition-colors
+                              `}
+                            />
+                          </div>
+
+                          {/* Start Date */}
+                          <div className="w-[90px] shrink-0">
+                            <DatePickerCell
+                              value={event.startDate}
+                              onChange={(date) => {
+                                handleEventChange(event.id, {
+                                  startDate: date,
+                                  endDate: event.endDate && event.endDate < date ? date : event.endDate,
+                                })
+                              }}
+                              placeholder="Pick a date"
+                              isEmpty={empty}
+                              isFilled={isFieldFilled(event, 'startDate')}
+                            />
+                          </div>
+
+                          {/* End Date */}
+                          <div className="w-[90px] shrink-0">
+                            <DatePickerCell
+                              value={event.endDate}
+                              onChange={(date) => handleEventChange(event.id, { endDate: date })}
+                              placeholder="Pick a date"
+                              disabledBefore={parseDate(event.startDate)}
+                              isEmpty={empty}
+                              isFilled={isFieldFilled(event, 'endDate')}
+                            />
+                          </div>
+
+                          {/* Category */}
+                          <div className="flex-1 min-w-0">
+                            <Select
+                              value={event.category || undefined}
+                              onValueChange={(value) => handleEventChange(event.id, { category: value })}
+                            >
+                              <SelectTrigger
+                                className={`
+                                  w-full h-auto border-none shadow-none px-[6px] py-[5px] rounded-[4px]
+                                  font-['Avenir',sans-serif] font-normal text-[14px] leading-[20px]
+                                  ${empty && !isFieldFilled(event, 'category')
+                                    ? 'bg-[#151617] text-[#c9ced4]'
+                                    : 'bg-transparent text-[#c9ced4] hover:bg-[#151617]'
+                                  }
+                                  focus:bg-[#151617] focus:ring-0 transition-colors
+                                  [&>span]:text-[#6b6e73] [&>span[data-placeholder]]:text-[#6b6e73]
+                                `}
                               >
-                                {cat.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                                <SelectValue placeholder="Select category" />
+                              </SelectTrigger>
+                              <SelectContent className="bg-[#242526] border border-[rgba(210,210,210,0.2)] rounded-lg">
+                                {categories.map(cat => (
+                                  <SelectItem
+                                    key={cat.id}
+                                    value={cat.id}
+                                    className="text-[#c9ced4] font-['Avenir',sans-serif] text-[14px] hover:bg-[#151617] focus:bg-[#151617] focus:text-[#c9ced4]"
+                                  >
+                                    {cat.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
 
-                      {/* Delete */}
-                      <div className="w-[32px] shrink-0 flex justify-center">
-                        <button
-                          onClick={() => empty
-                            ? handleDeleteEmptyRow(event.id)
-                            : handleDeleteEvent(event.id)
-                          }
-                          className="p-1 text-[#9b9ea3] hover:text-[#dadee5] transition-colors rounded"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                          {/* Delete */}
+                          <div className="w-[32px] shrink-0 flex justify-center">
+                            <button
+                              onClick={() => empty
+                                ? handleDeleteEmptyRow(event.id)
+                                : handleDeleteEvent(event.id)
+                              }
+                              className="p-1 text-[#9b9ea3] hover:text-[#dadee5] transition-colors rounded"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Categories Tab Content */
+              <div className="flex flex-col h-full">
+                {/* Header */}
+                <div className="flex flex-col gap-[6px]">
+                  <div
+                    className="flex items-center gap-[24px] px-[16px]"
+                    style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 300, fontSize: '12px', lineHeight: '1.4', color: '#9b9ea3' }}
+                  >
+                    <div className="w-[243px] shrink-0">Category Title</div>
+                    <div className="flex-1 text-center">Category Color</div>
+                    <div className="w-[176px] shrink-0 opacity-0">Category Color</div>
+                  </div>
+                  <div className="h-px w-full bg-[rgba(210,210,210,0.2)]" />
+                </div>
+
+                {/* Scrollable category rows */}
+                <div className="flex-1 overflow-y-auto pt-1 pb-5 space-y-2">
+                  {categories.map(cat => (
+                    <div
+                      key={cat.id}
+                      className={`flex items-center rounded-[4px] pt-[6px] pb-[5px] ${cat.visible ? 'bg-[#242526]' : 'bg-[#151617]'}`}
+                    >
+                      <div className="flex flex-1 items-center gap-[20px] h-[76px] px-[10px]">
+                        {/* Editable title */}
+                        <div className={`w-[250px] shrink-0 bg-[#151617] rounded-[4px] px-[6px] py-[5px] ${!cat.visible ? 'opacity-40' : ''}`}>
+                          <input
+                            type="text"
+                            value={editingLabels[cat.id] || ''}
+                            onChange={(e) => handleCategoryLabelChange(cat.id, e.target.value)}
+                            onBlur={() => handleCategoryLabelBlur(cat.id)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                            className="w-full bg-transparent border-none outline-none font-['Aleo',serif] font-normal text-[24px] leading-[1.4] text-[#dadee5]"
+                          />
+                        </div>
+
+                        {/* Color picker */}
+                        <div className={`flex-1 flex items-center justify-center gap-[6px] ${!cat.visible ? 'opacity-40' : ''}`}>
+                          {COLOR_PALETTE.map(color => (
+                            <ColorBar
+                              key={color.value}
+                              color={color.value}
+                              isSelected={cat.color.toUpperCase() === color.value.toUpperCase()}
+                              onClick={() => handleCategoryColorChange(cat.id, color.value)}
+                            />
+                          ))}
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-[16px] shrink-0">
+                          <button
+                            onClick={() => handleCategoryVisibilityToggle(cat.id)}
+                            className={glassButtonClass}
+                          >
+                            {cat.visible ? 'Hide' : 'Show'}
+                          </button>
+                          <button
+                            onClick={() => handleCategoryDelete(cat.id)}
+                            disabled={categories.length <= 1}
+                            className={`${glassButtonClass} disabled:opacity-50 disabled:pointer-events-none`}
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  )
-                })}
+                  ))}
+                </div>
+
+                {/* Bottom divider */}
+                <div className="h-px w-full bg-[rgba(210,210,210,0.2)]" />
               </div>
-            </div>
+            )}
           </div>
 
           {/* Footer */}
           <div className="flex justify-between items-center mt-8">
-            {/* Add Event (left) */}
-            <button
-              onClick={handleAddRow}
-              disabled={emptyRows.length >= MAX_EMPTY_ROWS}
-              className="
-                min-w-[80px] px-[11px] py-[6px] rounded-[10px]
-                backdrop-blur-[12px] bg-white/10 border border-white/[0.15]
-                shadow-[0px_8px_32px_rgba(0,0,0,0.4),inset_0px_1px_0px_rgba(255,255,255,0.1)]
-                font-['Avenir',sans-serif] font-medium text-[14px] text-[#c9ced4]
-                hover:bg-white/20 hover:text-[#dadee5] transition-all
-                disabled:opacity-50 disabled:pointer-events-none
-              "
-            >
-              Add Event
-            </button>
-
-            {/* Cancel + Save Changes (right) */}
-            <div className="flex gap-[10px]">
+            {/* Add button (left) — context-dependent */}
+            {activePageTab === 'events' ? (
               <button
-                onClick={onClose}
-                className="
-                  min-w-[80px] px-[11px] py-[6px] rounded-[10px]
-                  backdrop-blur-[12px] bg-white/10 border border-white/[0.15]
-                  shadow-[0px_8px_32px_rgba(0,0,0,0.4),inset_0px_1px_0px_rgba(255,255,255,0.1)]
-                  font-['Avenir',sans-serif] font-medium text-[14px] text-[#c9ced4]
-                  hover:bg-white/20 hover:text-[#dadee5] transition-all
-                "
+                onClick={handleAddRow}
+                disabled={emptyRows.length >= MAX_EMPTY_ROWS}
+                className={`${glassButtonClass} disabled:opacity-50 disabled:pointer-events-none`}
               >
+                Add Event
+              </button>
+            ) : (
+              <button
+                onClick={handleAddCategory}
+                disabled={categories.length >= 4}
+                className={`${glassButtonClass} disabled:opacity-50 disabled:pointer-events-none`}
+              >
+                Add Category
+              </button>
+            )}
+
+            {/* Cancel + Save (right) */}
+            <div className="flex gap-[10px]">
+              <button onClick={onClose} className={glassButtonClass}>
                 Cancel
               </button>
 
@@ -569,7 +749,7 @@ export function EventTableEditor({
                 onClick={handleApplyChanges}
                 disabled={!canApplyChanges}
                 className="
-                  min-w-[80px] px-[11px] py-[6px] rounded-[10px]
+                  relative min-w-[80px] px-[11px] py-[6px] rounded-[10px]
                   backdrop-blur-[12px] bg-[rgba(37,99,235,0.8)] border border-white/[0.15]
                   shadow-[0px_8px_32px_rgba(0,0,0,0.4),inset_0px_1px_0px_rgba(255,255,255,0.1)]
                   font-['Avenir',sans-serif] font-medium text-[14px] text-[#dadee5]
