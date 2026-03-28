@@ -98,8 +98,8 @@ function SortableTab({
       onClick={onClick}
       className={`
         group relative flex items-center justify-between w-full py-[9px] pl-[11px] pr-[3px] rounded-[10px]
-        backdrop-blur-[12px] text-left
-        font-['Avenir',sans-serif] font-medium text-[14px] leading-[20px] transition-all
+        text-left
+        font-['Avenir',sans-serif] font-medium text-[14px] leading-[20px] transition-colors
         ${isActive
           ? 'border border-transparent bg-[rgba(37,99,235,0.4)] text-[#dadee5]'
           : 'border border-transparent bg-transparent text-[#c9ced4] hover:border-[rgba(255,255,255,0.15)] hover:bg-[rgba(255,255,255,0.1)] hover:text-[#dadee5]'
@@ -495,8 +495,8 @@ export function EventTableEditor({
                     onClick={() => setActiveCategory(null)}
                     className={`
                       w-full py-[9px] pl-[11px] pr-[3px] rounded-[10px]
-                      backdrop-blur-[12px] text-left
-                      font-['Avenir',sans-serif] font-medium text-[14px] leading-[20px] transition-all
+                      text-left
+                      font-['Avenir',sans-serif] font-medium text-[14px] leading-[20px] transition-colors
                       ${activeCategory === null
                         ? 'border border-transparent bg-[rgba(37,99,235,0.4)] text-[#dadee5]'
                         : 'border border-transparent bg-transparent text-[#c9ced4] hover:border-[rgba(255,255,255,0.15)] hover:bg-[rgba(255,255,255,0.1)] hover:text-[#dadee5]'
