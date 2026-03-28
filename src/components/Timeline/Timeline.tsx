@@ -4,6 +4,7 @@ import { TimelineGrid } from './TimelineGrid';
 import { TimelineCategoryLabels } from './TimelineCategoryLabels';
 import { TimelineEvent } from './TimelineEvent';
 import { TimelineScrollIndicator } from './TimelineScrollIndicator';
+import { TimelineGridFiller } from './TimelineGridFiller';
 import { TimelineOverview } from './TimelineOverview';
 import { TimelineEvent as ITimelineEvent, CategoryConfig } from '../../types/event';
 import { TimelineScale } from '../../types/timeline';
@@ -222,6 +223,17 @@ export function Timeline({
                   ))}
                 </div>
               ))}
+
+              {/* Filler row: extends vertical grid lines to bottom of viewport */}
+              <div
+                className="relative"
+                style={{
+                  gridColumn: `1 / span ${months.length * 4}`,
+                  minHeight: `calc(100vh - ${categoryData.totalHeight + HEADER_HEIGHT + SCROLL_INDICATOR_HEIGHT}px - 6rem)`,
+                }}
+              >
+                <TimelineGridFiller months={months} scale={scale} />
+              </div>
 
               {/* Add Event Cursor — hidden during drag */}
               {hoveredMonth !== null && onAddEvent && !dragState.isDragging && (
