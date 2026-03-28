@@ -4,7 +4,6 @@ import { TimelineGrid } from './TimelineGrid';
 import { TimelineCategoryLabels } from './TimelineCategoryLabels';
 import { TimelineEvent } from './TimelineEvent';
 import { TimelineScrollIndicator } from './TimelineScrollIndicator';
-import { TimelineGridFiller } from './TimelineGridFiller';
 import { TimelineOverview } from './TimelineOverview';
 import { TimelineEvent as ITimelineEvent, CategoryConfig } from '../../types/event';
 import { TimelineScale } from '../../types/timeline';
@@ -226,13 +225,29 @@ export function Timeline({
 
               {/* Filler row: extends vertical grid lines to bottom of viewport */}
               <div
-                className="relative flex flex-col"
+                className="relative border-l border-gray-700"
                 style={{
                   gridColumn: `1 / span ${months.length * 4}`,
                   minHeight: `calc(100vh - ${categoryData.totalHeight + HEADER_HEIGHT + SCROLL_INDICATOR_HEIGHT}px - 6rem)`,
                 }}
               >
-                <TimelineGridFiller months={months} scale={scale} />
+                <div
+                  className="absolute inset-0 grid transition-all duration-200 ease-in-out"
+                  style={{
+                    gridTemplateColumns: `repeat(${months.length}, ${scale.monthWidth}px)`,
+                  }}
+                >
+                  {months.map((month, index) => (
+                    <div
+                      key={`filler-${month.year}-${month.month}`}
+                      className="border-r border-gray-700"
+                      onMouseEnter={() => setHoveredMonth(index)}
+                      onMouseLeave={() => setHoveredMonth(null)}
+                      onClick={() => handleMonthClick(index)}
+                      style={{ pointerEvents: 'auto' }}
+                    />
+                  ))}
+                </div>
               </div>
 
               {/* Add Event Cursor — hidden during drag */}
