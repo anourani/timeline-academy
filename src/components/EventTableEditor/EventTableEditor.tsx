@@ -259,16 +259,19 @@ export function EventTableEditor({
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [emptyRows, setEmptyRows] = useState<DraftEvent[]>([])
   const [draftEvents, setDraftEvents] = useState<TimelineEvent[]>(events)
+  const [draftCategories, setDraftCategories] = useState<CategoryConfig[]>(categories)
   const [hasChanges, setHasChanges] = useState(false)
   const MAX_EMPTY_ROWS = 10
 
   React.useEffect(() => {
     if (isOpen) {
       setDraftEvents(events)
+      setDraftCategories(categories)
       setEmptyRows([])
       setHasChanges(false)
+      setActivePageTab('events')
     }
-  }, [isOpen, events])
+  }, [isOpen, events, categories])
 
   const displayEvents = useMemo(() => {
     const filteredEvents = activeCategory
@@ -288,8 +291,9 @@ export function EventTableEditor({
       const hasAnyField = Boolean(row.title.trim() || row.startDate || row.category)
       return hasAnyField ? isValidEvent(row) : true
     })
-    return allEventsValid && allEmptyRowsValid
-  }, [draftEvents, emptyRows, hasChanges])
+    const allCategoriesValid = draftCategories.every(c => c.label.trim())
+    return allEventsValid && allEmptyRowsValid && allCategoriesValid
+  }, [draftEvents, draftCategories, emptyRows, hasChanges])
 
   const handleDeleteEvent = (eventId: string) => {
     setDraftEvents(draftEvents.filter(event => event.id !== eventId))
@@ -335,6 +339,7 @@ export function EventTableEditor({
   const handleApplyChanges = () => {
     if (!canApplyChanges) return
     onEventsChange(draftEvents)
+    onCategoriesChange(draftCategories)
     onClose()
   }
 
@@ -351,10 +356,11 @@ export function EventTableEditor({
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
     if (over && active.id !== over.id) {
-      const oldIndex = categories.findIndex(c => c.id === active.id)
-      const newIndex = categories.findIndex(c => c.id === over.id)
-      const reordered = arrayMove(categories, oldIndex, newIndex)
-      onCategoriesChange(reordered)
+      const oldIndex = draftCategories.findIndex(c => c.id === active.id)
+      const newIndex = draftCategories.findIndex(c => c.id === over.id)
+      const reordered = arrayMove(draftCategories, oldIndex, newIndex)
+      setDraftCategories(reordered)
+      setHasChanges(true)
     }
   }
 
@@ -362,8 +368,8 @@ export function EventTableEditor({
   const [editingLabels, setEditingLabels] = useState<Record<string, string>>({})
 
   useEffect(() => {
-    setEditingLabels(categories.reduce((acc, cat) => ({ ...acc, [cat.id]: cat.label }), {} as Record<string, string>))
-  }, [categories])
+    setEditingLabels(draftCategories.reduce((acc, cat) => ({ ...acc, [cat.id]: cat.label }), {} as Record<string, string>))
+  }, [draftCategories])
 
   const handleCategoryLabelChange = useCallback((catId: string, value: string) => {
     setEditingLabels(prev => ({ ...prev, [catId]: value }))
@@ -372,49 +378,54 @@ export function EventTableEditor({
   const handleCategoryLabelBlur = useCallback((catId: string) => {
     const trimmed = (editingLabels[catId] || '').trim()
     if (!trimmed) {
-      const cat = categories.find(c => c.id === catId)
+      const cat = draftCategories.find(c => c.id === catId)
       if (cat) setEditingLabels(prev => ({ ...prev, [catId]: cat.label }))
       return
     }
-    const isDuplicate = categories.some(c => c.id !== catId && c.label.toLowerCase() === trimmed.toLowerCase())
+    const isDuplicate = draftCategories.some(c => c.id !== catId && c.label.toLowerCase() === trimmed.toLowerCase())
     if (isDuplicate) {
-      const cat = categories.find(c => c.id === catId)
+      const cat = draftCategories.find(c => c.id === catId)
       if (cat) setEditingLabels(prev => ({ ...prev, [catId]: cat.label }))
       return
     }
-    onCategoriesChange(categories.map(c => c.id === catId ? { ...c, label: trimmed } : c))
-  }, [categories, editingLabels, onCategoriesChange])
+    setDraftCategories(draftCategories.map(c => c.id === catId ? { ...c, label: trimmed } : c))
+    setHasChanges(true)
+  }, [draftCategories, editingLabels])
 
   const handleCategoryColorChange = useCallback((catId: string, color: string) => {
-    onCategoriesChange(categories.map(c => c.id === catId ? { ...c, color } : c))
-  }, [categories, onCategoriesChange])
+    setDraftCategories(draftCategories.map(c => c.id === catId ? { ...c, color } : c))
+    setHasChanges(true)
+  }, [draftCategories])
 
   const handleCategoryVisibilityToggle = useCallback((catId: string) => {
-    onCategoriesChange(categories.map(c => c.id === catId ? { ...c, visible: !c.visible } : c))
-  }, [categories, onCategoriesChange])
+    setDraftCategories(draftCategories.map(c => c.id === catId ? { ...c, visible: !c.visible } : c))
+    setHasChanges(true)
+  }, [draftCategories])
 
   const handleCategoryDelete = useCallback((catId: string) => {
-    if (categories.length <= 1) return
-    onCategoriesChange(categories.filter(c => c.id !== catId))
-  }, [categories, onCategoriesChange])
+    if (draftCategories.length <= 1) return
+    setDraftCategories(draftCategories.filter(c => c.id !== catId))
+    setHasChanges(true)
+  }, [draftCategories])
 
   const handleAddCategory = useCallback(() => {
-    if (categories.length >= 4) return
+    if (draftCategories.length >= 4) return
     let uniqueName = 'New Category'
     let counter = 1
-    while (categories.some(c => c.label.toLowerCase() === uniqueName.toLowerCase())) {
+    while (draftCategories.some(c => c.label.toLowerCase() === uniqueName.toLowerCase())) {
       uniqueName = `New Category ${counter}`
       counter++
     }
     const newCat: CategoryConfig = {
       id: uniqueName.toLowerCase().replace(/\s+/g, '_') as CategoryConfig['id'],
       label: uniqueName,
-      color: COLOR_PALETTE[categories.length % COLOR_PALETTE.length].value,
+      color: COLOR_PALETTE[draftCategories.length % COLOR_PALETTE.length].value,
       visible: true,
     }
-    onCategoriesChange([...categories, newCat])
+    setDraftCategories([...draftCategories, newCat])
     setEditingLabels(prev => ({ ...prev, [newCat.id]: newCat.label }))
-  }, [categories, onCategoriesChange])
+    setHasChanges(true)
+  }, [draftCategories])
 
   const isEmptyRow = (id: string) => emptyRows.some(row => row.id === id)
 
@@ -503,10 +514,10 @@ export function EventTableEditor({
                     modifiers={[restrictToVerticalAxis, restrictToParentElement]}
                   >
                     <SortableContext
-                      items={categories.map(c => c.id)}
+                      items={draftCategories.map(c => c.id)}
                       strategy={verticalListSortingStrategy}
                     >
-                      {categories.map(cat => (
+                      {draftCategories.map(cat => (
                         <SortableTab
                           key={cat.id}
                           category={cat}
@@ -612,7 +623,7 @@ export function EventTableEditor({
                                 <SelectValue placeholder="Select category" />
                               </SelectTrigger>
                               <SelectContent className="bg-[#242526] border border-[rgba(210,210,210,0.2)] rounded-lg">
-                                {categories.map(cat => (
+                                {draftCategories.map(cat => (
                                   <SelectItem
                                     key={cat.id}
                                     value={cat.id}
@@ -661,7 +672,7 @@ export function EventTableEditor({
 
                 {/* Scrollable category rows */}
                 <div className="flex-1 overflow-y-auto pt-1 pb-5 space-y-2">
-                  {categories.map(cat => (
+                  {draftCategories.map(cat => (
                     <div
                       key={cat.id}
                       className={`flex items-center rounded-[4px] pt-[6px] pb-[5px] ${cat.visible ? 'bg-[#242526]' : 'bg-[#151617]'}`}
@@ -701,7 +712,7 @@ export function EventTableEditor({
                           </button>
                           <button
                             onClick={() => handleCategoryDelete(cat.id)}
-                            disabled={categories.length <= 1}
+                            disabled={draftCategories.length <= 1}
                             className={`${glassButtonClass} disabled:opacity-50 disabled:pointer-events-none`}
                           >
                             Delete
@@ -732,7 +743,7 @@ export function EventTableEditor({
             ) : (
               <button
                 onClick={handleAddCategory}
-                disabled={categories.length >= 4}
+                disabled={draftCategories.length >= 4}
                 className={`${glassButtonClass} disabled:opacity-50 disabled:pointer-events-none`}
               >
                 Add Category
