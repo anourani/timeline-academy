@@ -9,7 +9,7 @@ interface TimelineGridFillerProps {
 export function TimelineGridFiller({ months, scale }: TimelineGridFillerProps) {
   return (
     <div
-      className="pointer-events-none grid transition-all duration-200 ease-in-out"
+      className="pointer-events-none grid flex-1 transition-all duration-200 ease-in-out"
       style={{
         gridTemplateColumns: `repeat(${months.length}, ${scale.monthWidth}px)`,
       }}

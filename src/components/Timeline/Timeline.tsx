@@ -226,7 +226,7 @@ export function Timeline({
 
               {/* Filler row: extends vertical grid lines to bottom of viewport */}
               <div
-                className="relative"
+                className="relative flex flex-col"
                 style={{
                   gridColumn: `1 / span ${months.length * 4}`,
                   minHeight: `calc(100vh - ${categoryData.totalHeight + HEADER_HEIGHT + SCROLL_INDICATOR_HEIGHT}px - 6rem)`,
