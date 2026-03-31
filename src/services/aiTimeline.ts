@@ -27,9 +27,10 @@ export async function classifySubject(
   subject: string
 ): Promise<ClassificationResult> {
   const { data, error } = await supabase.functions.invoke(
-    'classify-subject',
+    'generate-timeline',
     {
-      body: { subject },
+      body: { subject, mode: 'classify' },
+      headers: { 'x-session-token': getSessionToken() },
     }
   );
 

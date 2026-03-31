@@ -2,6 +2,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { createLLMClient } from "../_shared/llm-client.ts";
 import { checkRateLimit, recordUsage } from "../_shared/rate-limiter.ts";
+import { classifySubject } from "../_shared/classify.ts";
 import type { CategoryDefinition } from "../_shared/prompts.ts";
 
 Deno.serve(async (req: Request) => {
@@ -12,7 +13,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     // 1. Parse request body
-    const { subject, provider, categories } = await req.json();
+    const { subject, provider, categories, mode } = await req.json();
 
     if (!subject || typeof subject !== "string" || !subject.trim()) {
       return new Response(
@@ -22,6 +23,15 @@ Deno.serve(async (req: Request) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
+    }
+
+    // 1b. Classification mode — cheap, fast, no auth/rate-limit needed
+    if (mode === "classify") {
+      const type = await classifySubject(subject.trim());
+      return new Response(JSON.stringify({ type }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // 2. Determine session key for rate limiting

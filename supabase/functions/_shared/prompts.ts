@@ -46,8 +46,12 @@ RESPONSE SCHEMA:
 
 export function getUserPrompt(
   subject: string,
-  categories: CategoryDefinition[]
+  categories?: CategoryDefinition[]
 ): string {
+  if (!categories || categories.length === 0) {
+    return `Generate a biographical timeline for: ${subject}`;
+  }
+
   const categoryLines = categories
     .map(
       (c, i) => `- category_${i + 1}: "${c.label}" → ${c.promptSnippet}`
