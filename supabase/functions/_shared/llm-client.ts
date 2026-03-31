@@ -102,7 +102,6 @@ class ClaudeClient implements LLMClient {
         system: getSystemPrompt(),
         messages: [
           { role: "user", content: userPrompt },
-          { role: "assistant", content: "{" },
         ],
         temperature: 0.4,
       }),
@@ -119,8 +118,11 @@ class ClaudeClient implements LLMClient {
       throw new Error("Empty response from Anthropic");
     }
 
-    // We prefilled with "{" so the response continues from there
-    const text = "{" + block.text;
+    // Strip markdown code fences if the model wraps the JSON
+    let text = block.text.trim();
+    if (text.startsWith("```")) {
+      text = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
+    }
     return parseAndValidate(text);
   }
 }
