@@ -27,11 +27,19 @@ Deno.serve(async (req: Request) => {
 
     // 1b. Classification mode — cheap, fast, no auth/rate-limit needed
     if (mode === "classify") {
-      const type = await classifySubject(subject.trim());
-      return new Response(JSON.stringify({ type }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      try {
+        const type = await classifySubject(subject.trim());
+        return new Response(JSON.stringify({ type }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (classifyErr) {
+        console.error("Classification failed, falling back to topic:", classifyErr);
+        return new Response(JSON.stringify({ type: "topic" }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     // 2. Determine session key for rate limiting
