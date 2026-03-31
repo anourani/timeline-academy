@@ -1,50 +1,61 @@
 /**
  * Prompt templates for AI timeline generation.
  *
- * Category mapping matches the default categories in the frontend
- * (src/constants/categories.ts):
- *   category_1 → Personal Life
- *   category_2 → Career & Achievements
- *   category_3 → Education
- *   category_4 → Other / Historical Context
+ * The new Madlibs system sends subject type and category definitions
+ * so the LLM produces focused, well-distributed timelines.
  */
 
+export interface CategoryDefinition {
+  id: string;
+  label: string;
+  promptSnippet: string;
+}
+
 export function getSystemPrompt(): string {
-  return `You are a biographical timeline generator. Given a person's name, produce a JSON object describing key events in their life that can be plotted on a timeline.
+  return `You are a timeline generator. You receive a subject, category lenses, and their definitions. Your ONLY job is to find events that match the provided categories.
 
-Rules:
-1. Return ONLY valid JSON — no markdown, no code fences, no explanation.
-2. Each event must have:
-   - "title": a short description (max 55 characters)
-   - "startDate": in YYYY-MM-DD format
-   - "endDate": in YYYY-MM-DD format (same as startDate for single-day events)
-   - "category": one of "category_1", "category_2", "category_3", "category_4"
-3. Category meanings:
-   - "category_1" = Personal Life (birth, death, marriage, family, health)
-   - "category_2" = Career & Achievements (jobs, awards, major works, milestones)
-   - "category_3" = Education (schooling, degrees, training, mentorship)
-   - "category_4" = Other / Historical Context (relocations, cultural events, legacy)
-4. For dates where only the year is known, use January 1 of that year (e.g. "1905-01-01").
-5. For date ranges (e.g. attending a university from 1896 to 1900), set startDate to the beginning and endDate to the end.
-6. Include as many events as appropriate for the person's historical significance — typically 15–30 for well-known figures, fewer for less documented individuals.
-7. Order events chronologically by startDate.
-8. The "timelineDescription" should be 1–2 sentences summarizing who the person is and the time span covered.
+HARD RULES:
+1. CATEGORY LOCK-IN — Every event MUST belong to one of the provided categories. Never invent or add extra categories.
+2. BALANCED DISTRIBUTION — Generate 4–8 events per category. Distribute roughly evenly. If a category has fewer than 2 events, note this in the timeline description.
+3. EVENT QUALITY — Max 55 characters per title. Prefer specific facts over vague summaries.
+   BAD:  "Had a successful career"
+   GOOD: "Scored 81 points vs. Raptors"
+4. DATE FORMAT — YYYY-MM-DD. Year-only → January 1. Ranges → use startDate/endDate span. Chronological order.
+5. JSON ONLY — No markdown, no code fences, no explanation.
 
-Response schema:
+RESPONSE SCHEMA:
 {
-  "timelineTitle": "<Person's full name>",
-  "timelineDescription": "<Brief summary>",
+  "timelineTitle": "<descriptive title>",
+  "timelineDescription": "<1–2 sentence summary of scope>",
+  "categoryMapping": {
+    "category_1": "<first category label>",
+    "category_2": "<second category label>",
+    "category_3": "<third category label>",
+    "category_4": "<fourth category label>"
+  },
   "events": [
     {
       "title": "<max 55 chars>",
       "startDate": "YYYY-MM-DD",
       "endDate": "YYYY-MM-DD",
-      "category": "category_1" | "category_2" | "category_3" | "category_4"
+      "category": "category_1"
     }
   ]
 }`;
 }
 
-export function getUserPrompt(subject: string): string {
-  return `Generate a biographical timeline for: ${subject}`;
+export function getUserPrompt(
+  subject: string,
+  categories: CategoryDefinition[]
+): string {
+  const categoryLines = categories
+    .map(
+      (c, i) => `- category_${i + 1}: "${c.label}" → ${c.promptSnippet}`
+    )
+    .join("\n");
+
+  return `Generate a timeline of: ${subject}
+
+Category lenses (use ONLY these):
+${categoryLines}`;
 }

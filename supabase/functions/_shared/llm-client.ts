@@ -1,8 +1,10 @@
 import { getSystemPrompt, getUserPrompt } from "./prompts.ts";
+import type { CategoryDefinition } from "./prompts.ts";
 
 export interface GeneratedTimeline {
   timelineTitle: string;
   timelineDescription: string;
+  categoryMapping?: Record<string, string>;
   events: Array<{
     title: string;
     startDate: string;
@@ -12,7 +14,10 @@ export interface GeneratedTimeline {
 }
 
 export interface LLMClient {
-  generateTimeline(subject: string): Promise<GeneratedTimeline>;
+  generateTimeline(
+    subject: string,
+    categories?: CategoryDefinition[]
+  ): Promise<GeneratedTimeline>;
 }
 
 // ---------------------------------------------------------------------------
@@ -26,7 +31,14 @@ class OpenAIClient implements LLMClient {
     this.apiKey = apiKey;
   }
 
-  async generateTimeline(subject: string): Promise<GeneratedTimeline> {
+  async generateTimeline(
+    subject: string,
+    categories?: CategoryDefinition[]
+  ): Promise<GeneratedTimeline> {
+    const userPrompt = categories
+      ? getUserPrompt(subject, categories)
+      : `Generate a biographical timeline for: ${subject}`;
+
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -38,7 +50,7 @@ class OpenAIClient implements LLMClient {
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: getSystemPrompt() },
-          { role: "user", content: getUserPrompt(subject) },
+          { role: "user", content: userPrompt },
         ],
         temperature: 0.4,
         max_tokens: 4096,
@@ -69,7 +81,14 @@ class ClaudeClient implements LLMClient {
     this.apiKey = apiKey;
   }
 
-  async generateTimeline(subject: string): Promise<GeneratedTimeline> {
+  async generateTimeline(
+    subject: string,
+    categories?: CategoryDefinition[]
+  ): Promise<GeneratedTimeline> {
+    const userPrompt = categories
+      ? getUserPrompt(subject, categories)
+      : `Generate a biographical timeline for: ${subject}`;
+
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -82,7 +101,7 @@ class ClaudeClient implements LLMClient {
         max_tokens: 4096,
         system: getSystemPrompt(),
         messages: [
-          { role: "user", content: getUserPrompt(subject) },
+          { role: "user", content: userPrompt },
           { role: "assistant", content: "{" },
         ],
         temperature: 0.4,
@@ -137,8 +156,14 @@ function parseAndValidate(text: string): GeneratedTimeline {
     "category_4",
   ]);
 
-  const events = (obj.events as Record<string, unknown>[]).map(
-    (e, i: number) => {
+  const events = (obj.events as Record<string, unknown>[])
+    .filter((e) => {
+      // Filter out events with categories outside the provided set
+      return (
+        typeof e.category === "string" && validCategories.has(e.category)
+      );
+    })
+    .map((e, i: number) => {
       if (typeof e.title !== "string" || !e.title) {
         throw new Error(`Event ${i}: missing title`);
       }
@@ -149,23 +174,32 @@ function parseAndValidate(text: string): GeneratedTimeline {
         throw new Error(`Event ${i}: missing endDate`);
       }
 
-      const category =
-        typeof e.category === "string" && validCategories.has(e.category)
-          ? e.category
-          : "category_4"; // Default to "Other" if category is invalid
-
       return {
         title: (e.title as string).slice(0, 55),
         startDate: e.startDate as string,
         endDate: e.endDate as string,
-        category,
+        category: e.category as string,
       };
-    }
-  );
+    });
+
+  if (events.length === 0) {
+    throw new Error("No valid events in LLM response");
+  }
+
+  // Extract categoryMapping if present
+  let categoryMapping: Record<string, string> | undefined;
+  if (
+    obj.categoryMapping &&
+    typeof obj.categoryMapping === "object" &&
+    !Array.isArray(obj.categoryMapping)
+  ) {
+    categoryMapping = obj.categoryMapping as Record<string, string>;
+  }
 
   return {
     timelineTitle: obj.timelineTitle as string,
     timelineDescription: obj.timelineDescription as string,
+    categoryMapping,
     events,
   };
 }

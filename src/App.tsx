@@ -36,7 +36,7 @@ export function App() {
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
   const [showCreationScreen, setShowCreationScreen] = useState(false);
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
-  const { isGenerating, error: aiError, generate } = useAIMode();
+  const { isGenerating, isClassifying, classifiedType, categoryLabels, error: aiError, classify, generate, resetClassification } = useAIMode();
   const { loadAllDrafts, loadDraft, saveDraft, saveDraftImmediate, createDraft, clearAllDrafts } = useLocalDraft();
   const handledRouteStateRef = useRef(false);
 
@@ -274,13 +274,28 @@ export function App() {
     // For logged-out users, just hiding the creation screen reveals the empty timeline
   };
 
-  const handleAIGenerate = async (subject: string) => {
+  const handleClassify = async (subject: string) => {
     try {
-      const { title: genTitle, description: genDesc, events: genEvents } = await generate(subject);
+      await classify(subject);
+    } catch {
+      // Error is already set in useAIMode — stays on creation screen showing error
+    }
+  };
+
+  const handleSubjectChange = () => {
+    resetClassification();
+  };
+
+  const handleAIGenerate = async (subject: string) => {
+    if (!classifiedType) return;
+    try {
+      const { title: genTitle, description: genDesc, events: genEvents, categories: genCategories } = await generate(subject, classifiedType);
       setTitle(genTitle);
       setDescription(genDesc);
       setEvents(genEvents);
+      updateCategories(genCategories);
       setShowCreationScreen(false);
+      resetClassification();
       if (genEvents.length > 0) {
         const earliest = genEvents.reduce((a, b) => a.startDate < b.startDate ? a : b);
         setPendingScrollDate(earliest.startDate);
@@ -389,8 +404,13 @@ export function App() {
       {showCreationScreen && (
         <NewTimelineScreen
           onAIGenerate={handleAIGenerate}
+          onClassify={handleClassify}
           onManualCreate={handleManualCreate}
+          onSubjectChange={handleSubjectChange}
           isGenerating={isGenerating}
+          isClassifying={isClassifying}
+          classifiedType={classifiedType}
+          categoryLabels={categoryLabels}
           error={aiError}
         />
       )}
