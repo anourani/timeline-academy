@@ -177,7 +177,7 @@ export function NewTimelineScreen({
                     ? 'bg-[#262626] border border-[#3d3e40]'
                     : 'bg-[#171717] border border-[#171717]'
                 } disabled:opacity-50`}
-                style={{ width: Math.max(180, name.length * 19 + 40) }}
+                style={{ width: Math.max(280, name.length * 19 + 40) }}
               />
               {suffix && (
                 <span className="font-['Aleo'] text-[32px] text-[#6b6f76] ml-2 whitespace-nowrap">
@@ -188,7 +188,7 @@ export function NewTimelineScreen({
           </div>
 
           {/* Type subtext */}
-          <div className="mt-1 flex items-center gap-1 font-avenir text-sm" style={{ paddingLeft: 'calc(32px * 13.5)' }}>
+          <div className="mt-1 flex items-center justify-center gap-1 font-avenir text-sm">
             {TYPE_LABELS.map((t, i) => (
               <span key={t.key}>
                 {i > 0 && <span className="text-[#9b9ea3] mx-0.5">/</span>}
