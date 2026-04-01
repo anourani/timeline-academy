@@ -169,6 +169,7 @@ export function NewTimelineScreen({
   }
 
   const handleCancel = () => {
+    setName('')
     onCancel()
   }
 
@@ -190,56 +191,58 @@ export function NewTimelineScreen({
             {/* Step 1: Subject line */}
             <form onSubmit={handleSubmit}>
               <div className="flex flex-col gap-[50px] items-start">
-                <div>
-                  <div className="flex gap-[8px] items-center h-[58px]">
-                    <span className="font-['Aleo'] text-[32px] text-text-secondary whitespace-nowrap leading-[1.25]">
-                      Generate a timeline of
-                    </span>
-                    <input
-                      ref={inputRef}
-                      type="text"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      onFocus={() => setInputFocused(true)}
-                      onBlur={() => setInputFocused(false)}
-                      placeholder={PLACEHOLDER_NAMES[placeholderIndex]}
-                      disabled={isWorking}
-                      className={[
-                        "font-['Aleo'] text-[32px] leading-[1.25] outline-none rounded-[8px] px-[11px] py-[9px] transition-all duration-150 ease-in",
-                        isCompleted
-                          ? 'bg-[#171717] border border-[#3d3e40] text-text-secondary shadow-[0px_8px_32px_0px_rgba(155,158,163,0.04)]'
-                          : hasText
+                <div className="flex gap-[8px] items-center h-[58px]">
+                  <span className="font-['Aleo'] text-[32px] text-text-secondary whitespace-nowrap leading-[1.25]">
+                    Generate a timeline of
+                  </span>
+                  <div className="flex flex-col items-center gap-[2px]">
+                    <div className="flex items-center gap-[8px]">
+                      <input
+                        ref={inputRef}
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        onFocus={() => setInputFocused(true)}
+                        onBlur={() => setInputFocused(false)}
+                        placeholder={PLACEHOLDER_NAMES[placeholderIndex]}
+                        disabled={isWorking}
+                        className={[
+                          "font-['Aleo'] text-[32px] leading-[1.25] outline-none rounded-[8px] px-[11px] py-[9px] transition-all duration-150 ease-in",
+                          isCompleted
                             ? 'bg-[#171717] border border-[#3d3e40] text-text-secondary shadow-[0px_8px_32px_0px_rgba(155,158,163,0.04)]'
-                            : 'bg-[#0a0a0a] border border-[#171717] text-text-tertiary shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4)]',
-                        'placeholder-text-tertiary disabled:opacity-70',
-                      ].join(' ')}
-                      style={{
-                        width: isCompleted && !inputFocused
-                          ? Math.max(60, name.length * 19 + 30)
-                          : Math.max(280, name.length * 19 + 30),
-                        minWidth: isCompleted && !inputFocused ? undefined : 280,
-                      }}
-                    />
-                    {suffix && (
-                      <span className="font-['Aleo'] text-[32px] text-text-tertiary whitespace-nowrap leading-[1.25]">
-                        {suffix}
-                      </span>
-                    )}
-                  </div>
-                  {/* Type subtext — sits below the row, centered under the input */}
-                  <div className="flex items-center justify-center gap-[4px] font-avenir text-sm leading-[20px] mt-[2px]" style={{ paddingLeft: 'calc(32px * 14.5)' }}>
-                    {TYPE_LABELS.map((t, i) => (
-                      <span key={t.key} className="flex items-center gap-[4px]">
-                        {i > 0 && <span className="text-text-tertiary">/</span>}
-                        <span
-                          className={
-                            classifiedType === t.key ? 'text-text-primary' : 'text-text-tertiary'
-                          }
-                        >
-                          {t.display}
+                            : hasText
+                              ? 'bg-[#171717] border border-[#3d3e40] text-text-secondary shadow-[0px_8px_32px_0px_rgba(155,158,163,0.04)]'
+                              : 'bg-[#0a0a0a] border border-[#171717] text-text-tertiary shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4)]',
+                          'placeholder-text-tertiary disabled:opacity-70',
+                        ].join(' ')}
+                        style={{
+                          width: isCompleted && !inputFocused
+                            ? Math.max(60, name.length * 19 + 30)
+                            : Math.max(280, name.length * 19 + 30),
+                          minWidth: isCompleted && !inputFocused ? undefined : 280,
+                        }}
+                      />
+                      {suffix && (
+                        <span className="font-['Aleo'] text-[32px] text-text-tertiary whitespace-nowrap leading-[1.25]">
+                          {suffix}
                         </span>
-                      </span>
-                    ))}
+                      )}
+                    </div>
+                    {/* Type subtext — centered under the input */}
+                    <div className="flex items-center justify-center gap-[4px] font-avenir text-sm leading-[20px]">
+                      {TYPE_LABELS.map((t, i) => (
+                        <span key={t.key} className="flex items-center gap-[4px]">
+                          {i > 0 && <span className="text-text-tertiary">/</span>}
+                          <span
+                            className={
+                              classifiedType === t.key ? 'text-text-primary' : 'text-text-tertiary'
+                            }
+                          >
+                            {t.display}
+                          </span>
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
