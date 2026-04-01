@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { classifySubject, generateTimeline } from '../services/aiTimeline';
 import { TimelineEvent, CategoryConfig } from '../types/event';
 import { PILL_DEFINITIONS } from '../constants/pillDefinitions';
@@ -18,36 +18,42 @@ export function useAIMode() {
   const [classifiedType, setClassifiedType] = useState<SubjectType | null>(null);
   const [categoryLabels, setCategoryLabels] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const abortedRef = useRef(false);
 
-  const classify = async (subject: string): Promise<SubjectType> => {
+  const classifyAndGenerate = useCallback(async (subject: string): Promise<GenerateResult> => {
+    abortedRef.current = false;
     setIsClassifying(true);
     setError(null);
+    setClassifiedType(null);
+    setCategoryLabels([]);
 
+    let type: SubjectType;
     try {
       const result = await classifySubject(subject);
-      const type = result.type;
+      if (abortedRef.current) throw new Error('Cancelled');
+      type = result.type;
       setClassifiedType(type);
 
       const pills = PILL_DEFINITIONS[type];
       setCategoryLabels(pills.map((p) => p.label));
-
-      return type;
     } catch (err) {
+      if (abortedRef.current) {
+        setIsClassifying(false);
+        throw new Error('Cancelled');
+      }
       const msg = err instanceof Error ? err.message : 'Failed to classify subject';
       setError(msg);
-      throw err;
-    } finally {
       setIsClassifying(false);
+      throw err;
     }
-  };
 
-  const generate = async (subject: string, subjectType: SubjectType): Promise<GenerateResult> => {
+    setIsClassifying(false);
     setIsGenerating(true);
-    setError(null);
 
     try {
-      const pills = PILL_DEFINITIONS[subjectType];
-      const result = await generateTimeline(subject, subjectType, pills);
+      const pills = PILL_DEFINITIONS[type];
+      const result = await generateTimeline(subject, type, pills);
+      if (abortedRef.current) throw new Error('Cancelled');
 
       const events: TimelineEvent[] = result.events.map((e) => ({
         id: crypto.randomUUID(),
@@ -57,8 +63,6 @@ export function useAIMode() {
         category: e.category,
       }));
 
-      // Build category configs using the categoryMapping from the LLM response
-      // or fall back to pill definitions
       const categories: CategoryConfig[] = DEFAULT_CATEGORIES.map((defaultCat, i) => {
         const pill = pills[i];
         const mappingLabel = result.categoryMapping?.[`category_${i + 1}`];
@@ -75,19 +79,32 @@ export function useAIMode() {
         categories,
       };
     } catch (err) {
+      if (abortedRef.current) {
+        setIsGenerating(false);
+        throw new Error('Cancelled');
+      }
       const msg = err instanceof Error ? err.message : 'Something went wrong';
       setError(msg);
       throw err;
     } finally {
       setIsGenerating(false);
     }
-  };
+  }, []);
 
-  const resetClassification = () => {
+  const abort = useCallback(() => {
+    abortedRef.current = true;
+    setIsClassifying(false);
+    setIsGenerating(false);
     setClassifiedType(null);
     setCategoryLabels([]);
     setError(null);
-  };
+  }, []);
+
+  const resetClassification = useCallback(() => {
+    setClassifiedType(null);
+    setCategoryLabels([]);
+    setError(null);
+  }, []);
 
   return {
     isGenerating,
@@ -95,8 +112,8 @@ export function useAIMode() {
     classifiedType,
     categoryLabels,
     error,
-    classify,
-    generate,
+    classifyAndGenerate,
+    abort,
     resetClassification,
   };
 }

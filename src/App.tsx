@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Header } from './components/Layout/Header';
 import { GlobalNav } from '@/components/Navigation/GlobalNav';
@@ -36,7 +36,7 @@ export function App() {
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
   const [showCreationScreen, setShowCreationScreen] = useState(false);
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
-  const { isGenerating, isClassifying, classifiedType, categoryLabels, error: aiError, classify, generate, resetClassification } = useAIMode();
+  const { isGenerating, isClassifying, classifiedType, categoryLabels, error: aiError, classifyAndGenerate, abort: abortAI, resetClassification } = useAIMode();
   const { loadAllDrafts, loadDraft, saveDraft, saveDraftImmediate, createDraft, clearAllDrafts } = useLocalDraft();
   const handledRouteStateRef = useRef(false);
 
@@ -290,22 +290,9 @@ export function App() {
     }
   };
 
-  const handleClassify = async (subject: string) => {
-    try {
-      await classify(subject);
-    } catch {
-      // Error is already set in useAIMode — stays on creation screen showing error
-    }
-  };
-
-  const handleSubjectChange = () => {
-    resetClassification();
-  };
-
   const handleAIGenerate = async (subject: string) => {
-    if (!classifiedType) return;
     try {
-      const { title: genTitle, description: genDesc, events: genEvents, categories: genCategories } = await generate(subject, classifiedType);
+      const { title: genTitle, description: genDesc, events: genEvents, categories: genCategories } = await classifyAndGenerate(subject);
 
       // Create draft for logged-out users now that generation succeeded
       if (!user && !activeDraftId) {
@@ -332,6 +319,10 @@ export function App() {
     } catch {
       // Error is already set in useAIMode — stays on creation screen showing error
     }
+  };
+
+  const handleCancelAI = () => {
+    abortAI();
   };
 
   const handleBulkEventsChange = (newEvents: TimelineEvent[]) => {
@@ -433,9 +424,8 @@ export function App() {
       {showCreationScreen && (
         <NewTimelineScreen
           onAIGenerate={handleAIGenerate}
-          onClassify={handleClassify}
+          onCancel={handleCancelAI}
           onManualCreate={handleManualCreate}
-          onSubjectChange={handleSubjectChange}
           isGenerating={isGenerating}
           isClassifying={isClassifying}
           classifiedType={classifiedType}
