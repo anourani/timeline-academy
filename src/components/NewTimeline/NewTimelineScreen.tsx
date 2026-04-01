@@ -121,6 +121,7 @@ export function NewTimelineScreen({
   const [typewriterDone, setTypewriterDone] = useState(false)
   const [visiblePills, setVisiblePills] = useState<number[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
+  const inputWrapperRef = useRef<HTMLDivElement>(null)
   const pillTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])
 
   const isWorking = isClassifying || isGenerating
@@ -191,12 +192,12 @@ export function NewTimelineScreen({
             {/* Step 1: Subject line */}
             <form onSubmit={handleSubmit}>
               <div className="flex flex-col gap-[50px] items-start">
-                <div className="flex gap-[8px] items-center h-[58px]">
-                  <span className="font-['Aleo'] text-[32px] text-text-secondary whitespace-nowrap leading-[1.25]">
+                <div className="flex gap-[8px] items-start">
+                  <span className="font-['Aleo'] text-[32px] text-text-secondary whitespace-nowrap leading-[1.25] h-[58px] flex items-center shrink-0">
                     Generate a timeline of
                   </span>
                   <div className="flex flex-col items-center gap-[2px]">
-                    <div className="flex items-center gap-[8px]">
+                    <div ref={inputWrapperRef} className="flex items-center gap-[8px] h-[58px]">
                       <input
                         ref={inputRef}
                         type="text"
@@ -207,7 +208,7 @@ export function NewTimelineScreen({
                         placeholder={PLACEHOLDER_NAMES[placeholderIndex]}
                         disabled={isWorking}
                         className={[
-                          "font-['Aleo'] text-[32px] leading-[1.25] outline-none rounded-[8px] px-[11px] py-[9px] transition-all duration-150 ease-in",
+                          "font-['Aleo'] text-[32px] leading-[1.25] outline-none rounded-[8px] px-[11px] py-[9px] h-[58px] box-border transition-all duration-150 ease-in",
                           isCompleted
                             ? 'bg-[#171717] border border-[#3d3e40] text-text-secondary shadow-[0px_8px_32px_0px_rgba(155,158,163,0.04)]'
                             : hasText
@@ -228,7 +229,7 @@ export function NewTimelineScreen({
                         </span>
                       )}
                     </div>
-                    {/* Type subtext — centered under the input */}
+                    {/* Type subtext — centered under the input + suffix */}
                     <div className="flex items-center justify-center gap-[4px] font-avenir text-sm leading-[20px]">
                       {TYPE_LABELS.map((t, i) => (
                         <span key={t.key} className="flex items-center gap-[4px]">
