@@ -36,6 +36,10 @@ function calculateTimelineRange(events: TimelineEvent[]) {
     endYear = Math.min(MAX_YEAR, midYear + 5);
   }
 
+  // Add 5-year scroll padding beyond event range
+  startYear = Math.max(MIN_YEAR, startYear - 5);
+  endYear = Math.min(MAX_YEAR, endYear + 5);
+
   return { startYear, endYear };
 }
 
