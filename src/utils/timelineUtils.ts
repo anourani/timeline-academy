@@ -49,6 +49,13 @@ export function getCurrentTimelinePosition(
   };
 }
 
+/** Returns the Tailwind border-color class for a month's right-side vertical line.
+ *  December (month === 11) gets Grey-800 to mark year boundaries.
+ *  All other months get Grey-900. */
+export function getMonthBorderClass(month: Month): string {
+  return month.month === 11 ? 'border-[#262626]' : 'border-[#171717]';
+}
+
 export function getTimelineYearRange(events: TimelineEvent[]): string {
   if (events.length === 0) {
     // Empty timeline - show current year

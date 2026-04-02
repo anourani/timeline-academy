@@ -98,7 +98,7 @@ export function Timeline({
     let currentOffset = 0;
     const data = visibleCategories.map(category => {
       const categoryEvents = visibleEvents.filter(event => event.category === category.id);
-      const stackedEvents = calculateEventStacks(categoryEvents, months);
+      const stackedEvents = calculateEventStacks(categoryEvents, months, scale.monthWidth);
       const maxStack = Math.max(...stackedEvents.map(event => event.stackIndex), 0);
       
       const height = (maxStack + 1) * EVENT_HEIGHT + CATEGORY_PADDING;
@@ -118,7 +118,7 @@ export function Timeline({
       categories: data,
       totalHeight: currentOffset || CATEGORY_MIN_HEIGHT,
     };
-  }, [visibleEvents, visibleCategories, months]);
+  }, [visibleEvents, visibleCategories, months, scale.monthWidth]);
 
   const handleMonthClick = useCallback((monthIndex: number) => {
     if (!onAddEvent || justDraggedRef.current) return;
@@ -189,7 +189,7 @@ export function Timeline({
               {categoryData.categories.map((category) => (
                 <div 
                   key={`category-${category.id}`}
-                  className="relative border-l border-gray-700"
+                  className="relative border-l border-[#171717]"
                   style={{ 
                     height: category.height,
                     gridColumn: `1 / span ${months.length * 4}`,
@@ -225,29 +225,18 @@ export function Timeline({
 
               {/* Filler row: extends vertical grid lines to bottom of viewport */}
               <div
-                className="relative border-l border-gray-700"
+                className="relative border-l border-[#171717]"
                 style={{
                   gridColumn: `1 / span ${months.length * 4}`,
                   minHeight: `calc(100vh - ${categoryData.totalHeight + HEADER_HEIGHT + SCROLL_INDICATOR_HEIGHT}px - 6rem)`,
                 }}
               >
-                <div
-                  className="absolute inset-0 grid transition-all duration-200 ease-in-out"
-                  style={{
-                    gridTemplateColumns: `repeat(${months.length}, ${scale.monthWidth}px)`,
-                  }}
-                >
-                  {months.map((month, index) => (
-                    <div
-                      key={`filler-${month.year}-${month.month}`}
-                      className="border-r border-gray-700"
-                      onMouseEnter={() => setHoveredMonth(index)}
-                      onMouseLeave={() => setHoveredMonth(null)}
-                      onClick={() => handleMonthClick(index)}
-                      style={{ pointerEvents: 'auto' }}
-                    />
-                  ))}
-                </div>
+                <TimelineGrid
+                  months={months}
+                  onMonthHover={setHoveredMonth}
+                  onMonthClick={handleMonthClick}
+                  scale={scale}
+                />
               </div>
 
               {/* Add Event Cursor — hidden during drag */}
