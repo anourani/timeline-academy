@@ -14,9 +14,6 @@ interface EventPlacement {
   stackIndex: number;
 }
 
-// Constants
-const COLUMN_WIDTH = 32; // Width of each month column in pixels
-
 function getEventColumns(event: TimelineEvent, months: Month[]): { start: number; end: number } {
   if (!months?.length) return { start: 0, end: 0 };
   
@@ -37,10 +34,10 @@ function getEventColumns(event: TimelineEvent, months: Month[]): { start: number
   };
 }
 
-function calculateTitleWidth(title: string): number {
+function calculateTitleWidth(title: string, monthWidth: number): number {
   // Calculate columns needed for title
   const titleWidth = Math.max(EVENT_MIN_WIDTH, title.length * 8); // 8px per character approximation
-  return Math.ceil(titleWidth / COLUMN_WIDTH);
+  return Math.ceil(titleWidth / monthWidth);
 }
 
 function hasCollision(placement: EventPlacement, existingPlacements: EventPlacement[]): boolean {
@@ -51,7 +48,7 @@ function hasCollision(placement: EventPlacement, existingPlacements: EventPlacem
   );
 }
 
-export function calculateEventStacks(events: TimelineEvent[], months: Month[] = []): StackedEvent[] {
+export function calculateEventStacks(events: TimelineEvent[], months: Month[] = [], monthWidth: number = 28): StackedEvent[] {
   if (!events?.length) return [];
 
   // Sort events by start date, then by duration (shorter events first)
@@ -74,7 +71,7 @@ export function calculateEventStacks(events: TimelineEvent[], months: Month[] = 
     const { start: startColumn, end: endColumn } = getEventColumns(event, months);
     
     // Calculate columns needed for title
-    const titleColumns = calculateTitleWidth(event.title);
+    const titleColumns = calculateTitleWidth(event.title, monthWidth);
     
     // Calculate total visual space needed (max of date span and title width)
     const visualEndColumn = Math.max(
