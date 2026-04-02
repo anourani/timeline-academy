@@ -2,6 +2,8 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { createLLMClient } from "../_shared/llm-client.ts";
 import { checkRateLimit, recordUsage } from "../_shared/rate-limiter.ts";
+import { classifySubject } from "../_shared/classify.ts";
+import type { CategoryDefinition } from "../_shared/prompts.ts";
 
 Deno.serve(async (req: Request) => {
   // Handle CORS preflight
@@ -11,7 +13,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     // 1. Parse request body
-    const { subject, provider } = await req.json();
+    const { subject, provider, categories, mode } = await req.json();
 
     if (!subject || typeof subject !== "string" || !subject.trim()) {
       return new Response(
@@ -21,6 +23,23 @@ Deno.serve(async (req: Request) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
+    }
+
+    // 1b. Classification mode — cheap, fast, no auth/rate-limit needed
+    if (mode === "classify") {
+      try {
+        const type = await classifySubject(subject.trim());
+        return new Response(JSON.stringify({ type }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (classifyErr) {
+        console.error("Classification failed, falling back to topic:", classifyErr);
+        return new Response(JSON.stringify({ type: "topic" }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     // 2. Determine session key for rate limiting
@@ -85,7 +104,17 @@ Deno.serve(async (req: Request) => {
       "claude";
 
     const client = createLLMClient(selectedProvider);
-    const result = await client.generateTimeline(subject.trim());
+
+    // Pass categories if provided (Madlibs mode), otherwise fallback to legacy
+    const categoryDefs: CategoryDefinition[] | undefined =
+      Array.isArray(categories) && categories.length > 0
+        ? categories
+        : undefined;
+
+    const result = await client.generateTimeline(
+      subject.trim(),
+      categoryDefs
+    );
 
     // 5. Record usage
     await recordUsage(sessionKey);

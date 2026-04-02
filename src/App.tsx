@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Header } from './components/Layout/Header';
 import { GlobalNav } from '@/components/Navigation/GlobalNav';
@@ -36,7 +36,7 @@ export function App() {
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
   const [showCreationScreen, setShowCreationScreen] = useState(false);
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
-  const { isGenerating, error: aiError, generate } = useAIMode();
+  const { isGenerating, isClassifying, classifiedType, categoryLabels, error: aiError, classifyAndGenerate, abort: abortAI, resetClassification } = useAIMode();
   const { loadAllDrafts, loadDraft, saveDraft, saveDraftImmediate, createDraft, clearAllDrafts } = useLocalDraft();
   const handledRouteStateRef = useRef(false);
 
@@ -73,21 +73,23 @@ export function App() {
       } | null;
 
       if (routeState?.newTimeline) {
-        // "Build from Scratch" or "Build with AI" — always start a new timeline
-        const newDraft = createDraft();
-        if (!newDraft) {
-          alert('You\'ve reached the 3-timeline limit. Delete an existing timeline to create a new one.');
-          routerNavigate('/', { replace: true });
-          setDraftHydrated(true);
-          return;
-        }
-        setActiveDraftId(newDraft.id);
-        setTitle(newDraft.title);
-        setDescription(newDraft.description);
-        setEvents(newDraft.events);
-        updateCategories(newDraft.categories);
-        handleScaleChange(newDraft.scale);
-        if (!routeState.skipCreationScreen) {
+        if (routeState.skipCreationScreen) {
+          // "Build from Scratch" — create draft immediately
+          const newDraft = createDraft();
+          if (!newDraft) {
+            alert('You\'ve reached the 3-timeline limit. Delete an existing timeline to create a new one.');
+            routerNavigate('/', { replace: true });
+            setDraftHydrated(true);
+            return;
+          }
+          setActiveDraftId(newDraft.id);
+          setTitle(newDraft.title);
+          setDescription(newDraft.description);
+          setEvents(newDraft.events);
+          updateCategories(newDraft.categories);
+          handleScaleChange(newDraft.scale);
+        } else {
+          // "Build with AI" — defer draft creation until generation completes
           setShowCreationScreen(true);
         }
       } else if (routeState?.draftId) {
@@ -268,19 +270,48 @@ export function App() {
 
   const handleManualCreate = async () => {
     setShowCreationScreen(false);
+    resetClassification();
     if (user) {
       await switchTimeline('new');
+    } else if (!activeDraftId) {
+      // Create a draft now for logged-out users choosing manual mode
+      const newDraft = createDraft();
+      if (newDraft) {
+        setActiveDraftId(newDraft.id);
+        setTitle(newDraft.title);
+        setDescription(newDraft.description);
+        setEvents(newDraft.events);
+        updateCategories(newDraft.categories);
+        handleScaleChange(newDraft.scale);
+      } else {
+        alert('You\'ve reached the 3-timeline limit. Delete an existing timeline to create a new one.');
+        routerNavigate('/', { replace: true });
+      }
     }
-    // For logged-out users, just hiding the creation screen reveals the empty timeline
   };
 
   const handleAIGenerate = async (subject: string) => {
     try {
-      const { title: genTitle, description: genDesc, events: genEvents } = await generate(subject);
+      const { title: genTitle, description: genDesc, events: genEvents, categories: genCategories } = await classifyAndGenerate(subject);
+
+      // Create draft for logged-out users now that generation succeeded
+      if (!user && !activeDraftId) {
+        const newDraft = createDraft();
+        if (newDraft) {
+          setActiveDraftId(newDraft.id);
+        } else {
+          alert('You\'ve reached the 3-timeline limit. Delete an existing timeline to create a new one.');
+          routerNavigate('/', { replace: true });
+          return;
+        }
+      }
+
       setTitle(genTitle);
       setDescription(genDesc);
       setEvents(genEvents);
+      updateCategories(genCategories);
       setShowCreationScreen(false);
+      resetClassification();
       if (genEvents.length > 0) {
         const earliest = genEvents.reduce((a, b) => a.startDate < b.startDate ? a : b);
         setPendingScrollDate(earliest.startDate);
@@ -288,6 +319,10 @@ export function App() {
     } catch {
       // Error is already set in useAIMode — stays on creation screen showing error
     }
+  };
+
+  const handleCancelAI = () => {
+    abortAI();
   };
 
   const handleBulkEventsChange = (newEvents: TimelineEvent[]) => {
@@ -389,8 +424,12 @@ export function App() {
       {showCreationScreen && (
         <NewTimelineScreen
           onAIGenerate={handleAIGenerate}
+          onCancel={handleCancelAI}
           onManualCreate={handleManualCreate}
           isGenerating={isGenerating}
+          isClassifying={isClassifying}
+          classifiedType={classifiedType}
+          categoryLabels={categoryLabels}
           error={aiError}
         />
       )}
