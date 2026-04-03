@@ -87,7 +87,7 @@ export const TimelineEvent = memo(function TimelineEvent({
         className="h-full w-[8px] rounded flex-shrink-0"
         style={{ backgroundColor: categoryColor }}
       />
-      <div className="pl-1 whitespace-nowrap text-base font-medium overflow-visible">
+      <div className="pl-1 whitespace-nowrap body-lg overflow-visible">
         {event.title}
       </div>
     </div>
@@ -98,7 +98,7 @@ export const TimelineEvent = memo(function TimelineEvent({
       {/* Ghost placeholder at original position during drag */}
       {isDragging && (
         <div
-          className="flex items-center text-white rounded p-0.5 pointer-events-none"
+          className="flex items-center text-text-secondary rounded p-0.5 pointer-events-none"
           style={{
             gridColumn: `${startColumn} / ${endColumn}`,
             gridRow: event.stackIndex + 1,
@@ -115,7 +115,7 @@ export const TimelineEvent = memo(function TimelineEvent({
 
       {/* Main event element */}
       <div
-        className={`flex items-center text-white group rounded p-0.5 ${
+        className={`flex items-center text-text-secondary hover:text-text-primary group rounded p-0.5 ${
           isDragging ? 'select-none' : 'transition-colors hover:brightness-110'
         } ${isDraggable ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-pointer'}`}
         style={{
