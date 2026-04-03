@@ -42,7 +42,7 @@ export function TimelineTile({ id, title, eventCount, yearRange, dominantCategor
         <span className="flex-1 font-aleo font-normal text-[18px] leading-[1.4] text-text-secondary group-hover:text-text-primary transition-colors truncate">
           {title || DEFAULT_TIMELINE_TITLE}
         </span>
-        <div className="flex items-center gap-2 font-mono text-[12px] font-light leading-[1.4] text-text-tertiary shrink-0 w-[220px]">
+        <div className="flex items-center gap-2 label-s-type1 text-text-tertiary shrink-0 w-[220px]">
           {yearRange && <span className="shrink-0 whitespace-nowrap">{yearRange}</span>}
           <div
             className="shrink-0 size-[6px] rounded-full"

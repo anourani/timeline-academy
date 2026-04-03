@@ -25,7 +25,7 @@ export function TimelineMonthLabels({ months, scale }: TimelineMonthLabelsProps)
           style={{ width: `${scale.monthWidth}px` }}
         >
           {scale.value === 'large' && (
-            <span className="text-[10px] text-[#9b9ea3] font-mono transition-transform duration-200 ease-in-out">
+            <span className="label-xs-type1 text-[#9b9ea3] transition-transform duration-200 ease-in-out">
               {format(new Date(month.year, month.month), 'MMM')}
             </span>
           )}

@@ -122,13 +122,13 @@ grid-template-columns: repeat(${months.length}, ${scale.monthWidth}px);
 - Spans full grid width: `gridColumn: 1 / span ${months.length}`
 - Flexbox row where each year section width = `monthsInYear × scale.monthWidth`
 - Height: 32px (`h-8`)
-- Year text: `text-sm text-gray-400 text-center font-mono`
+- Year text: `label-m-type1 text-[#9b9ea3] text-center`
 - Animated width transitions: `transition-[width] duration-200 ease-in-out`
 
 ### Month Labels (`TimelineMonthLabels.tsx`)
 - Grid: one cell per month, each `${scale.monthWidth}px` wide
 - Height: 32px (`h-8`)
-- Month text: `text-[10px] text-gray-500 font-mono`, formatted via `date-fns` → `'MMM'` (Jan, Feb, etc.)
+- Month text: `label-xs-type1 text-[#9b9ea3]`, formatted via `date-fns` → `'MMM'` (Jan, Feb, etc.)
 - Vertical borders: `border-r border-gray-700` between months
 
 ---
@@ -141,7 +141,7 @@ A fixed indicator at the left edge of the timeline that shows which year the use
 
 - **Position:** `absolute left-[150px] top-[32px] bottom-[32px]`
 - **Visual:** 4px wide white vertical bar with upper extension line (24px)
-- **Year display:** `text-2xl` monospace text, 8px above the indicator bar
+- **Year display:** `label-xl-type1` text, 8px above the indicator bar
 
 **Logic:** Uses `getCurrentTimelinePosition()` from `timelineUtils.ts` which:
 1. Reads `scrollLeft` from the scroll container

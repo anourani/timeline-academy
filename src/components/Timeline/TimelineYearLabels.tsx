@@ -29,7 +29,7 @@ export function TimelineYearLabels({ months, scale }: TimelineYearLabelsProps) {
               width: `${monthsInYear * scale.monthWidth}px`,
             }}
           >
-            <div className="absolute left-0 right-0 top-0 text-sm text-[#9b9ea3] text-center font-mono transition-transform duration-200 ease-in-out">
+            <div className="absolute left-0 right-0 top-0 label-m-type1 text-[#9b9ea3] text-center transition-transform duration-200 ease-in-out">
               {year}
             </div>
           </div>

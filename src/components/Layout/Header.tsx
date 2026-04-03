@@ -108,7 +108,7 @@ export function Header({
                 className="bg-transparent text-[32px] leading-[1.25] text-[#c9ced4] font-['Aleo'] font-normal border-none outline-none focus:outline-none caret-white min-w-0"
                 style={{ width: `${Math.max(title.length, 1)}ch` }}
               />
-              <div className="flex items-center gap-6 stats-m text-[#9b9ea3]">
+              <div className="flex items-center gap-6 label-m-type1 text-[#9b9ea3]">
                 <span>{events.length} {events.length === 1 ? 'event' : 'events'}</span>
                 <span>{timelineRange}</span>
               </div>

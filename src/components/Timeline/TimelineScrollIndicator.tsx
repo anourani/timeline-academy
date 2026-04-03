@@ -15,7 +15,7 @@ export function TimelineScrollIndicator({
 
   return (
     <div
-      className="flex items-start px-[24px] pointer-events-none font-mono text-[24px] text-[#9b9ea3] whitespace-nowrap"
+      className="flex items-start px-[24px] pointer-events-none label-xl-type1 text-[#9b9ea3] whitespace-nowrap"
       style={{ height: SCROLL_INDICATOR_HEIGHT }}
     >
       {leftYear != null && <span>{leftYear}</span>}
