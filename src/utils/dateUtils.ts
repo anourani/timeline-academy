@@ -1,5 +1,6 @@
 import { TimelineEvent } from '../types/event';
 import { Month } from '../types/timeline';
+import { format } from 'date-fns';
 
 const MIN_YEAR = 1900;
 const MAX_YEAR = 2100;
@@ -99,6 +100,36 @@ export function isValidDateFormat(dateStr: string): boolean {
 export function formatDateForCSV(dateStr: string): string {
   const [year, month, day] = dateStr.split('-').map(Number);
   return `${month}/${day}/${year}`;
+}
+
+// Date picker conversion helpers (shared by EventForm and EventTableEditor)
+export const parseDate = (dateStr: string): Date | undefined => {
+  if (!dateStr) return undefined
+  return new Date(dateStr + 'T00:00:00')
+}
+
+export const formatDateToString = (date: Date): string => {
+  return format(date, 'yyyy-MM-dd')
+}
+
+export const formatDateDisplay = (dateStr: string): string => {
+  if (!dateStr) return ''
+  const date = parseDate(dateStr)
+  if (!date) return ''
+  return format(date, 'MM/dd/yyyy')
+}
+
+// Dark theme classNames for Calendar component
+export const darkCalendarClassNames = {
+  day_selected: "bg-[rgba(37,99,235,0.8)] text-white hover:bg-[rgba(37,99,235,0.9)] focus:bg-[rgba(37,99,235,0.9)]",
+  day_today: "ring-1 ring-[#9b9ea3] text-[#c9ced4]",
+  day: "h-8 w-8 p-0 font-normal text-[#c9ced4] hover:bg-[#151617] rounded-md inline-flex items-center justify-center aria-selected:opacity-100",
+  head_cell: "text-[#9b9ea3] w-8 font-normal text-[0.8rem]",
+  caption_label: "text-[#c9ced4] text-sm font-medium",
+  nav_button: "h-7 w-7 bg-transparent hover:bg-[#151617] rounded-md p-0 opacity-70 hover:opacity-100 inline-flex items-center justify-center border border-[rgba(210,210,210,0.2)]",
+  cell: "relative p-0 text-center text-sm focus-within:relative focus-within:z-20 [&:has([aria-selected])]:bg-[rgba(37,99,235,0.2)] [&:has([aria-selected])]:rounded-md",
+  day_outside: "text-[#6b6e73] opacity-50 aria-selected:opacity-100",
+  day_disabled: "text-[#6b6e73] opacity-30",
 }
 
 // Drag-and-drop date shifting utilities

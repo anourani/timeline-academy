@@ -149,4 +149,70 @@
     text-transform: uppercase;
     color: var(--text-color-secondary);
   }
+
+  /* Label Type 1 — JetBrains Mono (monospace, for dates/numbers) */
+  .label-xl-type1 {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 400;
+    font-size: 24px;
+    line-height: 140%;
+  }
+
+  .label-m-type1 {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 140%;
+  }
+
+  .label-s-type1 {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 400;
+    font-size: 12px;
+    line-height: 140%;
+  }
+
+  .label-xs-type1 {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 400;
+    font-size: 10px;
+    line-height: 140%;
+  }
+
+  /* Label Type 2 — Avenir (sans-serif, for text labels) */
+  .label-xl-type2 {
+    font-family: 'Avenir', sans-serif;
+    font-weight: 500;
+    font-size: 24px;
+    line-height: 140%;
+  }
+
+  .label-m-type2 {
+    font-family: 'Avenir', sans-serif;
+    font-weight: 500;
+    font-size: 14px;
+    line-height: 140%;
+  }
+
+  .label-s-type2 {
+    font-family: 'Avenir', sans-serif;
+    font-weight: 500;
+    font-size: 12px;
+    line-height: 140%;
+  }
+
+  .label-xs-type2 {
+    font-family: 'Avenir', sans-serif;
+    font-weight: 500;
+    font-size: 10px;
+    line-height: 140%;
+  }
+
+  /* Body text */
+  .body-m {
+    font-family: 'Avenir', sans-serif;
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 20px;
+  }
 }
