@@ -145,7 +145,7 @@ export function Header({
       </div>
 
       <Dialog open={showAddEventModal} onOpenChange={setShowAddEventModal}>
-        <DialogContent className="bg-surface-secondary border-[rgba(210,210,210,0.15)] max-w-[350px] rounded-[20px] px-4 py-5">
+        <DialogContent className="bg-surface-secondary border-[rgba(210,210,210,0.15)] max-w-[340px] rounded-[20px] px-5 py-6">
           <DialogHeader>
             <DialogTitle className="header-small text-[#c9ced4] text-center">
               Add Event

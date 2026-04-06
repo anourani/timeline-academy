@@ -133,7 +133,7 @@ export function EventForm({
 
   return (
     <form onSubmit={handleSubmit} className="rounded-lg">
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-6">
         {/* Event Title */}
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
