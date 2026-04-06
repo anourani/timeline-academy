@@ -135,7 +135,7 @@ export function EventForm({
     <form onSubmit={handleSubmit} className="rounded-lg">
       <div className="flex flex-col gap-4">
         {/* Event Title */}
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
             <label htmlFor="title" className="label-s-type2 text-[#c9ced4]">
               Event title
@@ -158,7 +158,7 @@ export function EventForm({
         </div>
 
         {/* Category Toggle Grid */}
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
             <label className="label-s-type2 text-[#c9ced4]">
               Category
@@ -179,7 +179,7 @@ export function EventForm({
                     borderColor: cat.color,
                   } : undefined}
                   className={cn(
-                    "flex-1 px-2 py-2.5 rounded text-sm text-center border transition-colors",
+                    "flex-1 px-2 py-2 rounded text-sm text-center border transition-colors",
                     "font-['Avenir',sans-serif]",
                     category === cat.id
                       ? "text-[#dadee5]"
@@ -202,7 +202,7 @@ export function EventForm({
                     borderColor: cat.color,
                   } : undefined}
                   className={cn(
-                    "flex-1 px-2 py-2.5 rounded text-sm text-center border transition-colors",
+                    "flex-1 px-2 py-2 rounded text-sm text-center border transition-colors",
                     "font-['Avenir',sans-serif]",
                     category === cat.id
                       ? "text-[#dadee5]"
@@ -220,7 +220,7 @@ export function EventForm({
         {/* Date Fields */}
         <div className="flex gap-2">
           {/* Start Date */}
-          <div className="flex-1 flex flex-col gap-1">
+          <div className="flex-1 flex flex-col gap-1.5">
             <label className="label-s-type2 text-[#c9ced4]">
               Start date
             </label>
@@ -269,7 +269,7 @@ export function EventForm({
           </div>
 
           {/* End Date */}
-          <div className="flex-1 flex flex-col gap-1">
+          <div className="flex-1 flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
               <label className="label-s-type2 text-[#c9ced4]">
                 End date
