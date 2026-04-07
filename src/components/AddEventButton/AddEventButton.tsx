@@ -31,9 +31,9 @@ export function AddEventButton({ onAddEvent, categories }: AddEventButtonProps) 
       </Button>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="max-w-[550px]">
+        <DialogContent className="bg-surface-secondary border-[rgba(210,210,210,0.15)] max-w-[360px] rounded-[20px] px-5 py-6">
           <DialogHeader>
-            <DialogTitle>Add New Event</DialogTitle>
+            <DialogTitle className="header-small text-[#c9ced4] text-center">Add Event</DialogTitle>
           </DialogHeader>
           <EventForm onSubmit={handleSubmit} categories={categories} />
         </DialogContent>
