@@ -65,6 +65,8 @@ export function EventForm({
     }
   }, [isEndDateFocused, endDate, startDate])
 
+  const isFormValid = title.trim().length > 0 && category.length > 0 && startDate.length > 0
+
   const handleStartDateBlur = useCallback(() => {
     if (!startDateText) {
       setStartDate('')
@@ -334,7 +336,13 @@ export function EventForm({
           <Button
             type="submit"
             variant="glass"
-            className="min-w-[80px] !bg-[rgba(37,99,235,0.8)]"
+            disabled={!isFormValid}
+            className={cn(
+              "min-w-[80px]",
+              isFormValid
+                ? "!bg-[rgba(37,99,235,0.8)]"
+                : "!bg-[rgba(37,99,235,0.3)] opacity-50 cursor-not-allowed"
+            )}
           >
             {initialEvent ? 'Update' : 'Add'}
           </Button>
