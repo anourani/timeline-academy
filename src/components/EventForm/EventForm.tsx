@@ -137,7 +137,7 @@ export function EventForm({
         {/* Event Title */}
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
-            <label htmlFor="title" className="label-s-type2 text-[#c9ced4]">
+            <label htmlFor="title" className="label-m-type2 text-[#c9ced4]">
               Event title
             </label>
             <span className="label-xs-type2 text-[#9b9ea3]">
@@ -159,7 +159,7 @@ export function EventForm({
         {/* Category Toggle Grid */}
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
-            <label className="label-s-type2 text-[#c9ced4]">
+            <label className="label-m-type2 text-[#c9ced4]">
               Category
             </label>
             <span className="label-xs-type2 text-[#9b9ea3]">
@@ -220,7 +220,7 @@ export function EventForm({
         <div className="flex gap-2">
           {/* Start Date */}
           <div className="flex-1 flex flex-col gap-1.5">
-            <label className="label-s-type2 text-[#c9ced4]">
+            <label className="label-m-type2 text-[#c9ced4]">
               Start date
             </label>
             <Popover open={startCalendarOpen} onOpenChange={setStartCalendarOpen}>
@@ -270,7 +270,7 @@ export function EventForm({
           {/* End Date */}
           <div className="flex-1 flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
-              <label className="label-s-type2 text-[#c9ced4]">
+              <label className="label-m-type2 text-[#c9ced4]">
                 End date
               </label>
               <span className="label-xs-type2 text-[#9b9ea3]">
