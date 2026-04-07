@@ -136,11 +136,11 @@ export function EventForm({
       <div className="flex flex-col gap-6">
         {/* Event Title */}
         <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-[6px]">
             <label htmlFor="title" className="label-m-type2 text-[#c9ced4]">
               Event title
             </label>
-            <span className="label-xs-type2 text-[#9b9ea3]">
+            <span className="label-s-type2 text-[#9b9ea3]">
               {title.length}/{MAX_TITLE_LENGTH}
             </span>
           </div>
@@ -158,11 +158,11 @@ export function EventForm({
 
         {/* Category Toggle Grid */}
         <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-[6px]">
             <label className="label-m-type2 text-[#c9ced4]">
               Category
             </label>
-            <span className="label-xs-type2 text-[#9b9ea3]">
+            <span className="label-s-type2 text-[#9b9ea3]">
               select one
             </span>
           </div>
@@ -269,11 +269,11 @@ export function EventForm({
 
           {/* End Date */}
           <div className="flex-1 flex flex-col gap-1.5">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-[6px]">
               <label className="label-m-type2 text-[#c9ced4]">
                 End date
               </label>
-              <span className="label-xs-type2 text-[#9b9ea3]">
+              <span className="label-s-type2 text-[#9b9ea3]">
                 optional
               </span>
             </div>
