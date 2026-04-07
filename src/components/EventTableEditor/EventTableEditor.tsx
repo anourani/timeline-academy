@@ -80,7 +80,7 @@ function SortableTab({
       style={style}
       onClick={onClick}
       className={`
-        group relative flex items-center justify-between w-full py-[9px] pl-[11px] pr-[3px] rounded-[10px]
+        group relative flex items-center justify-between w-full min-w-[184px] py-[9px] pl-[11px] pr-[3px] rounded-[10px]
         text-left
         font-['Avenir',sans-serif] font-medium text-[14px] leading-[20px] transition-colors
         ${isActive
@@ -104,6 +104,103 @@ function SortableTab({
         <GripVertical size={18} className="text-[#9b9ea3]" />
       </span>
     </button>
+  )
+}
+
+// Sortable Category Row component for Categories tab
+function SortableCategoryRow({
+  cat,
+  editingLabel,
+  onLabelChange,
+  onLabelBlur,
+  onColorChange,
+  onVisibilityToggle,
+  onDelete,
+  canDelete,
+}: {
+  cat: CategoryConfig
+  editingLabel: string
+  onLabelChange: (catId: string, value: string) => void
+  onLabelBlur: (catId: string) => void
+  onColorChange: (catId: string, color: string) => void
+  onVisibilityToggle: (catId: string) => void
+  onDelete: (catId: string) => void
+  canDelete: boolean
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: cat.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    ...(isDragging ? { zIndex: 10 } : {}),
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-center rounded-[8px] pl-[4px] pt-[5px] pb-[5px] ${cat.visible ? 'bg-[#242526]' : 'bg-[#151617]'} ${isDragging ? 'shadow-[0px_12px_40px_rgba(0,0,0,0.6)]' : ''}`}
+      {...attributes}
+    >
+      {/* Drag handle - always visible */}
+      <div
+        className="w-[22px] shrink-0 flex items-center justify-center cursor-grab active:cursor-grabbing"
+        {...listeners}
+      >
+        <GripVertical size={18} className="text-[#9b9ea3]" />
+      </div>
+
+      {/* Row content */}
+      <div className="flex flex-1 items-center gap-[20px] h-[76px] px-[10px]">
+        {/* Editable title */}
+        <div className={`w-[250px] shrink-0 bg-[#151617] rounded-[4px] px-[6px] py-[5px] ${!cat.visible ? 'opacity-40' : ''}`}>
+          <input
+            type="text"
+            value={editingLabel}
+            onChange={(e) => onLabelChange(cat.id, e.target.value)}
+            onBlur={() => onLabelBlur(cat.id)}
+            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+            className="w-full bg-transparent border-none outline-none font-['Aleo',serif] font-normal text-[24px] leading-[1.4] text-[#dadee5]"
+          />
+        </div>
+
+        {/* Color picker */}
+        <div className={`flex-1 flex items-center justify-center gap-[6px] ${!cat.visible ? 'opacity-40' : ''}`}>
+          {COLOR_PALETTE.map(color => (
+            <ColorBar
+              key={color.value}
+              color={color.value}
+              isSelected={cat.color.toUpperCase() === color.value.toUpperCase()}
+              onClick={() => onColorChange(cat.id, color.value)}
+            />
+          ))}
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex items-center gap-[16px] shrink-0">
+          <button
+            onClick={() => onVisibilityToggle(cat.id)}
+            className={glassButtonClass}
+          >
+            {cat.visible ? 'Hide' : 'Show'}
+          </button>
+          <button
+            onClick={() => onDelete(cat.id)}
+            disabled={!canDelete}
+            className={`${glassButtonClass} disabled:opacity-50 disabled:pointer-events-none`}
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -462,12 +559,12 @@ export function EventTableEditor({
               /* Events Tab Content */
               <div className="flex gap-[16px] h-full">
                 {/* Category Sidebar */}
-                <div className="w-[162px] shrink-0 bg-[#242526] rounded-[12px] p-2 flex flex-col gap-[2px] overflow-y-auto">
+                <div className="w-[200px] shrink-0 bg-[#242526] rounded-[12px] p-2 flex flex-col gap-[2px] overflow-y-auto">
                   {/* All Categories tab (pinned, not draggable) */}
                   <button
                     onClick={() => setActiveCategory(null)}
                     className={`
-                      w-full py-[9px] pl-[11px] pr-[3px] rounded-[10px]
+                      w-full min-w-[184px] py-[9px] pl-[11px] pr-[3px] rounded-[10px]
                       text-left
                       font-['Avenir',sans-serif] font-medium text-[14px] leading-[20px] transition-colors
                       ${activeCategory === null
@@ -633,7 +730,7 @@ export function EventTableEditor({
                 {/* Header */}
                 <div className="flex flex-col gap-[6px]">
                   <div
-                    className="flex items-center gap-[24px] px-[16px]"
+                    className="flex items-center gap-[24px] pl-[42px] pr-[16px]"
                     style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 300, fontSize: '12px', lineHeight: '1.4', color: '#9b9ea3' }}
                   >
                     <div className="w-[243px] shrink-0">Category Title</div>
@@ -645,55 +742,31 @@ export function EventTableEditor({
 
                 {/* Scrollable category rows */}
                 <div className="flex-1 overflow-y-auto pt-1 pb-5 space-y-2">
-                  {draftCategories.map(cat => (
-                    <div
-                      key={cat.id}
-                      className={`flex items-center rounded-[4px] pt-[6px] pb-[5px] ${cat.visible ? 'bg-[#242526]' : 'bg-[#151617]'}`}
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
+                    modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+                  >
+                    <SortableContext
+                      items={draftCategories.map(c => c.id)}
+                      strategy={verticalListSortingStrategy}
                     >
-                      <div className="flex flex-1 items-center gap-[20px] h-[76px] px-[10px]">
-                        {/* Editable title */}
-                        <div className={`w-[250px] shrink-0 bg-[#151617] rounded-[4px] px-[6px] py-[5px] ${!cat.visible ? 'opacity-40' : ''}`}>
-                          <input
-                            type="text"
-                            value={editingLabels[cat.id] || ''}
-                            onChange={(e) => handleCategoryLabelChange(cat.id, e.target.value)}
-                            onBlur={() => handleCategoryLabelBlur(cat.id)}
-                            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-                            className="w-full bg-transparent border-none outline-none font-['Aleo',serif] font-normal text-[24px] leading-[1.4] text-[#dadee5]"
-                          />
-                        </div>
-
-                        {/* Color picker */}
-                        <div className={`flex-1 flex items-center justify-center gap-[6px] ${!cat.visible ? 'opacity-40' : ''}`}>
-                          {COLOR_PALETTE.map(color => (
-                            <ColorBar
-                              key={color.value}
-                              color={color.value}
-                              isSelected={cat.color.toUpperCase() === color.value.toUpperCase()}
-                              onClick={() => handleCategoryColorChange(cat.id, color.value)}
-                            />
-                          ))}
-                        </div>
-
-                        {/* Action buttons */}
-                        <div className="flex items-center gap-[16px] shrink-0">
-                          <button
-                            onClick={() => handleCategoryVisibilityToggle(cat.id)}
-                            className={glassButtonClass}
-                          >
-                            {cat.visible ? 'Hide' : 'Show'}
-                          </button>
-                          <button
-                            onClick={() => handleCategoryDelete(cat.id)}
-                            disabled={draftCategories.length <= 1}
-                            className={`${glassButtonClass} disabled:opacity-50 disabled:pointer-events-none`}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                      {draftCategories.map(cat => (
+                        <SortableCategoryRow
+                          key={cat.id}
+                          cat={cat}
+                          editingLabel={editingLabels[cat.id] || ''}
+                          onLabelChange={handleCategoryLabelChange}
+                          onLabelBlur={handleCategoryLabelBlur}
+                          onColorChange={handleCategoryColorChange}
+                          onVisibilityToggle={handleCategoryVisibilityToggle}
+                          onDelete={handleCategoryDelete}
+                          canDelete={draftCategories.length > 1}
+                        />
+                      ))}
+                    </SortableContext>
+                  </DndContext>
                 </div>
 
                 {/* Bottom divider */}
