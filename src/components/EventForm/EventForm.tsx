@@ -151,8 +151,7 @@ export function EventForm({
             onChange={(e) => setTitle(e.target.value)}
             maxLength={MAX_TITLE_LENGTH}
             required
-            placeholder="Value"
-            className="h-9 bg-[#242526] border-[#737373] rounded-lg font-['Avenir',sans-serif] text-sm text-[#dadee5] placeholder:text-[#9b9ea3] [color-scheme:dark]"
+            className="h-9 bg-[#242526] border-[#737373] rounded-lg font-['Avenir',sans-serif] text-sm text-[#dadee5] [color-scheme:dark]"
             autoFocus
           />
         </div>
