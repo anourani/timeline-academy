@@ -12,6 +12,9 @@ interface SidePanelContextValue {
   setOnTimelineSelect: (handler: TimelineSelectHandler | null) => void
   activeTimelineId: string | null
   setActiveTimelineId: (id: string | null) => void
+  /** Live title for the active timeline — lets the editor push title edits to the panel before autosave lands. */
+  activeTimelineTitle: string | null
+  setActiveTimelineTitle: (title: string | null) => void
 }
 
 const SidePanelContext = createContext<SidePanelContextValue | null>(null)
@@ -19,6 +22,7 @@ const SidePanelContext = createContext<SidePanelContextValue | null>(null)
 export function SidePanelProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false)
   const [activeTimelineId, setActiveTimelineId] = useState<string | null>(null)
+  const [activeTimelineTitle, setActiveTimelineTitle] = useState<string | null>(null)
   const navigate = useNavigate()
   const customHandlerRef = useRef<TimelineSelectHandler | null>(null)
 
@@ -47,7 +51,9 @@ export function SidePanelProvider({ children }: { children: ReactNode }) {
     setOnTimelineSelect,
     activeTimelineId,
     setActiveTimelineId,
-  }), [isOpen, open, close, toggle, onTimelineSelect, setOnTimelineSelect, activeTimelineId])
+    activeTimelineTitle,
+    setActiveTimelineTitle,
+  }), [isOpen, open, close, toggle, onTimelineSelect, setOnTimelineSelect, activeTimelineId, activeTimelineTitle])
 
   return (
     <SidePanelContext.Provider value={value}>

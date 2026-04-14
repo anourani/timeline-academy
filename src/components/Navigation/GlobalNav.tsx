@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { Columns3, PanelLeft, Plus, Settings as SettingsIcon, Video } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useSidePanel } from '@/contexts/SidePanelContext'
@@ -103,8 +103,9 @@ export function GlobalNav({
                   }}
                   placeholder="Untitled Timeline"
                   aria-label="Timeline name"
-                  className="font-['Aleo',serif] font-normal text-[18px] leading-[1.4] text-[#9b9ea3] hover:text-[#c9ced4] focus:text-[#dadee5] bg-transparent border-none outline-none caret-white min-w-0"
-                  style={{ width: `${Math.max((timelineTitle ?? '').length, 'Untitled Timeline'.length) + 1}ch` }}
+                  size={Math.max((timelineTitle ?? '').length, 'Untitled Timeline'.length)}
+                  className="font-['Aleo',serif] font-normal text-[18px] leading-[1.4] text-[#9b9ea3] hover:text-[#c9ced4] focus:text-[#dadee5] bg-transparent border-none outline-none caret-white min-w-0 p-0"
+                  style={{ fieldSizing: 'content' } as CSSProperties}
                 />
               ) : (
                 <p className="font-['Aleo',serif] font-normal text-[18px] leading-[1.4] text-[#9b9ea3] truncate">

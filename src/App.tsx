@@ -41,7 +41,7 @@ export function App() {
   const { isGenerating, isClassifying, classifiedType, categoryLabels, error: aiError, classifyAndGenerate, abort: abortAI, resetClassification } = useAIMode();
   const { loadAllDrafts, loadDraft, saveDraft, saveDraftImmediate, createDraft, clearAllDrafts } = useLocalDraft();
   const handledRouteStateRef = useRef(false);
-  const { setOnTimelineSelect, setActiveTimelineId } = useSidePanel();
+  const { setOnTimelineSelect, setActiveTimelineId, setActiveTimelineTitle } = useSidePanel();
 
   const timelineData = {
     id: timelineId,
@@ -279,6 +279,12 @@ export function App() {
     setActiveTimelineId(timelineId);
     return () => setActiveTimelineId(null);
   }, [timelineId, setActiveTimelineId]);
+
+  // Push live title edits to the side panel so the tile updates before autosave lands
+  useEffect(() => {
+    setActiveTimelineTitle(title);
+    return () => setActiveTimelineTitle(null);
+  }, [title, setActiveTimelineTitle]);
 
   const handlePresentMode = () => {
     if (timelineId) {

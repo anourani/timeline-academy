@@ -63,7 +63,7 @@ function TileMenuButton({ onDelete }: { onDelete: () => void }) {
 
 export function GlobalSidePanel() {
   const { user } = useAuth()
-  const { isOpen, close, onTimelineSelect, activeTimelineId } = useSidePanel()
+  const { isOpen, close, onTimelineSelect, activeTimelineId, activeTimelineTitle } = useSidePanel()
   const { timelines, isLoading, error, loadTimelines } = useTimelines()
   const navigate = useNavigate()
   const [localDrafts, setLocalDrafts] = useState<LocalDraft[]>([])
@@ -144,8 +144,8 @@ export function GlobalSidePanel() {
 
   return (
     <>
-      <aside
-        className="h-screen w-[320px] bg-[#171717] rounded-tr-2xl rounded-br-2xl flex flex-col overflow-hidden"
+      <div
+        className="h-full w-[320px] bg-[#171717] rounded-tr-2xl rounded-br-2xl flex flex-col overflow-hidden"
         aria-label="Timelines side panel"
       >
         {/* Header */}
@@ -186,22 +186,25 @@ export function GlobalSidePanel() {
             ) : (
               rows.map((row) => {
                 const isActive = row.kind === 'timeline' && row.id === activeTimelineId
+                const displayTitle = isActive && activeTimelineTitle !== null && activeTimelineTitle.length > 0
+                  ? activeTimelineTitle
+                  : row.title
                 return (
                   <div
                     key={`${row.kind}:${row.id}`}
                     className={`group flex items-center gap-4 px-2 py-3 rounded-lg cursor-pointer transition-colors ${
                       isActive
-                        ? 'bg-[#0a0a0a]'
+                        ? 'bg-surface-primary'
                         : 'hover:bg-white/5'
                     }`}
                     onClick={() => handleTileClick(row)}
                   >
                     <p
-                      className={`flex-1 min-w-0 font-['Avenir:Roman',sans-serif] text-[16px] leading-[24px] truncate ${
+                      className={`flex-1 min-w-0 font-['Avenir',sans-serif] text-[16px] leading-[24px] truncate ${
                         isActive ? 'text-[#dadee5]' : 'text-[#9b9ea3]'
                       }`}
                     >
-                      {row.title}
+                      {displayTitle}
                     </p>
                     <div
                       className={`shrink-0 transition-opacity ${
@@ -221,7 +224,7 @@ export function GlobalSidePanel() {
         {user && (
           <div className="border-t border-[#404040] px-5 pt-3 pb-4 shrink-0">
             <div className="flex items-center justify-between gap-2 py-1.5">
-              <p className="flex-1 min-w-0 font-['Avenir:Roman',sans-serif] text-[16px] leading-[24px] text-[#9b9ea3] truncate">
+              <p className="flex-1 min-w-0 font-['Avenir',sans-serif] text-[16px] leading-[24px] text-[#9b9ea3] truncate">
                 {user.email}
               </p>
               <button
@@ -235,7 +238,7 @@ export function GlobalSidePanel() {
             </div>
           </div>
         )}
-      </aside>
+      </div>
 
       <ConfirmationModal
         isOpen={pendingDeleteId !== null}
