@@ -110,12 +110,11 @@ export function GlobalSidePanel() {
     : baseRows
 
   const handleTileClick = (row: TileRow) => {
+    // Always fire the click. Any dedup for "already on this timeline"
+    // happens in the downstream switch handler (App.tsx) — don't silently
+    // swallow clicks here, it masks bugs and breaks the feedback loop.
     if (row.kind === 'timeline') {
-      // activeTimelineId is only set when the editor is currently rendering
-      // this timeline, so a no-op here means "you're already looking at it."
-      if (row.id !== activeTimelineId) {
-        onTimelineSelect(row.id)
-      }
+      onTimelineSelect(row.id)
     } else {
       navigate('/editor', { state: { draftId: row.id } })
     }
@@ -223,9 +222,7 @@ export function GlobalSidePanel() {
                   <div
                     key={`${row.kind}:${row.id}`}
                     className={`group flex items-center gap-4 px-2 py-3 rounded-lg transition-colors ${
-                      isActive
-                        ? 'bg-surface-primary shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]'
-                        : ''
+                      isActive ? 'bg-white/[0.06]' : ''
                     }`}
                   >
                     <button

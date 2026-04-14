@@ -218,6 +218,12 @@ export function App() {
       return;
     }
 
+    // Dedup: if the user clicked the tile for the timeline that's already
+    // loaded, there's nothing to switch to — skip the refetch.
+    if (newTimelineId === timelineId) {
+      return;
+    }
+
     // Switch immediately; any in-flight autosave captured its own snapshot
     // (via debounce) and will still commit the outgoing timeline's data.
     await switchTimeline(newTimelineId);
