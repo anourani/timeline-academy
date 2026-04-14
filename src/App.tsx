@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Header } from './components/Layout/Header';
 import { GlobalNav } from '@/components/Navigation/GlobalNav';
@@ -8,6 +8,7 @@ import { useTimelineState } from './hooks/useTimelineState';
 import { useTimeline } from './hooks/useTimeline';
 import { useAuth } from './contexts/AuthContext';
 import { useAutosave } from './hooks/useAutosave';
+import { useSidePanel } from './contexts/SidePanelContext';
 import { AuthModal } from './components/Auth/AuthModal';
 import { UnsavedChangesModal } from './components/Modal/UnsavedChangesModal';
 import { useLocalDraft } from './hooks/useLocalDraft';
@@ -30,7 +31,8 @@ export function App() {
   const [showSampleTimeline, setShowSampleTimeline] = useState(false);
   const [pendingSwitchTimelineId, setPendingSwitchTimelineId] = useState<string | null>(null);
   const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
-  const [showSidePanel, setShowSidePanel] = useState(false);
+  const [activePanel, setActivePanel] = useState<'events' | 'settings' | null>(null);
+  const [showAddEventModal, setShowAddEventModal] = useState(false);
   const [pendingScrollDate, setPendingScrollDate] = useState<string | null>(null);
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
@@ -39,6 +41,7 @@ export function App() {
   const { isGenerating, isClassifying, classifiedType, categoryLabels, error: aiError, classifyAndGenerate, abort: abortAI, resetClassification } = useAIMode();
   const { loadAllDrafts, loadDraft, saveDraft, saveDraftImmediate, createDraft, clearAllDrafts } = useLocalDraft();
   const handledRouteStateRef = useRef(false);
+  const { setOnTimelineSelect, setActiveTimelineId, setActiveTimelineTitle } = useSidePanel();
 
   const timelineData = {
     id: timelineId,
@@ -51,9 +54,29 @@ export function App() {
 
   const { saveStatus, lastSavedTime, handleChange } = useAutosave(timelineData);
 
-  const handleAuthClick = () => {
-    setShowAuthModal(true);
+  const handleAddEventClick = () => {
+    setActivePanel(null);
+    setShowAddEventModal(true);
   };
+
+  // Derive the dominant category color for the nav's status dot.
+  const timelineAccentColor = useMemo(() => {
+    if (events.length === 0) return '#4196E4';
+    const counts = new Map<string, number>();
+    for (const e of events) {
+      if (e.category) counts.set(e.category, (counts.get(e.category) || 0) + 1);
+    }
+    let dominantId = '';
+    let max = 0;
+    for (const [id, count] of counts) {
+      if (count > max) {
+        max = count;
+        dominantId = id;
+      }
+    }
+    const category = categories.find(c => c.id === dominantId);
+    return category?.color || '#4196E4';
+  }, [events, categories]);
 
   // Trigger autosave when timeline data changes
   useEffect(() => {
@@ -195,12 +218,8 @@ export function App() {
       return;
     }
 
-    if (saveStatus === 'saving') {
-      setPendingSwitchTimelineId(newTimelineId);
-      setShowUnsavedChangesModal(true);
-      return;
-    }
-
+    // Switch immediately; any in-flight autosave captured its own snapshot
+    // (via debounce) and will still commit the outgoing timeline's data.
     await switchTimeline(newTimelineId);
   };
 
@@ -244,6 +263,29 @@ export function App() {
       setShowUnsavedChangesModal(false);
     }
   };
+
+  // Keep a ref to the latest handleTimelineSwitch so the registered handler
+  // always calls the current closure without re-registering every render.
+  const timelineSwitchRef = useRef(handleTimelineSwitch);
+  timelineSwitchRef.current = handleTimelineSwitch;
+
+  // Register our switch handler for the global side panel once on mount.
+  useEffect(() => {
+    setOnTimelineSelect((id: string) => timelineSwitchRef.current(id));
+    return () => setOnTimelineSelect(null);
+  }, [setOnTimelineSelect]);
+
+  // Keep the side panel informed of which timeline is active so it can highlight it.
+  // useLayoutEffect ensures the context update commits synchronously with the
+  // editor's render — no stale intermediate state visible to the panel.
+  useLayoutEffect(() => {
+    setActiveTimelineId(timelineId);
+  }, [timelineId, setActiveTimelineId]);
+
+  // Push live title edits to the side panel so the tile updates before autosave lands.
+  useLayoutEffect(() => {
+    setActiveTimelineTitle(title);
+  }, [title, setActiveTimelineTitle]);
 
   const handlePresentMode = () => {
     if (timelineId) {
@@ -343,8 +385,18 @@ export function App() {
     <div className="app-container min-h-screen bg-black text-white overflow-auto">
       <GlobalNav
         variant="timeline"
-        onPresentMode={handlePresentMode}
         timelineId={timelineId}
+        timelineTitle={title}
+        onTimelineTitleChange={setTitle}
+        events={events}
+        timelineAccentColor={timelineAccentColor}
+        onAddEventClick={handleAddEventClick}
+        onEventsClick={() => setActivePanel(prev => prev === 'events' ? null : 'events')}
+        onSettingsClick={() => setActivePanel(prev => prev === 'settings' ? null : 'settings')}
+        activePanel={activePanel}
+        onPresentMode={handlePresentMode}
+        saveStatus={saveStatus}
+        lastSavedTime={lastSavedTime}
       />
       <Header
         title={title}
@@ -355,18 +407,16 @@ export function App() {
         onImportEvents={addEvents}
         onClearTimeline={handleClearTimeline}
         events={events}
-        timelineId={timelineId}
-        onTimelineSwitch={handleTimelineSwitch}
         categories={categories}
         onCategoriesChange={updateCategories}
         onEventsChange={handleBulkEventsChange}
-        showSidePanel={showSidePanel}
-        onCloseSidePanel={() => setShowSidePanel(false)}
-        onAuthClick={handleAuthClick}
         scale={scale}
         onScaleChange={handleScaleChange}
-        saveStatus={saveStatus}
-        lastSavedTime={lastSavedTime}
+        activePanel={activePanel}
+        onActivePanelChange={setActivePanel}
+        showAddEventModal={showAddEventModal}
+        onAddEventClick={handleAddEventClick}
+        onCloseAddEventModal={() => setShowAddEventModal(false)}
       />
       {!user && events.length > 0 && !nudgeDismissed && (
         <div className="mx-4 mt-2 px-4 py-3 bg-blue-900/40 border border-blue-800/50 rounded-lg flex items-center justify-between text-sm">

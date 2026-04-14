@@ -1,18 +1,16 @@
-import { Plus, Columns3, Layers, Settings } from 'lucide-react'
+import { Plus, Columns3, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface FloatingToolbarProps {
   onAddEventClick: () => void
   onEventsClick: () => void
-  onCategoriesClick: () => void
   onSettingsClick: () => void
-  activePanel: 'events' | 'categories' | 'settings' | null
+  activePanel: 'events' | 'settings' | null
 }
 
 export function FloatingToolbar({
   onAddEventClick,
   onEventsClick,
-  onCategoriesClick,
   onSettingsClick,
   activePanel
 }: FloatingToolbarProps) {
@@ -31,14 +29,6 @@ export function FloatingToolbar({
         >
           <Columns3 size={18} />
           Event
-        </Button>
-        <Button
-          variant="glass" size="none"
-          data-active={activePanel === 'categories'}
-          onClick={onCategoriesClick}
-        >
-          <Layers size={18} />
-          Categories
         </Button>
         <Button
           variant="glass" size="none"
@@ -68,15 +58,6 @@ export function FloatingToolbar({
         >
           <Columns3 size={20} />
           Events
-        </Button>
-        <Button
-          variant="glass" size="none"
-          className="flex-col gap-1 h-auto px-3 py-2 text-[11px] min-w-0"
-          data-active={activePanel === 'categories'}
-          onClick={onCategoriesClick}
-        >
-          <Layers size={20} />
-          Categories
         </Button>
         <Button
           variant="glass" size="none"
