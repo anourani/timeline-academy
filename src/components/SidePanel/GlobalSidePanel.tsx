@@ -212,8 +212,10 @@ export function GlobalSidePanel() {
             ) : (
               rows.map((row) => {
                 const isActive = row.kind === 'timeline' && row.id === activeTimelineId
-                const displayTitle = isActive && activeTimelineTitle !== null && activeTimelineTitle.length > 0
-                  ? activeTimelineTitle
+                // When the editor is actively showing this timeline, trust its
+                // live title over whatever the fetched list still has cached.
+                const displayTitle = isActive && activeTimelineTitle != null
+                  ? (activeTimelineTitle.length > 0 ? activeTimelineTitle : DEFAULT_TIMELINE_TITLE)
                   : row.title
                 return (
                   <div

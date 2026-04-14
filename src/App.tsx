@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Header } from './components/Layout/Header';
 import { GlobalNav } from '@/components/Navigation/GlobalNav';
@@ -218,12 +218,8 @@ export function App() {
       return;
     }
 
-    if (saveStatus === 'saving') {
-      setPendingSwitchTimelineId(newTimelineId);
-      setShowUnsavedChangesModal(true);
-      return;
-    }
-
+    // Switch immediately; any in-flight autosave captured its own snapshot
+    // (via debounce) and will still commit the outgoing timeline's data.
     await switchTimeline(newTimelineId);
   };
 
@@ -268,19 +264,26 @@ export function App() {
     }
   };
 
-  // Register our switch handler (with unsaved-changes protection) for the global side panel
-  useEffect(() => {
-    setOnTimelineSelect(handleTimelineSwitch);
-    return () => setOnTimelineSelect(null);
-  });
+  // Keep a ref to the latest handleTimelineSwitch so the registered handler
+  // always calls the current closure without re-registering every render.
+  const timelineSwitchRef = useRef(handleTimelineSwitch);
+  timelineSwitchRef.current = handleTimelineSwitch;
 
-  // Keep the side panel informed of which timeline is active so it can highlight it
+  // Register our switch handler for the global side panel once on mount.
   useEffect(() => {
+    setOnTimelineSelect((id: string) => timelineSwitchRef.current(id));
+    return () => setOnTimelineSelect(null);
+  }, [setOnTimelineSelect]);
+
+  // Keep the side panel informed of which timeline is active so it can highlight it.
+  // useLayoutEffect ensures the context update commits synchronously with the
+  // editor's render — no stale intermediate state visible to the panel.
+  useLayoutEffect(() => {
     setActiveTimelineId(timelineId);
   }, [timelineId, setActiveTimelineId]);
 
-  // Push live title edits to the side panel so the tile updates before autosave lands
-  useEffect(() => {
+  // Push live title edits to the side panel so the tile updates before autosave lands.
+  useLayoutEffect(() => {
     setActiveTimelineTitle(title);
   }, [title, setActiveTimelineTitle]);
 
