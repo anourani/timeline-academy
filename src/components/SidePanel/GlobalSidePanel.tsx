@@ -219,7 +219,7 @@ export function GlobalSidePanel() {
                   <div
                     key={`${row.kind}:${row.id}`}
                     className={`group flex items-center gap-4 px-2 py-2.5 rounded-[10px] transition-colors ${
-                      isActive ? 'bg-white/10' : ''
+                      isActive ? 'bg-surface-primary' : ''
                     }`}
                   >
                     <button
