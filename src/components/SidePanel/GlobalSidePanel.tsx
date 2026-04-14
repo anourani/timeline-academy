@@ -91,7 +91,7 @@ export function GlobalSidePanel() {
     } else {
       navigate('/editor', { state: { draftId: row.id } })
     }
-    close()
+    // Panel stays open — it's only toggled via the panel-left button
   }
 
   const confirmDelete = (row: TileRow) => {
@@ -150,7 +150,7 @@ export function GlobalSidePanel() {
       >
         {/* Header */}
         <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-2 border-b border-[#404040] shrink-0">
-          <p className="font-['Aleo:Regular',serif] font-normal text-[18px] leading-[1.4] text-[#c9ced4]">
+          <p className="font-['Aleo',serif] font-normal text-[18px] leading-[1.4] text-[#c9ced4]">
             Timelines
           </p>
           <button

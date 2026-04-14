@@ -380,6 +380,7 @@ export function App() {
         variant="timeline"
         timelineId={timelineId}
         timelineTitle={title}
+        onTimelineTitleChange={setTitle}
         events={events}
         timelineAccentColor={timelineAccentColor}
         onAddEventClick={handleAddEventClick}

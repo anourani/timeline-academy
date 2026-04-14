@@ -19,6 +19,7 @@ interface GlobalNavProps {
   timelineId?: string | null
   /** Timeline identity — only rendered on variant="timeline" */
   timelineTitle?: string
+  onTimelineTitleChange?: (title: string) => void
   events?: TimelineEvent[]
   timelineAccentColor?: string
   /** Toolbar actions — only rendered on variant="timeline" */
@@ -37,6 +38,7 @@ export function GlobalNav({
   variant = 'default',
   timelineId,
   timelineTitle,
+  onTimelineTitleChange,
   events = [],
   timelineAccentColor = '#4196E4',
   onAddEventClick,
@@ -74,8 +76,8 @@ export function GlobalNav({
         {/* Left cluster: panel toggle + optional timeline identity */}
         <div className="flex items-center gap-5 min-w-0">
           <div
-            className={`overflow-hidden transition-[width,opacity,margin] duration-300 ease-out ${
-              isPanelOpen ? 'w-0 opacity-0 pointer-events-none -ml-5' : 'w-8 opacity-100'
+            className={`shrink-0 overflow-visible transition-[max-width,opacity,margin] duration-300 ease-out ${
+              isPanelOpen ? 'max-w-0 opacity-0 pointer-events-none -ml-5' : 'max-w-[48px] opacity-100'
             }`}
             aria-hidden={isPanelOpen}
           >
@@ -91,11 +93,28 @@ export function GlobalNav({
 
           {showTitleCluster && (
             <div className="flex items-center gap-6 min-w-0">
-              <p className="font-['Aleo:Regular',serif] font-normal text-[18px] leading-[1.4] text-[#9b9ea3] truncate">
-                {timelineTitle || 'Untitled Timeline'}
-              </p>
+              {onTimelineTitleChange ? (
+                <input
+                  type="text"
+                  value={timelineTitle ?? ''}
+                  onChange={(e) => onTimelineTitleChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      (e.target as HTMLInputElement).blur()
+                    }
+                  }}
+                  placeholder="Untitled Timeline"
+                  aria-label="Timeline name"
+                  className="font-['Aleo',serif] font-normal text-[18px] leading-[1.4] text-[#9b9ea3] hover:text-[#c9ced4] focus:text-[#dadee5] bg-transparent border-none outline-none caret-white min-w-0"
+                  style={{ width: `${Math.max((timelineTitle ?? '').length, 'Untitled Timeline'.length) + 1}ch` }}
+                />
+              ) : (
+                <p className="font-['Aleo',serif] font-normal text-[18px] leading-[1.4] text-[#9b9ea3] truncate">
+                  {timelineTitle || 'Untitled Timeline'}
+                </p>
+              )}
               <div className="flex items-center gap-2 shrink-0">
-                <span className="font-['JetBrains_Mono:Light',monospace] font-light text-[12px] leading-[1.4] text-[#c9ced4] whitespace-nowrap">
+                <span className="font-['JetBrains_Mono',monospace] font-light text-[12px] leading-[1.4] text-[#c9ced4] whitespace-nowrap">
                   {yearRange}
                 </span>
                 <span
@@ -103,7 +122,7 @@ export function GlobalNav({
                   style={{ backgroundColor: timelineAccentColor }}
                   aria-hidden
                 />
-                <span className="font-['JetBrains_Mono:Light',monospace] font-light text-[12px] leading-[1.4] text-[#c9ced4] whitespace-nowrap">
+                <span className="font-['JetBrains_Mono',monospace] font-light text-[12px] leading-[1.4] text-[#c9ced4] whitespace-nowrap">
                   {eventCountLabel}
                 </span>
               </div>
