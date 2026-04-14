@@ -220,20 +220,21 @@ export function GlobalSidePanel() {
                 return (
                   <div
                     key={`${row.kind}:${row.id}`}
-                    className={`group flex items-center gap-4 px-2 py-3 rounded-lg cursor-pointer transition-colors ${
+                    className={`group flex items-center gap-4 px-2 py-3 rounded-lg transition-colors ${
                       isActive
                         ? 'bg-surface-primary'
                         : 'hover:bg-white/5'
                     }`}
-                    onClick={() => handleTileClick(row)}
                   >
-                    <p
-                      className={`flex-1 min-w-0 font-['Avenir',sans-serif] text-[16px] leading-[24px] truncate ${
+                    <button
+                      type="button"
+                      onClick={() => handleTileClick(row)}
+                      className={`flex-1 min-w-0 text-left font-['Avenir',sans-serif] text-[16px] leading-[24px] truncate bg-transparent border-none p-0 cursor-pointer ${
                         isActive ? 'text-[#dadee5]' : 'text-[#9b9ea3]'
                       }`}
                     >
                       {displayTitle}
-                    </p>
+                    </button>
                     <div
                       className={`shrink-0 transition-opacity ${
                         isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
