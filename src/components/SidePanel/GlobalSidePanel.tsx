@@ -1,10 +1,17 @@
 import { useEffect, useState } from 'react'
-import { MoreVertical, PanelLeft, Trash2, LogOut } from 'lucide-react'
+import { MoreVertical, PanelLeft, Trash2, LogOut, Video } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useSidePanel } from '@/contexts/SidePanelContext'
 import { useTimelines } from '@/hooks/useTimelines'
 import { supabase } from '@/lib/supabase'
 import { ConfirmationModal } from '@/components/Modal/ConfirmationModal'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { FeedbackPanel } from '@/components/FeedbackPanel/FeedbackPanel'
 import { DEFAULT_TIMELINE_TITLE } from '@/constants/defaults'
 import { getAllDrafts, deleteDraft as deleteLocalDraft, type LocalDraft } from '@/utils/draftStorage'
 
@@ -68,6 +75,8 @@ export function GlobalSidePanel() {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const [pendingDeleteKind, setPendingDeleteKind] = useState<'timeline' | 'draft' | null>(null)
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false)
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false)
+  const [isVideoTutorialOpen, setIsVideoTutorialOpen] = useState(false)
 
   useEffect(() => {
     if (!user) {
@@ -247,6 +256,24 @@ export function GlobalSidePanel() {
           </div>
         </div>
 
+        {/* Action links: How it Works / Feedback */}
+        <div className="flex flex-col items-start p-3 shrink-0">
+          <button
+            type="button"
+            onClick={() => setIsVideoTutorialOpen(true)}
+            className="w-full flex items-center px-[7px] py-[9px] rounded-[10px] border border-transparent backdrop-blur-[12px] font-['Avenir',sans-serif] font-medium text-[14px] leading-[1.5] text-[#9b9ea3] hover:bg-[#262626] hover:text-[#dadee5] transition-colors"
+          >
+            How it Works
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsFeedbackOpen(true)}
+            className="w-full flex items-center px-[7px] py-[9px] rounded-[10px] border border-transparent backdrop-blur-[12px] font-['Avenir',sans-serif] font-medium text-[14px] leading-[1.5] text-[#9b9ea3] hover:bg-[#262626] hover:text-[#dadee5] transition-colors"
+          >
+            Feedback
+          </button>
+        </div>
+
         {/* Footer */}
         {user && (
           <div className="border-t border-[#404040] px-5 pt-3 pb-4 shrink-0">
@@ -289,6 +316,35 @@ export function GlobalSidePanel() {
         confirmLabel="Sign Out"
         cancelLabel="Cancel"
       />
+
+      <FeedbackPanel open={isFeedbackOpen} onOpenChange={setIsFeedbackOpen} />
+
+      <Dialog open={isVideoTutorialOpen} onOpenChange={setIsVideoTutorialOpen}>
+        <DialogContent className="max-w-[550px]">
+          <DialogHeader>
+            <DialogTitle>Quick Tutorial to Get Started</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-muted-foreground">
+              This video tutorial walks through how to start building your timeline by adding events, editing categories, customizing timeline settings, and importing or exporting data to build faster.
+            </p>
+            <div className="aspect-video">
+              <a
+                href="https://www.loom.com/share/f19575818a9341d4a266c482af981ba2"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full h-full bg-secondary rounded-lg flex items-center justify-center hover:bg-secondary/80 transition-colors"
+              >
+                <div className="text-center p-6">
+                  <Video size={48} className="mx-auto mb-4" />
+                  <p>Click to watch the tutorial video on Loom</p>
+                  <p className="text-sm text-muted-foreground mt-2">The video will open in a new tab</p>
+                </div>
+              </a>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
