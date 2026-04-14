@@ -79,9 +79,35 @@ export function GlobalSidePanel() {
     }
   }, [user, isOpen])
 
-  const rows: TileRow[] = user
+  // Freshen the list when the panel opens so the tile labels reflect any
+  // recent edits that haven't come through the realtime channel yet.
+  useEffect(() => {
+    if (isOpen && user) {
+      loadTimelines()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, user])
+
+  const baseRows: TileRow[] = user
     ? timelines.map(t => ({ id: t.id, title: t.title || DEFAULT_TIMELINE_TITLE, kind: 'timeline' as const }))
     : localDrafts.map(d => ({ id: d.id, title: d.title || DEFAULT_TIMELINE_TITLE, kind: 'draft' as const }))
+
+  // If the editor's active timeline isn't in the fetched list yet (new-timeline
+  // race, stale list, or dropped realtime event), synthesize a tile for it at
+  // the top using live context values so the user always sees their session.
+  const hasActiveRow = !!(user && activeTimelineId && baseRows.some(r => r.kind === 'timeline' && r.id === activeTimelineId))
+  const rows: TileRow[] = (!hasActiveRow && user && activeTimelineId)
+    ? [
+        {
+          id: activeTimelineId,
+          title: activeTimelineTitle && activeTimelineTitle.length > 0
+            ? activeTimelineTitle
+            : DEFAULT_TIMELINE_TITLE,
+          kind: 'timeline' as const,
+        },
+        ...baseRows,
+      ]
+    : baseRows
 
   const handleTileClick = (row: TileRow) => {
     if (row.kind === 'timeline') {

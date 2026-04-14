@@ -277,13 +277,11 @@ export function App() {
   // Keep the side panel informed of which timeline is active so it can highlight it
   useEffect(() => {
     setActiveTimelineId(timelineId);
-    return () => setActiveTimelineId(null);
   }, [timelineId, setActiveTimelineId]);
 
   // Push live title edits to the side panel so the tile updates before autosave lands
   useEffect(() => {
     setActiveTimelineTitle(title);
-    return () => setActiveTimelineTitle(null);
   }, [title, setActiveTimelineTitle]);
 
   const handlePresentMode = () => {
