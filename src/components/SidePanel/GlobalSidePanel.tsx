@@ -218,7 +218,7 @@ export function GlobalSidePanel() {
                 return (
                   <div
                     key={`${row.kind}:${row.id}`}
-                    className={`group flex items-center gap-4 px-2 py-3 rounded-lg transition-colors ${
+                    className={`group flex items-center gap-4 px-2 py-2.5 rounded-[10px] transition-colors ${
                       isActive ? 'bg-white/10' : ''
                     }`}
                   >
