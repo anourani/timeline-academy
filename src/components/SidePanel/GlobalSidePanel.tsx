@@ -110,17 +110,16 @@ export function GlobalSidePanel() {
     : baseRows
 
   const handleTileClick = (row: TileRow) => {
-    console.log('[sidepanel] handleTileClick', { row, activeTimelineId })
-    // Always fire the click. Any dedup for "already on this timeline"
-    // happens in the downstream switch handler (App.tsx) — don't silently
-    // swallow clicks here, it masks bugs and breaks the feedback loop.
+    console.log('[sidepanel] handleTileClick enter', 'id=', row.id, 'kind=', row.kind, 'title=', row.title, 'activeTimelineId=', activeTimelineId)
     if (row.kind === 'timeline') {
-      console.log('[sidepanel] calling onTimelineSelect', row.id)
+      console.log('[sidepanel] branch=timeline -> onTimelineSelect', row.id)
       onTimelineSelect(row.id)
+      console.log('[sidepanel] onTimelineSelect returned')
     } else {
+      console.log('[sidepanel] branch=draft -> navigate /editor', row.id)
       navigate('/editor', { state: { draftId: row.id } })
     }
-    // Panel stays open — it's only toggled via the panel-left button
+    console.log('[sidepanel] handleTileClick exit')
   }
 
   const confirmDelete = (row: TileRow) => {
