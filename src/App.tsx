@@ -213,6 +213,7 @@ export function App() {
   }, [location.state, user]);
 
   const handleTimelineSwitch = async (newTimelineId: string) => {
+    console.log('[editor] handleTimelineSwitch', { newTimelineId, currentTimelineId: timelineId });
     if (newTimelineId === 'new') {
       setShowCreationScreen(true);
       return;
@@ -221,12 +222,15 @@ export function App() {
     // Dedup: if the user clicked the tile for the timeline that's already
     // loaded, there's nothing to switch to — skip the refetch.
     if (newTimelineId === timelineId) {
+      console.log('[editor] handleTimelineSwitch dedup: already on this timeline');
       return;
     }
 
     // Switch immediately; any in-flight autosave captured its own snapshot
     // (via debounce) and will still commit the outgoing timeline's data.
+    console.log('[editor] calling switchTimeline');
     await switchTimeline(newTimelineId);
+    console.log('[editor] switchTimeline resolved');
   };
 
   const switchTimeline = async (newTimelineId: string) => {

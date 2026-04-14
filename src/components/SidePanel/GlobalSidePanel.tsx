@@ -110,10 +110,12 @@ export function GlobalSidePanel() {
     : baseRows
 
   const handleTileClick = (row: TileRow) => {
+    console.log('[sidepanel] handleTileClick', { row, activeTimelineId })
     // Always fire the click. Any dedup for "already on this timeline"
     // happens in the downstream switch handler (App.tsx) — don't silently
     // swallow clicks here, it masks bugs and breaks the feedback loop.
     if (row.kind === 'timeline') {
+      console.log('[sidepanel] calling onTimelineSelect', row.id)
       onTimelineSelect(row.id)
     } else {
       navigate('/editor', { state: { draftId: row.id } })
@@ -222,7 +224,7 @@ export function GlobalSidePanel() {
                   <div
                     key={`${row.kind}:${row.id}`}
                     className={`group flex items-center gap-4 px-2 py-3 rounded-lg transition-colors ${
-                      isActive ? 'bg-white/[0.06]' : ''
+                      isActive ? 'bg-white/10' : ''
                     }`}
                   >
                     <button

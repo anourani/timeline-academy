@@ -31,6 +31,10 @@ export function SidePanelProvider({ children }: { children: ReactNode }) {
   const toggle = useCallback(() => setIsOpen(prev => !prev), [])
 
   const onTimelineSelect = useCallback<TimelineSelectHandler>((timelineId) => {
+    console.log('[sidepanel] onTimelineSelect fired', {
+      timelineId,
+      hasCustomHandler: !!customHandlerRef.current,
+    })
     if (customHandlerRef.current) {
       customHandlerRef.current(timelineId)
     } else {
