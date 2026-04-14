@@ -111,6 +111,8 @@ export function GlobalSidePanel() {
 
   const handleTileClick = (row: TileRow) => {
     if (row.kind === 'timeline') {
+      // activeTimelineId is only set when the editor is currently rendering
+      // this timeline, so a no-op here means "you're already looking at it."
       if (row.id !== activeTimelineId) {
         onTimelineSelect(row.id)
       }
@@ -221,16 +223,16 @@ export function GlobalSidePanel() {
                   <div
                     key={`${row.kind}:${row.id}`}
                     className={`group flex items-center gap-4 px-2 py-3 rounded-lg transition-colors ${
-                      isActive
-                        ? 'bg-surface-primary'
-                        : 'hover:bg-white/5'
+                      isActive ? 'bg-surface-primary' : ''
                     }`}
                   >
                     <button
                       type="button"
                       onClick={() => handleTileClick(row)}
-                      className={`flex-1 min-w-0 text-left font-['Avenir',sans-serif] text-[16px] leading-[24px] truncate bg-transparent border-none p-0 cursor-pointer ${
-                        isActive ? 'text-[#dadee5]' : 'text-[#9b9ea3]'
+                      className={`flex-1 min-w-0 text-left font-['Avenir',sans-serif] text-[16px] leading-[24px] truncate bg-transparent border-none p-0 cursor-pointer transition-colors ${
+                        isActive
+                          ? 'text-[#dadee5]'
+                          : 'text-[#9b9ea3] hover:text-[#c9ced4]'
                       }`}
                     >
                       {displayTitle}

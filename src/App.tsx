@@ -278,13 +278,17 @@ export function App() {
   // Keep the side panel informed of which timeline is active so it can highlight it.
   // useLayoutEffect ensures the context update commits synchronously with the
   // editor's render — no stale intermediate state visible to the panel.
+  // The cleanup clears it on unmount so non-editor routes (e.g. Homepage) don't
+  // show a stale highlight for a timeline that isn't on screen.
   useLayoutEffect(() => {
     setActiveTimelineId(timelineId);
+    return () => setActiveTimelineId(null);
   }, [timelineId, setActiveTimelineId]);
 
   // Push live title edits to the side panel so the tile updates before autosave lands.
   useLayoutEffect(() => {
     setActiveTimelineTitle(title);
+    return () => setActiveTimelineTitle(null);
   }, [title, setActiveTimelineTitle]);
 
   const handlePresentMode = () => {
