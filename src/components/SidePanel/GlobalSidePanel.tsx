@@ -192,7 +192,7 @@ export function GlobalSidePanel() {
 
         {/* Body */}
         <div className="flex-1 min-h-0 overflow-y-auto">
-          <div className="flex flex-col gap-0.5 p-3">
+          <div className="flex flex-col p-3">
             {!user && rows.length === 0 ? (
               <div className="px-2 py-6 text-center">
                 <p className="text-[14px] text-[#9b9ea3] leading-[20px]">
@@ -223,7 +223,9 @@ export function GlobalSidePanel() {
                   <div
                     key={`${row.kind}:${row.id}`}
                     className={`group flex items-center gap-4 px-2 py-3 rounded-lg transition-colors ${
-                      isActive ? 'bg-surface-primary' : ''
+                      isActive
+                        ? 'bg-surface-primary shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]'
+                        : ''
                     }`}
                   >
                     <button
