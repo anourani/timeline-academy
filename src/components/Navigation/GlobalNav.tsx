@@ -61,6 +61,8 @@ export function GlobalNav({
     }
   }
 
+  // SaveStatusIndicator is hidden for now — flip to true to re-enable.
+  const SHOW_SAVE_STATUS = false
   const showTitleCluster = variant === 'timeline' && typeof timelineTitle === 'string'
   const yearRange = showTitleCluster ? getTimelineYearRange(events) : ''
   const eventCount = events.length
@@ -150,7 +152,8 @@ export function GlobalNav({
 
         {/* Right cluster: save status + action buttons */}
         <div className="ml-auto flex items-center gap-2">
-          {variant === 'timeline' && saveStatus && (
+          {/* SaveStatusIndicator hidden for now — keeping wiring in place for future reuse */}
+          {SHOW_SAVE_STATUS && variant === 'timeline' && saveStatus && (
             <div className="hidden md:block mr-2">
               <SaveStatusIndicator status={saveStatus} lastSaved={lastSavedTime} />
             </div>
