@@ -31,7 +31,7 @@ export function App() {
   const [showSampleTimeline, setShowSampleTimeline] = useState(false);
   const [pendingSwitchTimelineId, setPendingSwitchTimelineId] = useState<string | null>(null);
   const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
-  const [activePanel, setActivePanel] = useState<'events' | 'categories' | 'settings' | null>(null);
+  const [activePanel, setActivePanel] = useState<'events' | 'settings' | null>(null);
   const [showAddEventModal, setShowAddEventModal] = useState(false);
   const [pendingScrollDate, setPendingScrollDate] = useState<string | null>(null);
   const [draftHydrated, setDraftHydrated] = useState(false);
@@ -385,7 +385,6 @@ export function App() {
         timelineAccentColor={timelineAccentColor}
         onAddEventClick={handleAddEventClick}
         onEventsClick={() => setActivePanel(prev => prev === 'events' ? null : 'events')}
-        onCategoriesClick={() => setActivePanel(prev => prev === 'categories' ? null : 'categories')}
         onSettingsClick={() => setActivePanel(prev => prev === 'settings' ? null : 'settings')}
         activePanel={activePanel}
         onPresentMode={handlePresentMode}

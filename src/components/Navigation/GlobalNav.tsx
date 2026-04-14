@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Columns3, Layers, PanelLeft, Plus, Settings as SettingsIcon, Video } from 'lucide-react'
+import { Columns3, PanelLeft, Plus, Settings as SettingsIcon, Video } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useSidePanel } from '@/contexts/SidePanelContext'
 import { Button } from '@/components/ui/button'
@@ -25,9 +25,8 @@ interface GlobalNavProps {
   /** Toolbar actions — only rendered on variant="timeline" */
   onAddEventClick?: () => void
   onEventsClick?: () => void
-  onCategoriesClick?: () => void
   onSettingsClick?: () => void
-  activePanel?: 'events' | 'categories' | 'settings' | null
+  activePanel?: 'events' | 'settings' | null
   onPresentMode?: () => void
   /** Save status — only rendered on variant="timeline" */
   saveStatus?: SaveStatus
@@ -43,7 +42,6 @@ export function GlobalNav({
   timelineAccentColor = '#4196E4',
   onAddEventClick,
   onEventsClick,
-  onCategoriesClick,
   onSettingsClick,
   activePanel,
   onPresentMode,
@@ -147,15 +145,6 @@ export function GlobalNav({
             >
               <Columns3 size={18} />
               Events
-            </Button>
-            <Button
-              variant="glass"
-              size="none"
-              data-active={activePanel === 'categories'}
-              onClick={onCategoriesClick}
-            >
-              <Layers size={18} />
-              Categories
             </Button>
             <Button
               variant="glass"

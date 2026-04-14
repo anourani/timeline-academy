@@ -1,6 +1,5 @@
 import { TimelineSettingsPanel } from '../Settings/TimelineSettingsPanel';
 import { EventTableEditor } from '../EventTableEditor/EventTableEditor';
-import { CategoriesPanel } from '../Categories/CategoriesPanel';
 import { FloatingToolbar } from '../FloatingToolbar/FloatingToolbar';
 import { EventForm } from '../EventForm/EventForm';
 import { TimelineEvent, CategoryConfig } from '../../types/event';
@@ -26,8 +25,8 @@ interface HeaderProps {
   onEventsChange: (events: TimelineEvent[]) => void;
   scale: 'large' | 'small';
   onScaleChange: (scale: 'large' | 'small') => void;
-  activePanel: 'events' | 'categories' | 'settings' | null;
-  onActivePanelChange: (panel: 'events' | 'categories' | 'settings' | null) => void;
+  activePanel: 'events' | 'settings' | null;
+  onActivePanelChange: (panel: 'events' | 'settings' | null) => void;
   showAddEventModal: boolean;
   onAddEventClick: () => void;
   onCloseAddEventModal: () => void;
@@ -54,7 +53,7 @@ export function Header({
   onCloseAddEventModal,
 }: HeaderProps) {
   const closePanel = () => onActivePanelChange(null);
-  const togglePanel = (panel: 'events' | 'categories' | 'settings') => {
+  const togglePanel = (panel: 'events' | 'settings') => {
     onActivePanelChange(activePanel === panel ? null : panel);
   };
 
@@ -70,7 +69,6 @@ export function Header({
         <FloatingToolbar
           onAddEventClick={onAddEventClick}
           onEventsClick={() => togglePanel('events')}
-          onCategoriesClick={() => togglePanel('categories')}
           onSettingsClick={() => togglePanel('settings')}
           activePanel={activePanel}
         />
@@ -104,13 +102,6 @@ export function Header({
         onCategoriesChange={onCategoriesChange}
         scale={scale}
         onScaleChange={onScaleChange}
-      />
-
-      <CategoriesPanel
-        isOpen={activePanel === 'categories'}
-        onClose={closePanel}
-        categories={categories}
-        onCategoriesChange={onCategoriesChange}
       />
 
       <EventTableEditor
