@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Header } from './components/Layout/Header';
 import { GlobalNav } from '@/components/Navigation/GlobalNav';
@@ -8,6 +8,7 @@ import { useTimelineState } from './hooks/useTimelineState';
 import { useTimeline } from './hooks/useTimeline';
 import { useAuth } from './contexts/AuthContext';
 import { useAutosave } from './hooks/useAutosave';
+import { useSidePanel } from './contexts/SidePanelContext';
 import { AuthModal } from './components/Auth/AuthModal';
 import { UnsavedChangesModal } from './components/Modal/UnsavedChangesModal';
 import { useLocalDraft } from './hooks/useLocalDraft';
@@ -30,7 +31,8 @@ export function App() {
   const [showSampleTimeline, setShowSampleTimeline] = useState(false);
   const [pendingSwitchTimelineId, setPendingSwitchTimelineId] = useState<string | null>(null);
   const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
-  const [showSidePanel, setShowSidePanel] = useState(false);
+  const [activePanel, setActivePanel] = useState<'events' | 'categories' | 'settings' | null>(null);
+  const [showAddEventModal, setShowAddEventModal] = useState(false);
   const [pendingScrollDate, setPendingScrollDate] = useState<string | null>(null);
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
@@ -39,6 +41,7 @@ export function App() {
   const { isGenerating, isClassifying, classifiedType, categoryLabels, error: aiError, classifyAndGenerate, abort: abortAI, resetClassification } = useAIMode();
   const { loadAllDrafts, loadDraft, saveDraft, saveDraftImmediate, createDraft, clearAllDrafts } = useLocalDraft();
   const handledRouteStateRef = useRef(false);
+  const { setOnTimelineSelect, setActiveTimelineId } = useSidePanel();
 
   const timelineData = {
     id: timelineId,
@@ -51,9 +54,29 @@ export function App() {
 
   const { saveStatus, lastSavedTime, handleChange } = useAutosave(timelineData);
 
-  const handleAuthClick = () => {
-    setShowAuthModal(true);
+  const handleAddEventClick = () => {
+    setActivePanel(null);
+    setShowAddEventModal(true);
   };
+
+  // Derive the dominant category color for the nav's status dot.
+  const timelineAccentColor = useMemo(() => {
+    if (events.length === 0) return '#4196E4';
+    const counts = new Map<string, number>();
+    for (const e of events) {
+      if (e.category) counts.set(e.category, (counts.get(e.category) || 0) + 1);
+    }
+    let dominantId = '';
+    let max = 0;
+    for (const [id, count] of counts) {
+      if (count > max) {
+        max = count;
+        dominantId = id;
+      }
+    }
+    const category = categories.find(c => c.id === dominantId);
+    return category?.color || '#4196E4';
+  }, [events, categories]);
 
   // Trigger autosave when timeline data changes
   useEffect(() => {
@@ -245,6 +268,18 @@ export function App() {
     }
   };
 
+  // Register our switch handler (with unsaved-changes protection) for the global side panel
+  useEffect(() => {
+    setOnTimelineSelect(handleTimelineSwitch);
+    return () => setOnTimelineSelect(null);
+  });
+
+  // Keep the side panel informed of which timeline is active so it can highlight it
+  useEffect(() => {
+    setActiveTimelineId(timelineId);
+    return () => setActiveTimelineId(null);
+  }, [timelineId, setActiveTimelineId]);
+
   const handlePresentMode = () => {
     if (timelineId) {
       window.open(`/view/${timelineId}`, '_blank');
@@ -343,8 +378,18 @@ export function App() {
     <div className="app-container min-h-screen bg-black text-white overflow-auto">
       <GlobalNav
         variant="timeline"
-        onPresentMode={handlePresentMode}
         timelineId={timelineId}
+        timelineTitle={title}
+        events={events}
+        timelineAccentColor={timelineAccentColor}
+        onAddEventClick={handleAddEventClick}
+        onEventsClick={() => setActivePanel(prev => prev === 'events' ? null : 'events')}
+        onCategoriesClick={() => setActivePanel(prev => prev === 'categories' ? null : 'categories')}
+        onSettingsClick={() => setActivePanel(prev => prev === 'settings' ? null : 'settings')}
+        activePanel={activePanel}
+        onPresentMode={handlePresentMode}
+        saveStatus={saveStatus}
+        lastSavedTime={lastSavedTime}
       />
       <Header
         title={title}
@@ -355,18 +400,16 @@ export function App() {
         onImportEvents={addEvents}
         onClearTimeline={handleClearTimeline}
         events={events}
-        timelineId={timelineId}
-        onTimelineSwitch={handleTimelineSwitch}
         categories={categories}
         onCategoriesChange={updateCategories}
         onEventsChange={handleBulkEventsChange}
-        showSidePanel={showSidePanel}
-        onCloseSidePanel={() => setShowSidePanel(false)}
-        onAuthClick={handleAuthClick}
         scale={scale}
         onScaleChange={handleScaleChange}
-        saveStatus={saveStatus}
-        lastSavedTime={lastSavedTime}
+        activePanel={activePanel}
+        onActivePanelChange={setActivePanel}
+        showAddEventModal={showAddEventModal}
+        onAddEventClick={handleAddEventClick}
+        onCloseAddEventModal={() => setShowAddEventModal(false)}
       />
       {!user && events.length > 0 && !nudgeDismissed && (
         <div className="mx-4 mt-2 px-4 py-3 bg-blue-900/40 border border-blue-800/50 rounded-lg flex items-center justify-between text-sm">

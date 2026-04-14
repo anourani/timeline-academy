@@ -1,8 +1,7 @@
 import { useState } from 'react'
-import { Video } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { Columns3, Layers, PanelLeft, Plus, Settings as SettingsIcon, Video } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-import { supabase } from '@/lib/supabase'
+import { useSidePanel } from '@/contexts/SidePanelContext'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -11,30 +10,48 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { FeedbackPanel } from '@/components/FeedbackPanel/FeedbackPanel'
+import { SaveStatusIndicator, type SaveStatus } from '@/components/SaveStatusIndicator/SaveStatusIndicator'
+import { getTimelineYearRange } from '@/utils/timelineUtils'
+import type { TimelineEvent } from '@/types/event'
 
 interface GlobalNavProps {
   variant?: 'default' | 'timeline'
-  onPresentMode?: () => void
   timelineId?: string | null
+  /** Timeline identity — only rendered on variant="timeline" */
+  timelineTitle?: string
+  events?: TimelineEvent[]
+  timelineAccentColor?: string
+  /** Toolbar actions — only rendered on variant="timeline" */
+  onAddEventClick?: () => void
+  onEventsClick?: () => void
+  onCategoriesClick?: () => void
+  onSettingsClick?: () => void
+  activePanel?: 'events' | 'categories' | 'settings' | null
+  onPresentMode?: () => void
+  /** Save status — only rendered on variant="timeline" */
+  saveStatus?: SaveStatus
+  lastSavedTime?: Date
 }
 
 export function GlobalNav({
   variant = 'default',
-  onPresentMode,
   timelineId,
+  timelineTitle,
+  events = [],
+  timelineAccentColor = '#4196E4',
+  onAddEventClick,
+  onEventsClick,
+  onCategoriesClick,
+  onSettingsClick,
+  activePanel,
+  onPresentMode,
+  saveStatus,
+  lastSavedTime,
 }: GlobalNavProps) {
   const { user } = useAuth()
-  const navigate = useNavigate()
+  const { isOpen: isPanelOpen, toggle: togglePanel } = useSidePanel()
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false)
   const [isVideoTutorialOpen, setIsVideoTutorialOpen] = useState(false)
-
-  const handleSignOut = async () => {
-    try {
-      await supabase.auth.signOut()
-    } catch (error) {
-      console.error('Error signing out:', error)
-    }
-  }
 
   const handleShare = () => {
     if (timelineId) {
@@ -44,20 +61,100 @@ export function GlobalNav({
     }
   }
 
+  const showTitleCluster = variant === 'timeline' && typeof timelineTitle === 'string'
+  const yearRange = showTitleCluster ? getTimelineYearRange(events) : ''
+  const eventCount = events.length
+  const eventCountLabel = `${eventCount} ${eventCount === 1 ? 'event' : 'events'}`
+
   return (
     <div>
-      <div className="flex h-[60px] items-center justify-between px-6 py-3">
-        <div className="flex items-center">
-          <Button
-            variant="glass-sm"
-            size="none"
-            onClick={() => navigate('/')}
+      <div className="flex h-[64px] items-center gap-5 px-6 py-4 relative">
+        {/* Left cluster: panel toggle + optional timeline identity */}
+        <div className="flex items-center gap-5 min-w-0">
+          <div
+            className={`overflow-hidden transition-[width,opacity,margin] duration-300 ease-out ${
+              isPanelOpen ? 'w-0 opacity-0 pointer-events-none -ml-5' : 'w-8 opacity-100'
+            }`}
+            aria-hidden={isPanelOpen}
           >
-            Timelines
-          </Button>
+            <button
+              onClick={togglePanel}
+              className="relative flex items-center justify-center p-1.5 rounded-md border border-white/15 bg-white/10 backdrop-blur-[12px] text-[#c9ced4] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4),inset_0px_1px_0px_0px_rgba(255,255,255,0.1)] hover:bg-white/20 hover:text-[#dadee5] transition-colors"
+              aria-label="Open timelines panel"
+              tabIndex={isPanelOpen ? -1 : 0}
+            >
+              <PanelLeft size={20} />
+            </button>
+          </div>
+
+          {showTitleCluster && (
+            <div className="flex items-center gap-6 min-w-0">
+              <p className="font-['Aleo:Regular',serif] font-normal text-[18px] leading-[1.4] text-[#9b9ea3] truncate">
+                {timelineTitle || 'Untitled Timeline'}
+              </p>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="font-['JetBrains_Mono:Light',monospace] font-light text-[12px] leading-[1.4] text-[#c9ced4] whitespace-nowrap">
+                  {yearRange}
+                </span>
+                <span
+                  className="rounded-full size-1.5 shrink-0"
+                  style={{ backgroundColor: timelineAccentColor }}
+                  aria-hidden
+                />
+                <span className="font-['JetBrains_Mono:Light',monospace] font-light text-[12px] leading-[1.4] text-[#c9ced4] whitespace-nowrap">
+                  {eventCountLabel}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Center cluster: editor action buttons */}
+        {variant === 'timeline' && (
+          <div className="hidden md:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 items-center gap-2.5">
+            {onAddEventClick && (
+              <Button variant="glass" size="none" onClick={onAddEventClick}>
+                <Plus size={18} />
+                Add Event
+              </Button>
+            )}
+            <Button
+              variant="glass"
+              size="none"
+              data-active={activePanel === 'events'}
+              onClick={onEventsClick}
+            >
+              <Columns3 size={18} />
+              Events
+            </Button>
+            <Button
+              variant="glass"
+              size="none"
+              data-active={activePanel === 'categories'}
+              onClick={onCategoriesClick}
+            >
+              <Layers size={18} />
+              Categories
+            </Button>
+            <Button
+              variant="glass"
+              size="none"
+              data-active={activePanel === 'settings'}
+              onClick={onSettingsClick}
+            >
+              <SettingsIcon size={18} />
+              Settings
+            </Button>
+          </div>
+        )}
+
+        {/* Right cluster: save status + action buttons */}
+        <div className="ml-auto flex items-center gap-2">
+          {variant === 'timeline' && saveStatus && (
+            <div className="hidden md:block mr-2">
+              <SaveStatusIndicator status={saveStatus} lastSaved={lastSavedTime} />
+            </div>
+          )}
           {variant === 'default' && (
             <>
               <Button
@@ -68,22 +165,13 @@ export function GlobalNav({
                 How It Works
               </Button>
               {user && (
-                <>
-                  <Button
-                    variant="glass-sm"
-                    size="none"
-                    onClick={() => setIsFeedbackOpen(true)}
-                  >
-                    Feedback
-                  </Button>
-                  <Button
-                    variant="glass-sm"
-                    size="none"
-                    onClick={handleSignOut}
-                  >
-                    Log Out
-                  </Button>
-                </>
+                <Button
+                  variant="glass-sm"
+                  size="none"
+                  onClick={() => setIsFeedbackOpen(true)}
+                >
+                  Feedback
+                </Button>
               )}
             </>
           )}
