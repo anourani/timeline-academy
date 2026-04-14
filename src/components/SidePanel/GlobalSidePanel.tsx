@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { MoreVertical, PanelLeft, Trash2, LogOut } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useSidePanel } from '@/contexts/SidePanelContext'
@@ -63,9 +62,8 @@ function TileMenuButton({ onDelete }: { onDelete: () => void }) {
 
 export function GlobalSidePanel() {
   const { user } = useAuth()
-  const { isOpen, close, onTimelineSelect, activeTimelineId, activeTimelineTitle } = useSidePanel()
+  const { isOpen, close, onTimelineSelect, onDraftSelect, activeTimelineId, activeDraftId, activeTimelineTitle } = useSidePanel()
   const { timelines, isLoading, error, loadTimelines } = useTimelines()
-  const navigate = useNavigate()
   const [localDrafts, setLocalDrafts] = useState<LocalDraft[]>([])
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const [pendingDeleteKind, setPendingDeleteKind] = useState<'timeline' | 'draft' | null>(null)
@@ -110,16 +108,12 @@ export function GlobalSidePanel() {
     : baseRows
 
   const handleTileClick = (row: TileRow) => {
-    console.log('[sidepanel] handleTileClick enter', 'id=', row.id, 'kind=', row.kind, 'title=', row.title, 'activeTimelineId=', activeTimelineId)
     if (row.kind === 'timeline') {
-      console.log('[sidepanel] branch=timeline -> onTimelineSelect', row.id)
       onTimelineSelect(row.id)
-      console.log('[sidepanel] onTimelineSelect returned')
     } else {
-      console.log('[sidepanel] branch=draft -> navigate /editor', row.id)
-      navigate('/editor', { state: { draftId: row.id } })
+      onDraftSelect(row.id)
     }
-    console.log('[sidepanel] handleTileClick exit')
+    // Panel stays open — it's only toggled via the panel-left button
   }
 
   const confirmDelete = (row: TileRow) => {
@@ -213,7 +207,9 @@ export function GlobalSidePanel() {
               </div>
             ) : (
               rows.map((row) => {
-                const isActive = row.kind === 'timeline' && row.id === activeTimelineId
+                const isActive = row.kind === 'timeline'
+                  ? row.id === activeTimelineId
+                  : row.id === activeDraftId
                 // When the editor is actively showing this timeline, trust its
                 // live title over whatever the fetched list still has cached.
                 const displayTitle = isActive && activeTimelineTitle != null
