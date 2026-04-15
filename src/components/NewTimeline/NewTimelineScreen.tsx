@@ -1,12 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { GlobalNav } from '@/components/Navigation/GlobalNav'
 import { SUBJECT_TYPE_SUFFIX } from '@/constants/pillDefinitions'
 import type { SubjectType } from '@/constants/pillDefinitions'
 
 interface NewTimelineScreenProps {
   onAIGenerate: (subject: string) => void
   onCancel: () => void
-  onManualCreate: () => void
   isGenerating: boolean
   isClassifying: boolean
   classifiedType: SubjectType | null
@@ -108,7 +106,6 @@ function BackgroundPattern() {
 export function NewTimelineScreen({
   onAIGenerate,
   onCancel,
-  onManualCreate,
   isGenerating,
   isClassifying,
   classifiedType,
@@ -181,10 +178,9 @@ export function NewTimelineScreen({
   const hasText = name.trim().length > 0
 
   return (
-    <div className="fixed inset-0 bg-surface-primary z-50 overflow-auto">
+    <div className="relative min-h-screen bg-surface-primary overflow-auto">
       <BackgroundPattern />
       <div className="relative z-10">
-        <GlobalNav />
         <div
           className="pl-[120px] pr-[80px] pt-[260px] pb-[200px]"
         >
@@ -313,15 +309,6 @@ export function NewTimelineScreen({
               </div>
             )}
 
-            {/* Manual create escape hatch */}
-            {!isWorking && (
-              <button
-                onClick={onManualCreate}
-                className="text-sm text-text-tertiary hover:text-white underline underline-offset-2 transition-colors font-avenir"
-              >
-                Create my own timeline
-              </button>
-            )}
           </div>
         </div>
       </div>
