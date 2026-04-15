@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { MoreVertical, PanelLeft, Trash2, LogOut, Video } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useSidePanel } from '@/contexts/SidePanelContext'
@@ -68,6 +69,7 @@ function TileMenuButton({ onDelete }: { onDelete: () => void }) {
 }
 
 export function GlobalSidePanel() {
+  const navigate = useNavigate()
   const { user } = useAuth()
   const { isOpen, close, onTimelineSelect, onDraftSelect, activeTimelineId, activeDraftId, activeTimelineTitle } = useSidePanel()
   const { timelines, isLoading, error, loadTimelines } = useTimelines()
@@ -181,9 +183,12 @@ export function GlobalSidePanel() {
       >
         {/* Header */}
         <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-2 border-b border-[#404040] shrink-0">
-          <p className="font-['Aleo',serif] font-normal text-[18px] leading-[1.4] text-[#c9ced4]">
+          <button
+            onClick={() => navigate('/')}
+            className="font-['Aleo',serif] font-normal text-[18px] leading-[1.4] text-[#c9ced4] hover:text-[#dadee5] transition-colors bg-transparent border-none p-0 cursor-pointer"
+          >
             Timelines
-          </p>
+          </button>
           <button
             onClick={close}
             className="relative flex items-center justify-center p-1.5 rounded-md border border-white/15 bg-white/10 backdrop-blur-[12px] text-[#c9ced4] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4),inset_0px_1px_0px_0px_rgba(255,255,255,0.1)] hover:bg-white/20 hover:text-[#dadee5] transition-colors"

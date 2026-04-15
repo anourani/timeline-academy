@@ -12,9 +12,7 @@ import { useSidePanel } from './contexts/SidePanelContext';
 import { AuthModal } from './components/Auth/AuthModal';
 import { UnsavedChangesModal } from './components/Modal/UnsavedChangesModal';
 import { useLocalDraft } from './hooks/useLocalDraft';
-import { NewTimelineScreen } from './components/NewTimeline/NewTimelineScreen';
-import { useAIMode } from './hooks/useAIMode';
-import { TimelineEvent } from './types/event';
+import { TimelineEvent, CategoryConfig } from './types/event';
 
 export function App() {
   const {
@@ -36,9 +34,7 @@ export function App() {
   const [pendingScrollDate, setPendingScrollDate] = useState<string | null>(null);
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
-  const [showCreationScreen, setShowCreationScreen] = useState(false);
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
-  const { isGenerating, isClassifying, classifiedType, categoryLabels, error: aiError, classifyAndGenerate, abort: abortAI, resetClassification } = useAIMode();
   const { loadAllDrafts, loadDraft, saveDraft, saveDraftImmediate, createDraft, clearAllDrafts } = useLocalDraft();
   const handledRouteStateRef = useRef(false);
   const { setOnTimelineSelect, setOnDraftSelect, setActiveTimelineId, setActiveDraftId: setPanelActiveDraftId, setActiveTimelineTitle } = useSidePanel();
@@ -93,28 +89,50 @@ export function App() {
         skipCreationScreen?: boolean;
         draftId?: string;
         timelineId?: string;
+        aiGenerated?: {
+          title: string;
+          description: string;
+          events: TimelineEvent[];
+          categories: CategoryConfig[];
+        };
       } | null;
 
-      if (routeState?.newTimeline) {
-        if (routeState.skipCreationScreen) {
-          // "Build from Scratch" — create draft immediately
-          const newDraft = createDraft();
-          if (!newDraft) {
-            alert('You\'ve reached the 3-timeline limit. Delete an existing timeline to create a new one.');
-            routerNavigate('/', { replace: true });
-            setDraftHydrated(true);
-            return;
-          }
-          setActiveDraftId(newDraft.id);
-          setTitle(newDraft.title);
-          setDescription(newDraft.description);
-          setEvents(newDraft.events);
-          updateCategories(newDraft.categories);
-          handleScaleChange(newDraft.scale);
-        } else {
-          // "Build with AI" — defer draft creation until generation completes
-          setShowCreationScreen(true);
+      if (routeState?.aiGenerated) {
+        // Arriving from /ai with a freshly generated timeline — create a draft
+        // and seed it with the generated data.
+        const newDraft = createDraft();
+        if (!newDraft) {
+          alert('You\'ve reached the 3-timeline limit. Delete an existing timeline to create a new one.');
+          routerNavigate('/', { replace: true });
+          setDraftHydrated(true);
+          return;
         }
+        const { title: aiTitle, description: aiDesc, events: aiEvents, categories: aiCategories } = routeState.aiGenerated;
+        setActiveDraftId(newDraft.id);
+        setTitle(aiTitle);
+        setDescription(aiDesc);
+        setEvents(aiEvents);
+        updateCategories(aiCategories);
+        handleScaleChange(newDraft.scale);
+        if (aiEvents.length > 0) {
+          const earliest = aiEvents.reduce((a, b) => a.startDate < b.startDate ? a : b);
+          setPendingScrollDate(earliest.startDate);
+        }
+      } else if (routeState?.newTimeline && routeState.skipCreationScreen) {
+        // "Build from Scratch" — create draft immediately
+        const newDraft = createDraft();
+        if (!newDraft) {
+          alert('You\'ve reached the 3-timeline limit. Delete an existing timeline to create a new one.');
+          routerNavigate('/', { replace: true });
+          setDraftHydrated(true);
+          return;
+        }
+        setActiveDraftId(newDraft.id);
+        setTitle(newDraft.title);
+        setDescription(newDraft.description);
+        setEvents(newDraft.events);
+        updateCategories(newDraft.categories);
+        handleScaleChange(newDraft.scale);
       } else if (routeState?.draftId) {
         // Clicking a local draft tile on Homepage
         const draft = loadDraft(routeState.draftId);
@@ -126,10 +144,12 @@ export function App() {
           updateCategories(draft.categories);
           handleScaleChange(draft.scale);
         } else {
-          setShowCreationScreen(true);
+          routerNavigate('/ai', { replace: true });
+          setDraftHydrated(true);
+          return;
         }
       } else {
-        // No route state — load most recent draft or show creation screen
+        // No route state — load most recent draft or send user to AI entry
         const allDrafts = loadAllDrafts();
         if (allDrafts.length > 0) {
           const mostRecent = allDrafts[0];
@@ -140,7 +160,9 @@ export function App() {
           updateCategories(mostRecent.categories);
           handleScaleChange(mostRecent.scale);
         } else {
-          setShowCreationScreen(true);
+          routerNavigate('/ai', { replace: true });
+          setDraftHydrated(true);
+          return;
         }
       }
 
@@ -195,26 +217,55 @@ export function App() {
     }
   }, [user, draftHydrated]);
 
-  // Handle navigation from Homepage with a specific timeline to load
+  // Handle navigation from Homepage (or /ai) with a specific timeline to load
   useEffect(() => {
-    const state = location.state as { timelineId?: string; skipCreationScreen?: boolean } | null;
-    if (state?.timelineId && user && !handledRouteStateRef.current) {
+    const state = location.state as {
+      timelineId?: string;
+      skipCreationScreen?: boolean;
+      aiGenerated?: {
+        title: string;
+        description: string;
+        events: TimelineEvent[];
+        categories: CategoryConfig[];
+      };
+    } | null;
+    if (!user || handledRouteStateRef.current) return;
+
+    if (state?.aiGenerated) {
+      handledRouteStateRef.current = true;
+      const aiData = state.aiGenerated;
+      (async () => {
+        // Creates the timeline row in Supabase and sets timelineId so autosave
+        // will persist subsequent state updates to the new row.
+        await switchTimeline('new');
+        setTitle(aiData.title);
+        setDescription(aiData.description);
+        setEvents(aiData.events);
+        updateCategories(aiData.categories);
+        if (aiData.events.length > 0) {
+          const earliest = aiData.events.reduce((a, b) => a.startDate < b.startDate ? a : b);
+          setPendingScrollDate(earliest.startDate);
+        }
+      })();
+      routerNavigate('/editor', { replace: true, state: {} });
+    } else if (state?.timelineId) {
       handledRouteStateRef.current = true;
       if (state.timelineId === 'new' && state.skipCreationScreen) {
         switchTimeline('new');
       } else if (state.timelineId === 'new') {
-        setShowCreationScreen(true);
+        // "new" without skipCreationScreen now means "go to AI mode"
+        routerNavigate('/ai', { replace: true });
+        return;
       } else {
         switchTimeline(state.timelineId);
       }
-      // Clear the state so refreshing doesn't re-trigger
       routerNavigate('/editor', { replace: true, state: {} });
     }
   }, [location.state, user]);
 
   const handleTimelineSwitch = async (newTimelineId: string) => {
     if (newTimelineId === 'new') {
-      setShowCreationScreen(true);
+      routerNavigate('/ai');
       return;
     }
 
@@ -348,63 +399,6 @@ export function App() {
     updateEvent(updatedEvent);
   };
 
-  const handleManualCreate = async () => {
-    setShowCreationScreen(false);
-    resetClassification();
-    if (user) {
-      await switchTimeline('new');
-    } else if (!activeDraftId) {
-      // Create a draft now for logged-out users choosing manual mode
-      const newDraft = createDraft();
-      if (newDraft) {
-        setActiveDraftId(newDraft.id);
-        setTitle(newDraft.title);
-        setDescription(newDraft.description);
-        setEvents(newDraft.events);
-        updateCategories(newDraft.categories);
-        handleScaleChange(newDraft.scale);
-      } else {
-        alert('You\'ve reached the 3-timeline limit. Delete an existing timeline to create a new one.');
-        routerNavigate('/', { replace: true });
-      }
-    }
-  };
-
-  const handleAIGenerate = async (subject: string) => {
-    try {
-      const { title: genTitle, description: genDesc, events: genEvents, categories: genCategories } = await classifyAndGenerate(subject);
-
-      // Create draft for logged-out users now that generation succeeded
-      if (!user && !activeDraftId) {
-        const newDraft = createDraft();
-        if (newDraft) {
-          setActiveDraftId(newDraft.id);
-        } else {
-          alert('You\'ve reached the 3-timeline limit. Delete an existing timeline to create a new one.');
-          routerNavigate('/', { replace: true });
-          return;
-        }
-      }
-
-      setTitle(genTitle);
-      setDescription(genDesc);
-      setEvents(genEvents);
-      updateCategories(genCategories);
-      setShowCreationScreen(false);
-      resetClassification();
-      if (genEvents.length > 0) {
-        const earliest = genEvents.reduce((a, b) => a.startDate < b.startDate ? a : b);
-        setPendingScrollDate(earliest.startDate);
-      }
-    } catch {
-      // Error is already set in useAIMode — stays on creation screen showing error
-    }
-  };
-
-  const handleCancelAI = () => {
-    abortAI();
-  };
-
   const handleBulkEventsChange = (newEvents: TimelineEvent[]) => {
     const currentIds = new Set(events.map(e => e.id));
     const addedEvents = newEvents.filter(e => !currentIds.has(e.id));
@@ -509,18 +503,6 @@ export function App() {
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
       />
-      {showCreationScreen && (
-        <NewTimelineScreen
-          onAIGenerate={handleAIGenerate}
-          onCancel={handleCancelAI}
-          onManualCreate={handleManualCreate}
-          isGenerating={isGenerating}
-          isClassifying={isClassifying}
-          classifiedType={classifiedType}
-          categoryLabels={categoryLabels}
-          error={aiError}
-        />
-      )}
       <UnsavedChangesModal
         isOpen={showUnsavedChangesModal}
         onClose={() => {

@@ -70,11 +70,7 @@ export function Homepage() {
   };
 
   const handleBuildWithAI = () => {
-    if (user) {
-      navigate('/editor', { state: { timelineId: 'new' } });
-    } else {
-      navigate('/editor', { state: { newTimeline: true } });
-    }
+    navigate('/ai');
   };
 
   const handleAuthClick = () => {
