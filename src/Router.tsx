@@ -1,4 +1,4 @@
-import { createBrowserRouter, RouterProvider, Navigate, Outlet } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Outlet } from 'react-router-dom';
 import { App } from './App';
 import { Homepage } from './components/Homepage/Homepage';
 import { AIModePage } from './components/AIMode/AIModePage';
@@ -23,7 +23,6 @@ const router = createBrowserRouter([
       { path: '/', element: <Homepage /> },
       { path: '/editor', element: <App /> },
       { path: '/ai', element: <AIModePage /> },
-      { path: '/timelines', element: <Navigate to="/" replace /> },
     ],
   },
   {

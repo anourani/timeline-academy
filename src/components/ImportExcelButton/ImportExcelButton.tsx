@@ -16,7 +16,6 @@ interface ExcelRow {
 }
 
 const MAX_TITLE_LENGTH = 55;
-const DEFAULT_COLORS = ['#A770EC', '#FF7D05', '#259E23', '#4196E4'];
 
 export function ImportExcelButton({ onImport, categories }: ImportExcelButtonProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -50,7 +49,7 @@ export function ImportExcelButton({ onImport, categories }: ImportExcelButtonPro
     // Handle string date in MM/DD/YYYY format
     const match = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
     if (match) {
-      const [_, month, day, year] = match;
+      const [, month, day, year] = match;
       const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
       if (isNaN(date.getTime())) {
         return null;

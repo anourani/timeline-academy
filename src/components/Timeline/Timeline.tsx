@@ -47,7 +47,7 @@ export function Timeline({
     visibleCategories.some(cat => cat.id === event.category)
   );
 
-  const { startDate, endDate, months } = getTimelineRange(visibleEvents);
+  const { months } = getTimelineRange(visibleEvents);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [hoveredMonth, setHoveredMonth] = useState<number | null>(null);
   const [showEventModal, setShowEventModal] = useState(false);
