@@ -232,7 +232,7 @@ export function GlobalSidePanel() {
                 return (
                   <div
                     key={`${row.kind}:${row.id}`}
-                    className={`group flex items-center gap-4 px-2 py-2.5 rounded-[10px] transition-colors ${
+                    className={`group flex items-center gap-4 px-2 py-2.5 rounded-[6px] transition-colors ${
                       isActive ? 'bg-surface-primary' : ''
                     }`}
                   >
@@ -266,14 +266,14 @@ export function GlobalSidePanel() {
           <button
             type="button"
             onClick={() => setIsVideoTutorialOpen(true)}
-            className="w-full flex items-center px-[7px] py-[9px] rounded-[10px] border border-transparent backdrop-blur-[12px] font-['Avenir',sans-serif] font-medium text-[14px] leading-[1.5] text-[#9b9ea3] hover:bg-[#262626] hover:text-[#dadee5] transition-colors"
+            className="w-full flex items-center px-[7px] py-[9px] rounded-[6px] border border-transparent backdrop-blur-[12px] font-['Avenir',sans-serif] font-medium text-[14px] leading-[1.5] text-[#9b9ea3] hover:bg-[#262626] hover:text-[#dadee5] transition-colors"
           >
             How it Works
           </button>
           <button
             type="button"
             onClick={() => setIsFeedbackOpen(true)}
-            className="w-full flex items-center px-[7px] py-[9px] rounded-[10px] border border-transparent backdrop-blur-[12px] font-['Avenir',sans-serif] font-medium text-[14px] leading-[1.5] text-[#9b9ea3] hover:bg-[#262626] hover:text-[#dadee5] transition-colors"
+            className="w-full flex items-center px-[7px] py-[9px] rounded-[6px] border border-transparent backdrop-blur-[12px] font-['Avenir',sans-serif] font-medium text-[14px] leading-[1.5] text-[#9b9ea3] hover:bg-[#262626] hover:text-[#dadee5] transition-colors"
           >
             Feedback
           </button>
