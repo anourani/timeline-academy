@@ -155,7 +155,7 @@ export function Timeline({
   }, [editingEvent, onAddEvent, onUpdateEvent, scrollToDate]);
 
   return (
-    <div className={isFullScreen ? 'h-[calc(100vh-6rem)]' : 'relative mb-16'}>
+    <div className={isFullScreen ? 'h-[calc(100vh-6rem)]' : 'relative'}>
       <div
         className="absolute left-0 z-10 pointer-events-none"
         style={{ top: SCROLL_INDICATOR_HEIGHT + HEADER_HEIGHT, height: categoryData.totalHeight }}
