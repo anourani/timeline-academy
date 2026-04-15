@@ -483,7 +483,7 @@ export function App() {
           </div>
         </div>
       ) : (
-        <main className="timeline-container relative mt-16">
+        <main className="timeline-container relative mt-[140px]">
           <Timeline
             events={events}
             categories={categories}
