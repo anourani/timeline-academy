@@ -41,7 +41,7 @@ export function App() {
   const { isGenerating, isClassifying, classifiedType, categoryLabels, error: aiError, classifyAndGenerate, abort: abortAI, resetClassification } = useAIMode();
   const { loadAllDrafts, loadDraft, saveDraft, saveDraftImmediate, createDraft, clearAllDrafts } = useLocalDraft();
   const handledRouteStateRef = useRef(false);
-  const { setOnTimelineSelect, setActiveTimelineId, setActiveTimelineTitle } = useSidePanel();
+  const { setOnTimelineSelect, setOnDraftSelect, setActiveTimelineId, setActiveDraftId: setPanelActiveDraftId, setActiveTimelineTitle } = useSidePanel();
 
   const timelineData = {
     id: timelineId,
@@ -218,9 +218,33 @@ export function App() {
       return;
     }
 
+    // Dedup: if the user clicked the tile for the timeline that's already
+    // loaded, there's nothing to switch to — skip the refetch.
+    if (newTimelineId === timelineId) {
+      return;
+    }
+
     // Switch immediately; any in-flight autosave captured its own snapshot
     // (via debounce) and will still commit the outgoing timeline's data.
     await switchTimeline(newTimelineId);
+  };
+
+  const handleDraftSwitch = (newDraftId: string) => {
+    // Dedup: already editing this draft, nothing to do.
+    if (newDraftId === activeDraftId) {
+      return;
+    }
+    const draft = loadDraft(newDraftId);
+    if (!draft) {
+      console.error('Draft not found:', newDraftId);
+      return;
+    }
+    setActiveDraftId(draft.id);
+    setTitle(draft.title);
+    setDescription(draft.description);
+    setEvents(draft.events);
+    updateCategories(draft.categories);
+    handleScaleChange(draft.scale);
   };
 
   const switchTimeline = async (newTimelineId: string) => {
@@ -264,27 +288,41 @@ export function App() {
     }
   };
 
-  // Keep a ref to the latest handleTimelineSwitch so the registered handler
-  // always calls the current closure without re-registering every render.
+  // Keep refs to the latest switch handlers so the registered callbacks
+  // always invoke the current closure without re-registering every render.
   const timelineSwitchRef = useRef(handleTimelineSwitch);
   timelineSwitchRef.current = handleTimelineSwitch;
+  const draftSwitchRef = useRef(handleDraftSwitch);
+  draftSwitchRef.current = handleDraftSwitch;
 
-  // Register our switch handler for the global side panel once on mount.
+  // Register our switch handlers for the global side panel once on mount.
   useEffect(() => {
     setOnTimelineSelect((id: string) => timelineSwitchRef.current(id));
-    return () => setOnTimelineSelect(null);
-  }, [setOnTimelineSelect]);
+    setOnDraftSelect((id: string) => draftSwitchRef.current(id));
+    return () => {
+      setOnTimelineSelect(null);
+      setOnDraftSelect(null);
+    };
+  }, [setOnTimelineSelect, setOnDraftSelect]);
 
-  // Keep the side panel informed of which timeline is active so it can highlight it.
-  // useLayoutEffect ensures the context update commits synchronously with the
-  // editor's render — no stale intermediate state visible to the panel.
+  // Keep the side panel informed of which timeline/draft is active so it can
+  // highlight it. useLayoutEffect ensures the context update commits
+  // synchronously with the editor's render. Cleanup clears it on unmount so
+  // non-editor routes (e.g. Homepage) don't show a stale highlight.
   useLayoutEffect(() => {
     setActiveTimelineId(timelineId);
+    return () => setActiveTimelineId(null);
   }, [timelineId, setActiveTimelineId]);
+
+  useLayoutEffect(() => {
+    setPanelActiveDraftId(activeDraftId);
+    return () => setPanelActiveDraftId(null);
+  }, [activeDraftId, setPanelActiveDraftId]);
 
   // Push live title edits to the side panel so the tile updates before autosave lands.
   useLayoutEffect(() => {
     setActiveTimelineTitle(title);
+    return () => setActiveTimelineTitle(null);
   }, [title, setActiveTimelineTitle]);
 
   const handlePresentMode = () => {
