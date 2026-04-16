@@ -3,12 +3,11 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Header } from './components/Layout/Header';
 import { GlobalNav } from '@/components/Navigation/GlobalNav';
 import { Timeline } from './components/Timeline/Timeline';
-import { SampleTimelineView } from './components/SampleTimeline/SampleTimelineView';
 import { useTimelineState } from './hooks/useTimelineState';
 import { useTimeline } from './hooks/useTimeline';
-import { useAuth } from './contexts/AuthContext';
+import { useAuth } from './hooks/useAuth';
 import { useAutosave } from './hooks/useAutosave';
-import { useSidePanel } from './contexts/SidePanelContext';
+import { useSidePanel } from './hooks/useSidePanel';
 import { AuthModal } from './components/Auth/AuthModal';
 import { UnsavedChangesModal } from './components/Modal/UnsavedChangesModal';
 import { useLocalDraft } from './hooks/useLocalDraft';
@@ -26,7 +25,6 @@ export function App() {
   const location = useLocation();
   const routerNavigate = useNavigate();
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [showSampleTimeline, setShowSampleTimeline] = useState(false);
   const [pendingSwitchTimelineId, setPendingSwitchTimelineId] = useState<string | null>(null);
   const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
   const [activePanel, setActivePanel] = useState<'events' | 'settings' | null>(null);
@@ -495,10 +493,6 @@ export function App() {
           />
         </main>
       )}
-      <SampleTimelineView
-        isOpen={showSampleTimeline}
-        onClose={() => setShowSampleTimeline(false)}
-      />
       <AuthModal
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Timeline } from '../types/timeline';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from './useAuth';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second

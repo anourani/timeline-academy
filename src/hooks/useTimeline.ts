@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { TimelineEvent, CategoryConfig } from '../types/event';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from './useAuth';
 import { DEFAULT_TIMELINE_TITLE } from '../constants/defaults';
 import { saveTimelineEvents } from '../utils/saveEvents';
 
