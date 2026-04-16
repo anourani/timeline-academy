@@ -7,9 +7,10 @@ interface GlobalLayoutProps {
 }
 
 /**
- * Push-layout with a viewport-pinned side panel:
- * - Panel is position: fixed so it stays locked to the viewport while the page scrolls.
- * - Main content gets an animated padding-left to make room when the panel is open.
+ * Push-layout with a viewport-pinned floating side panel:
+ * - Panel is position: fixed with a 6px gap on left/top/bottom so it floats.
+ * - Total horizontal footprint is 320px (314px panel + 6px gap), so main
+ *   content padding-left stays at 320px when the panel is open.
  */
 export function GlobalLayout({ children }: GlobalLayoutProps) {
   const { isOpen } = useSidePanel()
@@ -17,7 +18,7 @@ export function GlobalLayout({ children }: GlobalLayoutProps) {
   return (
     <div className="min-h-screen">
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-[320px] transition-transform duration-300 ease-out ${
+        className={`fixed inset-y-0 left-0 z-40 w-[320px] pl-[6px] py-[6px] transition-transform duration-300 ease-out ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
         aria-hidden={!isOpen}
