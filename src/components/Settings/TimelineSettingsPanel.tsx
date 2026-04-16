@@ -8,6 +8,13 @@ import { ScaleSelector } from './ScaleSelector';
 import { DEFAULT_TIMELINE_DESCRIPTION } from '../../constants/defaults';
 import { utils, writeFile } from 'xlsx';
 import { read } from 'xlsx';
+
+interface ExcelRow {
+  'Event Title'?: string;
+  'Start Date'?: string | number | Date;
+  'End Date'?: string | number | Date;
+  'Category'?: string;
+}
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -111,7 +118,7 @@ export function TimelineSettingsPanel({
         const workbook = read(data, { cellDates: true });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const rows = utils.sheet_to_json<any>(worksheet);
+        const rows = utils.sheet_to_json<ExcelRow>(worksheet);
         const events = rows.slice(2).map(row => {
           let startDate = '';
           let endDate = '';

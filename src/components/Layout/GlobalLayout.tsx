@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { GlobalSidePanel } from '@/components/SidePanel/GlobalSidePanel'
-import { useSidePanel } from '@/contexts/SidePanelContext'
+import { useSidePanel } from '@/hooks/useSidePanel'
 
 interface GlobalLayoutProps {
   children: ReactNode

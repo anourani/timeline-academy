@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Modal } from '../Modal/Modal';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { isNetworkError, testConnection, getConnectionStatus } from '../../lib/supabase';
 import { OtpInput } from './OtpInput';
 

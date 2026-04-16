@@ -1,6 +1,6 @@
 import { type CSSProperties } from 'react'
 import { Columns3, PanelLeft, Plus, Settings as SettingsIcon } from 'lucide-react'
-import { useSidePanel } from '@/contexts/SidePanelContext'
+import { useSidePanel } from '@/hooks/useSidePanel'
 import { Button } from '@/components/ui/button'
 import { SaveStatusIndicator, type SaveStatus } from '@/components/SaveStatusIndicator/SaveStatusIndicator'
 import { getTimelineYearRange } from '@/utils/timelineUtils'

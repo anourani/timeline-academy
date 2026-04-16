@@ -7,7 +7,6 @@ interface CSVParseResult {
   errors: string[];
 }
 
-const DEFAULT_COLORS = ['#A770EC', '#FF7D05', '#259E23', '#4196E4'];
 const MAX_TITLE_LENGTH = 55;
 
 function isEmptyRow(values: string[]): boolean {
@@ -139,7 +138,7 @@ export function parseCSVEvents(csvContent: string, existingCategories: CategoryC
         title: title.trim(),
         startDate: normalizedStartDate,
         endDate: normalizedEndDate,
-        category: normalizedCategory as any
+        category: normalizedCategory
       });
       
     } catch (error) {

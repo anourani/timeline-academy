@@ -76,7 +76,7 @@ export function normalizeDate(dateStr: string): string | null {
   const dateFormat = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
   const match = dateStr.match(dateFormat);
   if (match) {
-    const [_, month, day, year] = match;
+    const [, month, day, year] = match;
     const m = parseInt(month);
     const d = parseInt(day);
     const y = parseInt(year);

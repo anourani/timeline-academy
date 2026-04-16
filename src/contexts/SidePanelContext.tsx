@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 type TimelineSelectHandler = (timelineId: string) => void
@@ -22,7 +22,7 @@ interface SidePanelContextValue {
   setActiveTimelineTitle: (title: string | null) => void
 }
 
-const SidePanelContext = createContext<SidePanelContextValue | null>(null)
+export const SidePanelContext = createContext<SidePanelContextValue | null>(null)
 
 export function SidePanelProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false)
@@ -83,12 +83,4 @@ export function SidePanelProvider({ children }: { children: ReactNode }) {
       {children}
     </SidePanelContext.Provider>
   )
-}
-
-export function useSidePanel(): SidePanelContextValue {
-  const ctx = useContext(SidePanelContext)
-  if (!ctx) {
-    throw new Error('useSidePanel must be used within a SidePanelProvider')
-  }
-  return ctx
 }
