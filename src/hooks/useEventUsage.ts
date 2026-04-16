@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
 import { getCurrentLimits } from '@/lib/limits'
+import { getAllDrafts } from '@/utils/draftStorage'
 
 interface EventUsage {
   eventCount: number
@@ -10,6 +11,12 @@ interface EventUsage {
   timelineLimit: number | null
   isLoading: boolean
   refetch: () => Promise<void>
+}
+
+function getLocalDraftUsage(): { eventCount: number; timelineCount: number } {
+  const drafts = getAllDrafts()
+  const eventCount = drafts.reduce((sum, d) => sum + d.events.length, 0)
+  return { eventCount, timelineCount: drafts.length }
 }
 
 export function useEventUsage(): EventUsage {
@@ -21,8 +28,9 @@ export function useEventUsage(): EventUsage {
 
   const refetch = useCallback(async () => {
     if (!user) {
-      setEventCount(0)
-      setTimelineCount(0)
+      const local = getLocalDraftUsage()
+      setEventCount(local.eventCount)
+      setTimelineCount(local.timelineCount)
       setIsLoading(false)
       return
     }
@@ -47,7 +55,17 @@ export function useEventUsage(): EventUsage {
 
   useEffect(() => {
     refetch()
-    if (!user) return
+
+    if (!user) {
+      // For logged-out users, poll localStorage every 2s so the counter
+      // stays in sync as the user adds/removes events in drafts.
+      const interval = setInterval(() => {
+        const local = getLocalDraftUsage()
+        setEventCount(local.eventCount)
+        setTimelineCount(local.timelineCount)
+      }, 2000)
+      return () => clearInterval(interval)
+    }
 
     const eventsChannel = supabase
       .channel('event_usage_events')
