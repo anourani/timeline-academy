@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { TimelineEvent, CategoryConfig } from '../types/event';
 import { useAuth } from './useAuth';
@@ -18,7 +18,7 @@ export function useTimeline() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadInitialTimeline = async () => {
+  const loadInitialTimeline = useCallback(async () => {
     if (!user) {
       setTimelineId(null);
       setIsLoading(false);
@@ -48,7 +48,7 @@ export function useTimeline() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user]);
 
   const retryInitialLoad = () => {
     loadInitialTimeline();
@@ -56,9 +56,9 @@ export function useTimeline() {
 
   useEffect(() => {
     loadInitialTimeline();
-  }, [user]);
+  }, [loadInitialTimeline]);
 
-  const loadTimeline = async (id: string): Promise<TimelineData> => {
+  const loadTimeline = useCallback(async (id: string): Promise<TimelineData> => {
     if (!user) throw new Error('Must be signed in to load timeline');
     
     try {
@@ -140,9 +140,9 @@ export function useTimeline() {
       setTimelineId(id === 'new' ? null : timelineId);
       throw error;
     }
-  };
+  }, [user, timelineId]);
 
-  const saveTimeline = async (title: string, events: TimelineEvent[], scale: 'large' | 'small' = 'large') => {
+  const saveTimeline = useCallback(async (title: string, events: TimelineEvent[], scale: 'large' | 'small' = 'large') => {
     if (!user) throw new Error('Must be signed in to save');
 
     try {
@@ -206,7 +206,7 @@ export function useTimeline() {
       console.error('Error saving timeline:', error);
       throw error;
     }
-  };
+  }, [user, timelineId]);
 
   return {
     timelineId,

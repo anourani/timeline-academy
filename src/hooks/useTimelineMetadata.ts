@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { getTimelineYearRange } from '../utils/timelineUtils';
 import { TimelineCategory } from '../types/event';
@@ -14,8 +14,13 @@ const DEFAULT_DOT_COLOR = '#4196E4';
 
 export function useTimelineMetadata(timelineIds: string[]): Map<string, TimelineMetadata> {
   const [metadata, setMetadata] = useState<Map<string, TimelineMetadata>>(new Map());
+  const prevIdsKeyRef = useRef('');
 
   useEffect(() => {
+    const idsKey = JSON.stringify(timelineIds);
+    if (idsKey === prevIdsKeyRef.current) return;
+    prevIdsKeyRef.current = idsKey;
+
     if (timelineIds.length === 0) {
       setMetadata(new Map());
       return;
@@ -110,7 +115,7 @@ export function useTimelineMetadata(timelineIds: string[]): Map<string, Timeline
     };
 
     fetchMetadata();
-  }, [JSON.stringify(timelineIds)]);
+  }, [timelineIds]);
 
   return metadata;
 }

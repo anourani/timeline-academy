@@ -1,4 +1,4 @@
-import React, { createContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useEffect, useState } from 'react';
 import { User, AuthError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 
@@ -13,6 +13,27 @@ export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+
+  const signOut = useCallback(async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      setUser(null);
+    } catch (error) {
+      console.error('Error signing out:', error);
+      // Force clear the session even if the API call fails
+      setUser(null);
+    }
+  }, []);
+
+  const handleAuthError = useCallback(async (error: AuthError) => {
+    // Handle specific auth errors
+    if (error.message.includes('refresh_token_not_found') ||
+        error.message.includes('invalid refresh token')) {
+      console.warn('Invalid refresh token, signing out user');
+      await signOut();
+    }
+  }, [signOut]);
 
   useEffect(() => {
     // Get initial session
@@ -37,44 +58,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [handleAuthError]);
 
-  const handleAuthError = async (error: AuthError) => {
-    // Handle specific auth errors
-    if (error.message.includes('refresh_token_not_found') ||
-        error.message.includes('invalid refresh token')) {
-      console.warn('Invalid refresh token, signing out user');
-      await signOut();
-    }
-  };
-
-  const signInWithEmail = async (email: string) => {
+  const signInWithEmail = useCallback(async (email: string) => {
     const { error } = await supabase.auth.signInWithOtp({ email });
     if (error) {
       handleAuthError(error);
       throw error;
     }
-  };
+  }, [handleAuthError]);
 
-  const verifyEmailOtp = async (email: string, token: string) => {
+  const verifyEmailOtp = useCallback(async (email: string, token: string) => {
     const { error } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
     if (error) {
       handleAuthError(error);
       throw error;
     }
-  };
-
-  const signOut = async () => {
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      setUser(null);
-    } catch (error) {
-      console.error('Error signing out:', error);
-      // Force clear the session even if the API call fails
-      setUser(null);
-    }
-  };
+  }, [handleAuthError]);
 
   return (
     <AuthContext.Provider value={{ user, signInWithEmail, verifyEmailOtp, signOut }}>

@@ -115,7 +115,7 @@ export function TimelineViewer() {
     };
 
     loadTimeline();
-  }, [timelineId]);
+  }, [timelineId, searchParams]);
 
   if (loading) {
     return (

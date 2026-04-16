@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { debounce } from '../utils/debounce';
 import { supabase } from '../lib/supabase';
 import { saveTimelineEvents } from '../utils/saveEvents';
@@ -19,7 +19,7 @@ export function useAutosave(timelineData: TimelineData) {
   const [lastSavedTime, setLastSavedTime] = useState<Date>();
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
-  const save = async (data: TimelineData) => {
+  const save = useCallback(async (data: TimelineData) => {
     if (!data.id) return;
 
     try {
@@ -49,11 +49,11 @@ export function useAutosave(timelineData: TimelineData) {
       console.error('Save error:', error);
       setSaveStatus('error');
     }
-  };
+  }, []);
 
-  const debouncedSave = useCallback(
-    debounce(save, 2000),
-    []
+  const debouncedSave = useMemo(
+    () => debounce(save, 2000),
+    [save]
   );
 
   const handleChange = useCallback((data: TimelineData) => {
@@ -93,7 +93,7 @@ export function useAutosave(timelineData: TimelineData) {
 
     window.addEventListener('online', handleOnline);
     return () => window.removeEventListener('online', handleOnline);
-  }, [saveStatus, hasUnsavedChanges, timelineData]);
+  }, [saveStatus, hasUnsavedChanges, timelineData, save]);
 
   return {
     saveStatus,

@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Header } from './components/Layout/Header';
 import { GlobalNav } from '@/components/Navigation/GlobalNav';
@@ -35,6 +35,7 @@ export function App() {
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   const { loadAllDrafts, loadDraft, saveDraft, saveDraftImmediate, createDraft, clearAllDrafts } = useLocalDraft();
   const handledRouteStateRef = useRef(false);
+  const migrationDoneRef = useRef(false);
   const { setOnTimelineSelect, setOnDraftSelect, setActiveTimelineId, setActiveDraftId: setPanelActiveDraftId, setActiveTimelineTitle } = useSidePanel();
 
   const timelineData = {
@@ -75,9 +76,16 @@ export function App() {
   // Trigger autosave when timeline data changes
   useEffect(() => {
     if (timelineId) {
-      handleChange(timelineData);
+      handleChange({
+        id: timelineId,
+        title,
+        description,
+        events,
+        categories,
+        scale: currentScale.value
+      });
     }
-  }, [timelineId, title, description, events, categories, currentScale.value]);
+  }, [timelineId, title, description, events, categories, currentScale.value, handleChange]);
 
   // Hydrate from localStorage draft if logged out
   useEffect(() => {
@@ -168,7 +176,7 @@ export function App() {
       // Clear the route state so refreshing doesn't re-trigger
       routerNavigate('/editor', { replace: true, state: {} });
     }
-  }, [user, draftHydrated]);
+  }, [user, draftHydrated, createDraft, handleScaleChange, loadAllDrafts, loadDraft, location.state, routerNavigate, setDescription, setEvents, setTitle, updateCategories]);
 
   // Save to localStorage when logged out
   useEffect(() => {
@@ -183,37 +191,38 @@ export function App() {
         savedAt: new Date().toISOString()
       });
     }
-  }, [user, draftHydrated, activeDraftId, title, description, events, categories, currentScale.value]);
+  }, [user, draftHydrated, activeDraftId, title, description, events, categories, currentScale.value, saveDraft]);
 
   // Migrate localStorage drafts to Supabase on login
   useEffect(() => {
-    if (user && draftHydrated) {
-      const allDrafts = loadAllDrafts();
-      const draftsWithEvents = allDrafts.filter(d => d.events.length > 0);
+    if (!user || !draftHydrated || migrationDoneRef.current) return;
+    migrationDoneRef.current = true;
 
-      if (draftsWithEvents.length > 0) {
-        (async () => {
-          for (const draft of draftsWithEvents) {
-            try {
-              await saveTimeline(draft.title, draft.events, draft.scale);
-            } catch (err: unknown) {
-              if (err instanceof Error && err.message === 'Maximum limit of 3 timelines reached') {
-                alert('You\'ve reached the 3-timeline limit. Some drafts couldn\'t be saved. Delete an existing timeline to make room.');
-                break;
-              } else {
-                console.error('Failed to migrate draft:', err);
-              }
+    const allDrafts = loadAllDrafts();
+    const draftsWithEvents = allDrafts.filter(d => d.events.length > 0);
+
+    if (draftsWithEvents.length > 0) {
+      (async () => {
+        for (const draft of draftsWithEvents) {
+          try {
+            await saveTimeline(draft.title, draft.events, draft.scale);
+          } catch (err: unknown) {
+            if (err instanceof Error && err.message === 'Maximum limit of 3 timelines reached') {
+              alert('You\'ve reached the 3-timeline limit. Some drafts couldn\'t be saved. Delete an existing timeline to make room.');
+              break;
+            } else {
+              console.error('Failed to migrate draft:', err);
             }
           }
-          clearAllDrafts();
-          setActiveDraftId(null);
-        })();
-      } else {
+        }
         clearAllDrafts();
         setActiveDraftId(null);
-      }
+      })();
+    } else {
+      clearAllDrafts();
+      setActiveDraftId(null);
     }
-  }, [user, draftHydrated]);
+  }, [user, draftHydrated, clearAllDrafts, loadAllDrafts, saveTimeline]);
 
   // Handle navigation from Homepage (or /ai) with a specific timeline to load
   useEffect(() => {
@@ -259,7 +268,7 @@ export function App() {
       }
       routerNavigate('/editor', { replace: true, state: {} });
     }
-  }, [location.state, user]);
+  }, [location.state, user, routerNavigate, setDescription, setEvents, setTitle, switchTimeline, updateCategories]);
 
   const handleTimelineSwitch = async (newTimelineId: string) => {
     if (newTimelineId === 'new') {
@@ -296,7 +305,7 @@ export function App() {
     handleScaleChange(draft.scale);
   };
 
-  const switchTimeline = async (newTimelineId: string) => {
+  const switchTimeline = useCallback(async (newTimelineId: string) => {
     try {
       // Load new data first — don't clear state until we have the replacement
       const { title: newTitle, description: newDescription, events: newEvents, categories: newCategories, scale: newScale } = await loadTimeline(newTimelineId);
@@ -315,7 +324,7 @@ export function App() {
       console.error('Error switching timeline:', error);
       alert('Failed to load timeline. Please try again.');
     }
-  };
+  }, [loadTimeline, setTitle, setDescription, setEvents, updateCategories, resetCategories, handleScaleChange]);
 
   const handleDiscardAndSwitch = async () => {
     if (pendingSwitchTimelineId) {

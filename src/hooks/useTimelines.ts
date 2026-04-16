@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { Timeline } from '../types/timeline';
 import { useAuth } from './useAuth';
@@ -12,7 +12,7 @@ export function useTimelines() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadTimelines = async (retryCount = 0) => {
+  const loadTimelines = useCallback(async (retryCount = 0) => {
     if (!user) {
       setTimelines([]);
       setIsLoading(false);
@@ -59,7 +59,7 @@ export function useTimelines() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     // Initial load
@@ -103,7 +103,7 @@ export function useTimelines() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user]);
+  }, [loadTimelines, user]);
 
   return { timelines, isLoading, error, loadTimelines };
 }
