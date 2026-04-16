@@ -1,6 +1,7 @@
 import type { TimelineEvent, CategoryConfig } from '../types/event'
 import { DEFAULT_CATEGORIES } from '../constants/categories'
 import { DEFAULT_TIMELINE_TITLE } from '../constants/defaults'
+import { getCurrentLimits } from '../lib/limits'
 
 export interface LocalDraft {
   id: string
@@ -13,7 +14,7 @@ export interface LocalDraft {
 }
 
 const STORAGE_KEY = 'timeline_drafts'
-export const MAX_DRAFTS = 3
+export const MAX_DRAFTS = getCurrentLimits().timelineLimit ?? Number.POSITIVE_INFINITY
 
 function generateId(): string {
   return crypto.randomUUID()
@@ -66,13 +67,11 @@ export function createDraft(): LocalDraft | null {
   const existingTitles = new Set(drafts.map(d => d.title))
   let title = DEFAULT_TIMELINE_TITLE
   if (existingTitles.has(title)) {
-    for (let i = 2; i <= MAX_DRAFTS; i++) {
-      const candidate = `${DEFAULT_TIMELINE_TITLE} ${i}`
-      if (!existingTitles.has(candidate)) {
-        title = candidate
-        break
-      }
+    let i = 2
+    while (existingTitles.has(`${DEFAULT_TIMELINE_TITLE} ${i}`)) {
+      i++
     }
+    title = `${DEFAULT_TIMELINE_TITLE} ${i}`
   }
 
   const draft: LocalDraft = {

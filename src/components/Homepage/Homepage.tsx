@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useTimelines } from '../../hooks/useTimelines';
 import { useTimelineMetadata } from '../../hooks/useTimelineMetadata';
+import { useEventUsage } from '../../hooks/useEventUsage';
 import { supabase } from '../../lib/supabase';
+import { isOverEventLimit, isOverTimelineLimit, getCurrentLimits } from '../../lib/limits';
 import { AuthModal } from '../Auth/AuthModal';
 import { ConfirmationModal } from '../Modal/ConfirmationModal';
 import { GlobalNav } from '@/components/Navigation/GlobalNav';
@@ -40,6 +42,7 @@ export function Homepage() {
   const metadata = useTimelineMetadata(timelineIds);
 
   const firstName = user ? getUserFirstName(user) : null
+  const { eventCount } = useEventUsage();
 
   // Load local drafts for logged-out users
   useEffect(() => {
@@ -50,8 +53,14 @@ export function Homepage() {
     }
   }, [user]);
 
-  const currentCount = user ? timelines.length : localDrafts.length;
-  const atLimit = currentCount >= 3;
+  const timelineCount = user ? timelines.length : localDrafts.length;
+  const eventLimitReached = user ? isOverEventLimit(eventCount) : false;
+  const timelineLimitReached = isOverTimelineLimit(timelineCount);
+  const atLimit = eventLimitReached || timelineLimitReached;
+  const limits = getCurrentLimits();
+  const limitMessage = eventLimitReached
+    ? `You've reached the ${limits.eventLimit}-event limit. Delete events to make room, or upgrade.`
+    : `You've reached the ${limits.timelineLimit}-timeline limit. Delete a timeline to create a new one, or upgrade.`;
 
   const handleTileClick = (timelineId: string) => {
     navigate('/editor', { state: { timelineId } });
@@ -305,7 +314,7 @@ export function Homepage() {
             </h2>
             {atLimit ? (
               <p className="font-avenir text-sm leading-5 text-[#9b9ea3] py-2">
-                You've reached the 3-timeline limit. Delete an existing timeline to create a new one.
+                {limitMessage}
               </p>
             ) : (
               <div className="flex flex-col sm:flex-row items-stretch gap-4 w-full">

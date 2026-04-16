@@ -2,6 +2,24 @@ import React, { useRef } from 'react';
 import { FileUp } from 'lucide-react';
 import { parseCSVEvents } from '../../utils/csvParser';
 import { TimelineEvent, CategoryConfig } from '../../types/event';
+import { supabase } from '../../lib/supabase';
+import { getCurrentLimits, isOverEventLimit } from '../../lib/limits';
+
+async function isAlreadyAtEventLimit(): Promise<{ limited: boolean; message: string }> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { limited: false, message: '' };
+  const { data, error } = await supabase.rpc('get_user_event_count');
+  if (error) return { limited: false, message: '' };
+  const count = typeof data === 'number' ? data : 0;
+  if (isOverEventLimit(count)) {
+    const { eventLimit } = getCurrentLimits();
+    return {
+      limited: true,
+      message: `You've reached the ${eventLimit}-event limit. Delete events to make room before importing, or upgrade.`,
+    };
+  }
+  return { limited: false, message: '' };
+}
 
 interface ImportCSVButtonProps {
   onImport: (events: Omit<TimelineEvent, 'id'>[], categories: CategoryConfig[]) => void;
@@ -20,6 +38,15 @@ export function ImportCSVButton({ onImport, categories }: ImportCSVButtonProps) 
     // Validate file type
     if (!file.name.toLowerCase().endsWith('.csv')) {
       alert('Please select a CSV file');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    const preflight = await isAlreadyAtEventLimit();
+    if (preflight.limited) {
+      alert(preflight.message);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }

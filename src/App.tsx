@@ -12,6 +12,15 @@ import { AuthModal } from './components/Auth/AuthModal';
 import { UnsavedChangesModal } from './components/Modal/UnsavedChangesModal';
 import { useLocalDraft } from './hooks/useLocalDraft';
 import { TimelineEvent, CategoryConfig } from './types/event';
+import { LimitReachedError, getCurrentLimits } from './lib/limits';
+
+function limitReachedMessage(kind: 'event' | 'timeline'): string {
+  const { eventLimit, timelineLimit } = getCurrentLimits();
+  if (kind === 'event') {
+    return `You've reached the ${eventLimit}-event limit. Delete events to make room, or upgrade.`;
+  }
+  return `You've reached the ${timelineLimit}-timeline limit. Delete a timeline to create a new one, or upgrade.`;
+}
 
 export function App() {
   const {
@@ -108,7 +117,7 @@ export function App() {
         // and seed it with the generated data.
         const newDraft = createDraft();
         if (!newDraft) {
-          alert('You\'ve reached the 3-timeline limit. Delete an existing timeline to create a new one.');
+          alert(limitReachedMessage('timeline'));
           routerNavigate('/', { replace: true });
           setDraftHydrated(true);
           return;
@@ -128,7 +137,7 @@ export function App() {
         // "Build from Scratch" — create draft immediately
         const newDraft = createDraft();
         if (!newDraft) {
-          alert('You\'ve reached the 3-timeline limit. Delete an existing timeline to create a new one.');
+          alert(limitReachedMessage('timeline'));
           routerNavigate('/', { replace: true });
           setDraftHydrated(true);
           return;
@@ -207,8 +216,10 @@ export function App() {
           try {
             await saveTimeline(draft.title, draft.events, draft.scale);
           } catch (err: unknown) {
-            if (err instanceof Error && err.message === 'Maximum limit of 3 timelines reached') {
-              alert('You\'ve reached the 3-timeline limit. Some drafts couldn\'t be saved. Delete an existing timeline to make room.');
+            if (err instanceof LimitReachedError) {
+              alert(
+                `${limitReachedMessage(err.kind)} Some drafts couldn't be saved.`
+              );
               break;
             } else {
               console.error('Failed to migrate draft:', err);

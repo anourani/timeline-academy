@@ -4,6 +4,36 @@ import { TimelineEvent, CategoryConfig } from '../types/event';
 import { useAuth } from './useAuth';
 import { DEFAULT_TIMELINE_TITLE } from '../constants/defaults';
 import { saveTimelineEvents } from '../utils/saveEvents';
+import {
+  LimitReachedError,
+  getCurrentLimits,
+  isOverEventLimit,
+  isOverTimelineLimit,
+} from '../lib/limits';
+
+async function checkCreateTimelineLimits(userId: string): Promise<void> {
+  const [eventsResult, timelinesResult] = await Promise.all([
+    supabase.rpc('get_user_event_count'),
+    supabase
+      .from('timelines')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId),
+  ]);
+
+  if (eventsResult.error) throw eventsResult.error;
+  if (timelinesResult.error) throw timelinesResult.error;
+
+  const { eventLimit, timelineLimit } = getCurrentLimits();
+  const eventCount = typeof eventsResult.data === 'number' ? eventsResult.data : 0;
+  const timelineCount = timelinesResult.count ?? 0;
+
+  if (isOverTimelineLimit(timelineCount)) {
+    throw new LimitReachedError('timeline', timelineLimit ?? 0);
+  }
+  if (isOverEventLimit(eventCount)) {
+    throw new LimitReachedError('event', eventLimit ?? 0);
+  }
+}
 
 interface TimelineData {
   title: string;
@@ -66,17 +96,7 @@ export function useTimeline() {
       setTimelineId(id === 'new' ? null : id);
       
       if (id === 'new') {
-        // Check timeline limit before creating
-        const { count, error: countError } = await supabase
-          .from('timelines')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', user.id);
-
-        if (countError) throw countError;
-        
-        if (count && count >= 3) {
-          throw new Error('Maximum limit of 3 timelines reached');
-        }
+        await checkCreateTimelineLimits(user.id);
 
         // Create a new timeline
         const { data: newTimeline, error: createError } = await supabase
@@ -147,17 +167,7 @@ export function useTimeline() {
 
     try {
       if (!timelineId) {
-        // Check timeline limit before saving
-        const { count, error: countError } = await supabase
-          .from('timelines')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', user.id);
-
-        if (countError) throw countError;
-        
-        if (count && count >= 3) {
-          throw new Error('Maximum limit of 3 timelines reached');
-        }
+        await checkCreateTimelineLimits(user.id);
 
         // Create new timeline
         const { data: timeline, error: timelineError } = await supabase
