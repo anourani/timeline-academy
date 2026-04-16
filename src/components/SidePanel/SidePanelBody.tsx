@@ -276,12 +276,10 @@ export function SidePanelBody() {
         </button>
       </div>
 
-      {/* Event Counter (signed-in only) */}
-      {user && (
-        <div className="px-3 pb-3 shrink-0">
-          <EventCounter />
-        </div>
-      )}
+      {/* Event Counter */}
+      <div className="px-3 pb-3 shrink-0">
+        <EventCounter />
+      </div>
 
       {/* Footer */}
       {user && (
