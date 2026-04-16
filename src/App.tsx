@@ -224,6 +224,27 @@ export function App() {
     }
   }, [user, draftHydrated, clearAllDrafts, loadAllDrafts, saveTimeline]);
 
+  const switchTimeline = useCallback(async (newTimelineId: string) => {
+    try {
+      // Load new data first — don't clear state until we have the replacement
+      const { title: newTitle, description: newDescription, events: newEvents, categories: newCategories, scale: newScale } = await loadTimeline(newTimelineId);
+
+      // Only update state after successful load
+      setTitle(newTitle);
+      setDescription(newDescription || '');
+      setEvents(newEvents);
+      if (newCategories) {
+        updateCategories(newCategories);
+      } else {
+        resetCategories();
+      }
+      handleScaleChange(newScale || 'large');
+    } catch (error) {
+      console.error('Error switching timeline:', error);
+      alert('Failed to load timeline. Please try again.');
+    }
+  }, [loadTimeline, setTitle, setDescription, setEvents, updateCategories, resetCategories, handleScaleChange]);
+
   // Handle navigation from Homepage (or /ai) with a specific timeline to load
   useEffect(() => {
     const state = location.state as {
@@ -304,27 +325,6 @@ export function App() {
     updateCategories(draft.categories);
     handleScaleChange(draft.scale);
   };
-
-  const switchTimeline = useCallback(async (newTimelineId: string) => {
-    try {
-      // Load new data first — don't clear state until we have the replacement
-      const { title: newTitle, description: newDescription, events: newEvents, categories: newCategories, scale: newScale } = await loadTimeline(newTimelineId);
-
-      // Only update state after successful load
-      setTitle(newTitle);
-      setDescription(newDescription || '');
-      setEvents(newEvents);
-      if (newCategories) {
-        updateCategories(newCategories);
-      } else {
-        resetCategories();
-      }
-      handleScaleChange(newScale || 'large');
-    } catch (error) {
-      console.error('Error switching timeline:', error);
-      alert('Failed to load timeline. Please try again.');
-    }
-  }, [loadTimeline, setTitle, setDescription, setEvents, updateCategories, resetCategories, handleScaleChange]);
 
   const handleDiscardAndSwitch = async () => {
     if (pendingSwitchTimelineId) {
