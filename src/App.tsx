@@ -31,7 +31,6 @@ export function App() {
   const [showAddEventModal, setShowAddEventModal] = useState(false);
   const [pendingScrollDate, setPendingScrollDate] = useState<string | null>(null);
   const [draftHydrated, setDraftHydrated] = useState(false);
-  const [nudgeDismissed, setNudgeDismissed] = useState(false);
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   const { loadAllDrafts, loadDraft, saveDraft, saveDraftImmediate, createDraft, clearAllDrafts } = useLocalDraft();
   const handledRouteStateRef = useRef(false);
@@ -457,26 +456,6 @@ export function App() {
         onAddEventClick={handleAddEventClick}
         onCloseAddEventModal={() => setShowAddEventModal(false)}
       />
-      {!user && events.length > 0 && !nudgeDismissed && (
-        <div className="mx-4 mt-2 px-4 py-3 bg-blue-900/40 border border-blue-800/50 rounded-lg flex items-center justify-between text-sm">
-          <span className="text-blue-200">
-            Your work isn't saved to the cloud yet.{' '}
-            <button
-              onClick={() => setShowAuthModal(true)}
-              className="text-blue-400 underline hover:text-blue-300"
-            >
-              Sign in
-            </button>
-            {' '}to save your timeline and access it from any device.
-          </span>
-          <button
-            onClick={() => setNudgeDismissed(true)}
-            className="text-gray-400 hover:text-white ml-4 shrink-0"
-          >
-            &#10005;
-          </button>
-        </div>
-      )}
       {timelineError ? (
         <div className="flex items-center justify-center py-20">
           <div className="bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full text-center">
