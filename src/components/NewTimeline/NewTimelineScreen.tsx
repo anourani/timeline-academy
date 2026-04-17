@@ -161,28 +161,30 @@ export function NewTimelineScreen({
               Generate a timeline of any subject
             </h1>
 
-            <input
-              ref={inputRef}
-              type="text"
-              value={name}
-              onChange={(e) => {
-                setName(e.target.value)
-                if (!isWorking) setShowSuggestions(true)
-              }}
-              onFocus={() => {
-                if (!isWorking) setShowSuggestions(true)
-              }}
-              placeholder={PLACEHOLDER_NAMES[placeholderIndex]}
-              disabled={isWorking}
-              className="block w-full font-['Aleo'] text-[32px] leading-[1.25] text-center text-text-secondary placeholder-text-tertiary bg-[#171717] border border-[#3d3e40] rounded-[12px] h-[80px] px-[16px] outline-none shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4)] focus:border-[#4d4e50] disabled:opacity-70"
-            />
-
-            {dropdownVisible && (
-              <SubjectSuggestions
-                query={name}
-                onSelect={handleSelectSuggestion}
+            <div className="flex flex-col items-center gap-[4px] w-[340px] max-w-full">
+              <input
+                ref={inputRef}
+                type="text"
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value)
+                  if (!isWorking) setShowSuggestions(true)
+                }}
+                onFocus={() => {
+                  if (!isWorking) setShowSuggestions(true)
+                }}
+                placeholder={PLACEHOLDER_NAMES[placeholderIndex]}
+                disabled={isWorking}
+                className="block w-full min-w-[280px] h-[62px] px-[10px] font-['Aleo'] text-[32px] leading-[1.25] text-center text-text-secondary placeholder-text-tertiary bg-[#171717] border border-[#404040] rounded-[8px] outline-none shadow-[0px_8px_32px_0px_rgba(155,158,163,0.04)] focus:border-[#4d4e50] disabled:opacity-70"
               />
-            )}
+
+              {dropdownVisible && (
+                <SubjectSuggestions
+                  query={name}
+                  onSelect={handleSelectSuggestion}
+                />
+              )}
+            </div>
 
             <div className="mt-[8px]">
               {isWorking ? (

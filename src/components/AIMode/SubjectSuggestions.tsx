@@ -9,7 +9,7 @@ interface SubjectSuggestionsProps {
 export function SubjectSuggestions({ query, onSelect }: SubjectSuggestionsProps) {
   const [highlight, setHighlight] = useState(0)
   const trimmed = query.trim()
-  const showPrefixBold = trimmed.length >= 3
+  const showPrefix = trimmed.length >= 3
 
   const suggestions = useMemo(() => {
     if (trimmed.length < 3) return DEFAULT_SUBJECT_SUGGESTIONS
@@ -40,11 +40,11 @@ export function SubjectSuggestions({ query, onSelect }: SubjectSuggestionsProps)
 
   return (
     <div
-      className="w-full flex flex-col gap-[2px] rounded-[12px] border border-[#3d3e40] bg-[#171717] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4)] p-[6px]"
+      className="flex flex-col items-stretch gap-[2px] w-[260px] max-w-full py-[12px] px-[4px] rounded-[8px] border border-[#262626] bg-[#171717] shadow-[0px_8px_32px_0px_rgba(155,158,163,0.04)]"
       role="listbox"
     >
       {suggestions.map((s, i) => {
-        const matchLen = showPrefixBold ? trimmed.length : 0
+        const matchLen = showPrefix ? trimmed.length : 0
         const prefix = s.slice(0, matchLen)
         const rest = s.slice(matchLen)
         return (
@@ -59,14 +59,14 @@ export function SubjectSuggestions({ query, onSelect }: SubjectSuggestionsProps)
             }}
             onMouseEnter={() => setHighlight(i)}
             className={[
-              "font-['Aleo'] text-[20px] leading-[1.25] text-left px-[12px] py-[8px] rounded-[8px] transition-colors",
+              "font-['Aleo'] text-[18px] leading-[1.4] font-normal text-left h-[33px] px-[12px] py-[4px] rounded-[8px] flex items-center transition-colors",
               i === highlight ? 'bg-[#262626]' : 'hover:bg-[#262626]',
             ].join(' ')}
           >
             {matchLen > 0 ? (
               <>
-                <span className="text-text-primary font-bold">{prefix}</span>
-                <span className="text-text-secondary">{rest}</span>
+                <span className="text-text-secondary">{prefix}</span>
+                <span className="text-text-tertiary">{rest}</span>
               </>
             ) : (
               <span className="text-text-secondary">{s}</span>
