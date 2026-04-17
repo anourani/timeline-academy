@@ -40,7 +40,7 @@ export function SubjectSuggestions({ query, onSelect }: SubjectSuggestionsProps)
 
   return (
     <div
-      className="absolute left-0 right-0 top-full mt-[8px] z-20 flex flex-col gap-[2px] rounded-[12px] border border-[#3d3e40] bg-[#171717] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4)] p-[6px]"
+      className="w-full flex flex-col gap-[2px] rounded-[12px] border border-[#3d3e40] bg-[#171717] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4)] p-[6px]"
       role="listbox"
     >
       {suggestions.map((s, i) => {

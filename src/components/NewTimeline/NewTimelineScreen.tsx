@@ -89,7 +89,7 @@ export function NewTimelineScreen({
   const [placeholderIndex, setPlaceholderIndex] = useState(0)
   const [showSuggestions, setShowSuggestions] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-  const inputWrapperRef = useRef<HTMLDivElement>(null)
+  const formRef = useRef<HTMLFormElement>(null)
 
   const isWorking = isClassifying || isGenerating
 
@@ -107,7 +107,7 @@ export function NewTimelineScreen({
   useEffect(() => {
     if (!showSuggestions) return
     const handleClick = (e: MouseEvent) => {
-      if (inputWrapperRef.current && !inputWrapperRef.current.contains(e.target as Node)) {
+      if (formRef.current && !formRef.current.contains(e.target as Node)) {
         setShowSuggestions(false)
       }
     }
@@ -152,36 +152,39 @@ export function NewTimelineScreen({
         <div className="px-4 pt-[120px] pb-[80px] flex flex-col items-center">
           <ModeSwitcher onStartFresh={onStartFresh} onImportCSV={onImportCSV} />
 
-          <h1 className="header-medium text-text-secondary mt-[64px] text-center">
-            Generate a timeline of any subject
-          </h1>
+          <form
+            ref={formRef}
+            onSubmit={handleSubmit}
+            className="mt-[64px] flex flex-col items-center gap-[16px] w-[364px] max-w-full"
+          >
+            <h1 className="header-small text-text-tertiary text-center">
+              Generate a timeline of any subject
+            </h1>
 
-          <form onSubmit={handleSubmit} className="w-full max-w-[480px] mt-[16px] flex flex-col items-center">
-            <div ref={inputWrapperRef} className="relative w-full">
-              <input
-                ref={inputRef}
-                type="text"
-                value={name}
-                onChange={(e) => {
-                  setName(e.target.value)
-                  if (!isWorking) setShowSuggestions(true)
-                }}
-                onFocus={() => {
-                  if (!isWorking) setShowSuggestions(true)
-                }}
-                placeholder={PLACEHOLDER_NAMES[placeholderIndex]}
-                disabled={isWorking}
-                className="block w-full font-['Aleo'] text-[32px] leading-[1.25] text-center text-text-secondary placeholder-text-tertiary bg-[#171717] border border-[#3d3e40] rounded-[12px] h-[80px] px-[16px] outline-none shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4)] focus:border-[#4d4e50] disabled:opacity-70"
+            <input
+              ref={inputRef}
+              type="text"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value)
+                if (!isWorking) setShowSuggestions(true)
+              }}
+              onFocus={() => {
+                if (!isWorking) setShowSuggestions(true)
+              }}
+              placeholder={PLACEHOLDER_NAMES[placeholderIndex]}
+              disabled={isWorking}
+              className="block w-full font-['Aleo'] text-[32px] leading-[1.25] text-center text-text-secondary placeholder-text-tertiary bg-[#171717] border border-[#3d3e40] rounded-[12px] h-[80px] px-[16px] outline-none shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4)] focus:border-[#4d4e50] disabled:opacity-70"
+            />
+
+            {dropdownVisible && (
+              <SubjectSuggestions
+                query={name}
+                onSelect={handleSelectSuggestion}
               />
-              {dropdownVisible && (
-                <SubjectSuggestions
-                  query={name}
-                  onSelect={handleSelectSuggestion}
-                />
-              )}
-            </div>
+            )}
 
-            <div className="mt-[24px]">
+            <div className="mt-[8px]">
               {isWorking ? (
                 <button
                   type="button"
