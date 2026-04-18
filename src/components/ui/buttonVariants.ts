@@ -20,7 +20,7 @@ export const buttonVariants = cva(
         "glass-sm":
           "backdrop-blur-[12px] bg-white/10 border border-white/[0.15] rounded-[10px] min-w-[80px] gap-1 px-[11px] py-[6px] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4),inset_0px_1px_0px_0px_rgba(255,255,255,0.1)] text-[#c9ced4] hover:bg-white/20 hover:border-transparent hover:text-[#dadee5] hover:cursor-pointer active:bg-[rgba(37,99,235,0.4)] active:border-transparent active:text-[#dadee5] data-[active=true]:bg-[rgba(37,99,235,0.4)] data-[active=true]:border-transparent data-[active=true]:text-[#dadee5]",
         "primary-sm":
-          "bg-[#2563eb] text-white h-[36px] px-[16px] rounded-[10px] font-avenir text-sm font-medium shadow-[inset_0px_1px_0px_0px_rgba(255,255,255,0.15)] hover:bg-[#1d4ed8] hover:cursor-pointer",
+          "backdrop-blur-[12px] bg-[rgba(37,99,235,0.8)] border border-white/[0.15] rounded-[10px] h-[33px] min-w-[80px] gap-1 px-[10px] py-[5px] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4),inset_0px_1px_0px_1px_rgba(255,255,255,0.1)] text-white font-avenir text-sm font-medium hover:bg-[rgba(37,99,235,0.9)] hover:cursor-pointer",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",
