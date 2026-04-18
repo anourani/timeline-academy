@@ -10,6 +10,7 @@ export interface LocalDraft {
   events: TimelineEvent[]
   categories: CategoryConfig[]
   scale: 'large' | 'small'
+  groupByCategory?: boolean
   savedAt: string
 }
 
@@ -81,6 +82,7 @@ export function createDraft(): LocalDraft | null {
     events: [],
     categories: [...DEFAULT_CATEGORIES],
     scale: 'large',
+    groupByCategory: false,
     savedAt: new Date().toISOString(),
   }
 

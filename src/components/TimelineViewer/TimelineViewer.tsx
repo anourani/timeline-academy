@@ -14,6 +14,7 @@ interface TimelineData {
   events: TimelineEvent[];
   categories: CategoryConfig[];
   scale: 'large' | 'small';
+  groupByCategory: boolean;
 }
 
 export function TimelineViewer() {
@@ -50,7 +51,8 @@ export function TimelineViewer() {
             description: draft.description || '',
             events: draft.events || [],
             categories,
-            scale: draft.scale || 'large'
+            scale: draft.scale || 'large',
+            groupByCategory: draft.groupByCategory ?? false
           });
         } catch {
           setError('Failed to load local draft');
@@ -104,7 +106,8 @@ export function TimelineViewer() {
           description: timelineData.description || '',
           events: formattedEvents,
           categories: categories,
-          scale: timelineData.scale || 'large'
+          scale: timelineData.scale || 'large',
+          groupByCategory: timelineData.group_by_category ?? false
         });
       } catch (err) {
         console.error('Error loading timeline:', err);
@@ -162,10 +165,11 @@ export function TimelineViewer() {
       </div>
 
       <main className="timeline-container relative mt-4">
-        <Timeline 
+        <Timeline
           events={timeline.events}
           categories={timeline.categories}
           scale={SCALES[timeline.scale]}
+          groupByCategory={timeline.groupByCategory}
         />
       </main>
     </div>

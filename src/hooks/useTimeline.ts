@@ -40,6 +40,8 @@ interface TimelineData {
   description?: string;
   events: TimelineEvent[];
   categories?: CategoryConfig[];
+  scale?: 'large' | 'small';
+  groupByCategory?: boolean;
 }
 
 export function useTimeline() {
@@ -114,7 +116,9 @@ export function useTimeline() {
           title: DEFAULT_TIMELINE_TITLE,
           description: '',
           events: [],
-          categories: undefined // Will use default categories
+          categories: undefined, // Will use default categories
+          scale: 'large',
+          groupByCategory: false
         };
       }
 
@@ -153,7 +157,9 @@ export function useTimeline() {
           endDate: event.end_date,
           category: event.category
         })),
-        categories: categories || undefined
+        categories: categories || undefined,
+        scale: timeline.scale || 'large',
+        groupByCategory: timeline.group_by_category ?? false
       };
     } catch (error) {
       // Reset timelineId if there was an error

@@ -25,6 +25,8 @@ interface HeaderProps {
   onEventsChange: (events: TimelineEvent[]) => void;
   scale: 'large' | 'small';
   onScaleChange: (scale: 'large' | 'small') => void;
+  groupByCategory: boolean;
+  onGroupByCategoryChange: (value: boolean) => void;
   activePanel: 'events' | 'settings' | null;
   onActivePanelChange: (panel: 'events' | 'settings' | null) => void;
   showAddEventModal: boolean;
@@ -46,6 +48,8 @@ export function Header({
   onEventsChange,
   scale,
   onScaleChange,
+  groupByCategory,
+  onGroupByCategoryChange,
   activePanel,
   onActivePanelChange,
   showAddEventModal,
@@ -102,6 +106,8 @@ export function Header({
         onCategoriesChange={onCategoriesChange}
         scale={scale}
         onScaleChange={onScaleChange}
+        groupByCategory={groupByCategory}
+        onGroupByCategoryChange={onGroupByCategoryChange}
       />
 
       <EventTableEditor
