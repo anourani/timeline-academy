@@ -1,4 +1,5 @@
 import { useEffect } from "react"
+import { createPortal } from "react-dom"
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
@@ -26,7 +27,9 @@ export function FeedbackPanel({ open, onOpenChange }: FeedbackPanelProps) {
     return () => document.removeEventListener("keydown", handler)
   }, [open, onOpenChange])
 
-  return (
+  if (typeof document === "undefined") return null
+
+  return createPortal(
     <aside
       className={`fixed inset-y-0 right-0 z-40 w-[320px] pr-[6px] py-[6px] transition-transform duration-300 ease-out ${
         open ? "translate-x-0" : "translate-x-full"
@@ -85,6 +88,7 @@ export function FeedbackPanel({ open, onOpenChange }: FeedbackPanelProps) {
           </div>
         </div>
       </div>
-    </aside>
+    </aside>,
+    document.body
   )
 }
