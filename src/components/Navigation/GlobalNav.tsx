@@ -61,7 +61,7 @@ export function GlobalNav({
     <div>
       <div className="flex h-[80px] items-start gap-5 px-6 py-[22px] relative">
         {/* Left cluster: panel toggle + optional timeline identity */}
-        <div className="flex items-center gap-5 min-w-0">
+        <div className="flex items-start gap-5 min-w-0">
           <div
             className={`shrink-0 overflow-visible transition-[max-width,opacity,margin] duration-300 ease-out ${
               isPanelOpen ? 'max-w-0 opacity-0 pointer-events-none -ml-5' : 'max-w-[48px] opacity-100'
@@ -93,16 +93,16 @@ export function GlobalNav({
                   placeholder="Untitled Timeline"
                   aria-label="Timeline name"
                   size={Math.max((timelineTitle ?? '').length, 'Untitled Timeline'.length)}
-                  className="font-['Aleo',serif] font-normal text-[18px] leading-[1.4] text-[#9b9ea3] hover:text-[#c9ced4] focus:text-[#dadee5] bg-transparent border-none outline-none caret-white min-w-0 p-0"
+                  className="font-['Aleo',serif] font-normal text-[18px] leading-[1.4] text-text-secondary hover:text-text-primary focus:text-text-primary bg-transparent border-none outline-none caret-white min-w-0 p-0"
                   style={{ fieldSizing: 'content' } as CSSProperties}
                 />
               ) : (
-                <p className="font-['Aleo',serif] font-normal text-[18px] leading-[1.4] text-[#9b9ea3] truncate">
+                <p className="font-['Aleo',serif] font-normal text-[18px] leading-[1.4] text-text-secondary truncate">
                   {timelineTitle || 'Untitled Timeline'}
                 </p>
               )}
               <div className="flex items-center gap-2 shrink-0">
-                <span className="font-['JetBrains_Mono',monospace] font-light text-[12px] leading-[1.4] text-[#c9ced4] whitespace-nowrap">
+                <span className="font-['JetBrains_Mono',monospace] font-light text-[12px] leading-[1.4] text-text-tertiary whitespace-nowrap">
                   {yearRange}
                 </span>
                 <span
@@ -110,7 +110,7 @@ export function GlobalNav({
                   style={{ backgroundColor: timelineAccentColor }}
                   aria-hidden
                 />
-                <span className="font-['JetBrains_Mono',monospace] font-light text-[12px] leading-[1.4] text-[#c9ced4] whitespace-nowrap">
+                <span className="font-['JetBrains_Mono',monospace] font-light text-[12px] leading-[1.4] text-text-tertiary whitespace-nowrap">
                   {eventCountLabel}
                 </span>
               </div>
