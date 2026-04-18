@@ -190,7 +190,7 @@ export function NewTimelineScreen({
                 <button
                   type="button"
                   onClick={handleCancel}
-                  className="relative inline-flex items-center justify-center h-[33px] min-w-[80px] px-[10px] py-[5px] rounded-[10px] border border-[rgba(255,255,255,0.15)] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4)] font-avenir text-sm font-medium text-text-secondary"
+                  className="relative inline-flex items-center justify-center h-[36px] min-w-[80px] px-[16px] rounded-[10px] border border-[rgba(255,255,255,0.15)] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4)] font-avenir text-sm font-medium text-text-secondary"
                 >
                   <div aria-hidden="true" className="absolute inset-0 rounded-[10px] backdrop-blur-[12px] bg-[rgba(255,255,255,0.1)] pointer-events-none" />
                   <span className="relative">Cancel</span>
