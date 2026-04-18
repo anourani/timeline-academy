@@ -30,13 +30,21 @@ export function FeedbackPanel({ open, onOpenChange }: FeedbackPanelProps) {
   if (typeof document === "undefined") return null
 
   return createPortal(
-    <aside
-      className={`fixed inset-y-0 right-0 z-40 w-[320px] pr-[6px] py-[6px] transition-transform duration-300 ease-out ${
-        open ? "translate-x-0" : "translate-x-full"
-      }`}
-      aria-hidden={!open}
-      aria-label="Feedback side panel"
-    >
+    <>
+      <div
+        onClick={() => onOpenChange(false)}
+        className={`fixed inset-0 z-40 bg-black/50 transition-opacity duration-300 ease-out ${
+          open ? "opacity-100" : "opacity-0 pointer-events-none"
+        }`}
+        aria-hidden="true"
+      />
+      <aside
+        className={`fixed inset-y-0 right-0 z-50 w-[320px] pr-[6px] py-[6px] transition-transform duration-300 ease-out ${
+          open ? "translate-x-0" : "translate-x-full"
+        }`}
+        aria-hidden={!open}
+        aria-label="Feedback side panel"
+      >
       <div className="h-full w-full bg-[#171717] rounded-[6px] border border-[#262626] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-2 border-b border-[#404040] shrink-0">
@@ -88,7 +96,8 @@ export function FeedbackPanel({ open, onOpenChange }: FeedbackPanelProps) {
           </div>
         </div>
       </div>
-    </aside>,
+      </aside>
+    </>,
     document.body
   )
 }
