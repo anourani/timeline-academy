@@ -208,7 +208,7 @@ export function Timeline({
   const rowHeight = groupByCategory ? EVENT_HEIGHT : EVENT_ROW_HEIGHT;
 
   return (
-    <div className={isFullScreen ? 'h-[calc(100vh-6rem)]' : 'relative'}>
+    <div className={isFullScreen ? 'h-[calc(100vh-6rem)] relative' : 'flex-1 min-h-0 flex flex-col relative'}>
       {showCategoryLabels && (
         <div
           className="absolute left-0 z-10 pointer-events-none"
@@ -221,92 +221,84 @@ export function Timeline({
         </div>
       )}
 
-      <div className="relative">
+      <div className="relative flex-1 min-h-0 flex flex-col">
         <TimelineScrollIndicator
           months={months}
           visibleRange={visibleRange}
         />
-        <div className="overflow-hidden">
+        <div
+          ref={scrollContainerRef}
+          className="flex-1 min-h-0 overflow-auto scrollbar-hide"
+        >
           <div
-            ref={scrollContainerRef}
-            className="overflow-x-auto scrollbar-hide"
+            className="relative timeline-grid transition-[min-width] duration-200 ease-in-out flex flex-col"
+            style={{
+              minWidth: `${months.length * scale.monthWidth}px`,
+              minHeight: '100%',
+              cursor: onAddEvent ? 'pointer' : 'default'
+            }}
           >
-            <div
-              className="relative timeline-grid transition-all duration-200 ease-in-out"
-              style={{
-                display: 'grid',
-                gridTemplateColumns: `repeat(${months.length * 4}, ${scale.quarterWidth}px)`,
-                minWidth: `${months.length * scale.monthWidth}px`,
-                cursor: onAddEvent ? 'pointer' : 'default'
-              }}
-            >
-              <TimelineHeader months={months} scale={scale} />
-              {layout.bands.map((band) => (
-                <div
-                  key={`band-${band.id}`}
-                  className="relative border-l border-[#171717]"
-                  style={{
-                    height: band.height,
-                    gridColumn: `1 / span ${months.length * 4}`,
-                    display: 'grid',
-                    gridTemplateColumns: `repeat(${months.length * 4}, ${scale.quarterWidth}px)`,
-                    gridAutoRows: `${rowHeight}px`,
-                    gap: 0,
-                  }}
-                >
-                  <TimelineGrid
-                    months={months}
-                    height={band.height}
-                    onMonthHover={setHoveredMonth}
-                    onMonthClick={handleMonthClick}
-                    scale={scale}
-                  />
-                  {band.events.map((event) => (
-                    <TimelineEvent
-                      key={event.id}
-                      event={event}
-                      months={months}
-                      categoryOffset={band.offset}
-                      categoryColor={visibleCategories.find(c => c.id === event.category)?.color}
-                      onEventClick={onUpdateEvent ? handleEventClick : undefined}
-                      scale={scale}
-                      isDragging={dragState.isDragging && dragState.draggedEventId === event.id}
-                      dragDeltaPixels={dragState.draggedEventId === event.id ? dragState.deltaPixels : 0}
-                      onPointerDown={onUpdateEvent ? handlePointerDown : undefined}
-                      rowHeight={rowHeight}
-                      onMounted={handleEventMounted}
-                    />
-                  ))}
-                </div>
-              ))}
-
-              {/* Filler row: extends vertical grid lines to bottom of viewport */}
+            <TimelineHeader months={months} scale={scale} />
+            {layout.bands.map((band) => (
               <div
-                className="relative border-l border-[#171717]"
+                key={`band-${band.id}`}
+                className="relative border-l border-[#171717] shrink-0"
                 style={{
-                  gridColumn: `1 / span ${months.length * 4}`,
-                  minHeight: `calc(100vh - ${layout.totalHeight + HEADER_HEIGHT + SCROLL_INDICATOR_HEIGHT}px - 6rem)`,
+                  height: band.height,
+                  display: 'grid',
+                  gridTemplateColumns: `repeat(${months.length * 4}, ${scale.quarterWidth}px)`,
+                  gridAutoRows: `${rowHeight}px`,
+                  gap: 0,
                 }}
               >
                 <TimelineGrid
                   months={months}
+                  height={band.height}
                   onMonthHover={setHoveredMonth}
                   onMonthClick={handleMonthClick}
                   scale={scale}
                 />
+                {band.events.map((event) => (
+                  <TimelineEvent
+                    key={event.id}
+                    event={event}
+                    months={months}
+                    categoryOffset={band.offset}
+                    categoryColor={visibleCategories.find(c => c.id === event.category)?.color}
+                    onEventClick={onUpdateEvent ? handleEventClick : undefined}
+                    scale={scale}
+                    isDragging={dragState.isDragging && dragState.draggedEventId === event.id}
+                    dragDeltaPixels={dragState.draggedEventId === event.id ? dragState.deltaPixels : 0}
+                    onPointerDown={onUpdateEvent ? handlePointerDown : undefined}
+                    rowHeight={rowHeight}
+                    onMounted={handleEventMounted}
+                  />
+                ))}
               </div>
+            ))}
 
-              {/* Add Event Cursor — hidden during drag */}
-              {hoveredMonth !== null && onAddEvent && !dragState.isDragging && (
-                <div
-                  className="absolute top-[64px] bottom-0 bg-[#FBFBFB]/25 pointer-events-none transition-transform duration-75 ease-out"
-                  style={{
-                    transform: `translateX(${hoveredMonth * scale.monthWidth}px)`,
-                    width: `${scale.monthWidth}px`,
-                  }}
-                />
-              )}
+            {/* Filler: extends vertical grid lines through remaining space.
+                flex-1 lets it fill the scroll container when events are short,
+                and the whole grid scrolls vertically when they aren't. */}
+            <div className="relative border-l border-[#171717] flex-1 min-h-0">
+              <TimelineGrid
+                months={months}
+                onMonthHover={setHoveredMonth}
+                onMonthClick={handleMonthClick}
+                scale={scale}
+              />
             </div>
+
+            {/* Add Event Cursor — hidden during drag */}
+            {hoveredMonth !== null && onAddEvent && !dragState.isDragging && (
+              <div
+                className="absolute top-[64px] bottom-0 bg-[#FBFBFB]/25 pointer-events-none transition-transform duration-75 ease-out"
+                style={{
+                  transform: `translateX(${hoveredMonth * scale.monthWidth}px)`,
+                  width: `${scale.monthWidth}px`,
+                }}
+              />
+            )}
           </div>
         </div>
 

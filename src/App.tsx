@@ -481,7 +481,7 @@ export function App() {
   };
 
   return (
-    <div className="app-container min-h-screen bg-black text-white overflow-auto">
+    <div className="app-container h-screen bg-black text-white overflow-hidden flex flex-col">
       <GlobalNav
         variant="timeline"
         timelineId={timelineId}
@@ -520,7 +520,7 @@ export function App() {
         onCloseAddEventModal={() => setShowAddEventModal(false)}
       />
       {!user && events.length > 0 && !nudgeDismissed && (
-        <div className="mx-4 mt-2 px-4 py-3 bg-blue-900/40 border border-blue-800/50 rounded-lg flex items-center justify-between text-sm">
+        <div className="mx-4 mt-2 px-4 py-3 bg-blue-900/40 border border-blue-800/50 rounded-lg flex items-center justify-between text-sm shrink-0">
           <span className="text-blue-200">
             Your work isn't saved to the cloud yet.{' '}
             <button
@@ -540,7 +540,7 @@ export function App() {
         </div>
       )}
       {timelineError ? (
-        <div className="flex items-center justify-center py-20">
+        <div className="flex-1 flex items-center justify-center py-20">
           <div className="bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full text-center">
             <p className="text-red-400 mb-4">{timelineError}</p>
             <button
@@ -552,7 +552,7 @@ export function App() {
           </div>
         </div>
       ) : (
-        <main className="timeline-container relative mt-[140px]">
+        <main className="timeline-container relative flex-1 min-h-0 flex flex-col pt-[140px]">
           <Timeline
             events={events}
             categories={categories}
