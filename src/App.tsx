@@ -28,6 +28,7 @@ export function App() {
     title, description, setTitle, setDescription,
     categories, updateCategories, resetCategories,
     scale, currentScale, handleScaleChange,
+    groupByCategory, handleGroupByCategoryChange,
   } = useTimelineState();
   const { user } = useAuth();
   const { saveTimeline, timelineId, loadTimeline, error: timelineError, retryInitialLoad } = useTimeline();
@@ -53,7 +54,8 @@ export function App() {
     description,
     events,
     categories,
-    scale: currentScale.value
+    scale: currentScale.value,
+    groupByCategory,
   };
 
   const { saveStatus, lastSavedTime, handleChange } = useAutosave(timelineData);
@@ -91,10 +93,11 @@ export function App() {
         description,
         events,
         categories,
-        scale: currentScale.value
+        scale: currentScale.value,
+        groupByCategory,
       });
     }
-  }, [timelineId, title, description, events, categories, currentScale.value, handleChange]);
+  }, [timelineId, title, description, events, categories, currentScale.value, groupByCategory, handleChange]);
 
   // Hydrate from localStorage draft if logged out
   useEffect(() => {
@@ -178,6 +181,7 @@ export function App() {
           setEvents(draft.events);
           updateCategories(draft.categories);
           handleScaleChange(draft.scale);
+          handleGroupByCategoryChange(draft.groupByCategory ?? false);
         } else {
           routerNavigate('/ai', { replace: true });
           setDraftHydrated(true);
@@ -194,6 +198,7 @@ export function App() {
           setEvents(mostRecent.events);
           updateCategories(mostRecent.categories);
           handleScaleChange(mostRecent.scale);
+          handleGroupByCategoryChange(mostRecent.groupByCategory ?? false);
         } else {
           routerNavigate('/ai', { replace: true });
           setDraftHydrated(true);
@@ -205,7 +210,7 @@ export function App() {
       // Clear the route state so refreshing doesn't re-trigger
       routerNavigate('/editor', { replace: true, state: {} });
     }
-  }, [user, draftHydrated, createDraft, handleScaleChange, loadAllDrafts, loadDraft, location.state, routerNavigate, setDescription, setEvents, setTitle, updateCategories]);
+  }, [user, draftHydrated, createDraft, handleScaleChange, handleGroupByCategoryChange, loadAllDrafts, loadDraft, location.state, routerNavigate, setDescription, setEvents, setTitle, updateCategories]);
 
   // Save to localStorage when logged out
   useEffect(() => {
@@ -217,10 +222,11 @@ export function App() {
         events,
         categories,
         scale: currentScale.value,
+        groupByCategory,
         savedAt: new Date().toISOString()
       });
     }
-  }, [user, draftHydrated, activeDraftId, title, description, events, categories, currentScale.value, saveDraft]);
+  }, [user, draftHydrated, activeDraftId, title, description, events, categories, currentScale.value, groupByCategory, saveDraft]);
 
   // Migrate localStorage drafts to Supabase on login
   useEffect(() => {
@@ -258,7 +264,14 @@ export function App() {
   const switchTimeline = useCallback(async (newTimelineId: string) => {
     try {
       // Load new data first — don't clear state until we have the replacement
-      const { title: newTitle, description: newDescription, events: newEvents, categories: newCategories, scale: newScale } = await loadTimeline(newTimelineId);
+      const {
+        title: newTitle,
+        description: newDescription,
+        events: newEvents,
+        categories: newCategories,
+        scale: newScale,
+        groupByCategory: newGroupByCategory,
+      } = await loadTimeline(newTimelineId);
 
       // Only update state after successful load
       setTitle(newTitle);
@@ -270,11 +283,12 @@ export function App() {
         resetCategories();
       }
       handleScaleChange(newScale || 'large');
+      handleGroupByCategoryChange(newGroupByCategory ?? false);
     } catch (error) {
       console.error('Error switching timeline:', error);
       alert('Failed to load timeline. Please try again.');
     }
-  }, [loadTimeline, setTitle, setDescription, setEvents, updateCategories, resetCategories, handleScaleChange]);
+  }, [loadTimeline, setTitle, setDescription, setEvents, updateCategories, resetCategories, handleScaleChange, handleGroupByCategoryChange]);
 
   // Handle navigation from Homepage (or /ai) with a specific timeline to load
   useEffect(() => {
@@ -368,6 +382,7 @@ export function App() {
     setEvents(draft.events);
     updateCategories(draft.categories);
     handleScaleChange(draft.scale);
+    handleGroupByCategoryChange(draft.groupByCategory ?? false);
   };
 
   const handleDiscardAndSwitch = async () => {
@@ -436,6 +451,7 @@ export function App() {
         id: activeDraftId,
         title, description, events, categories,
         scale: currentScale.value,
+        groupByCategory,
         savedAt: new Date().toISOString()
       });
       window.open(`/view/local?draftId=${activeDraftId}`, '_blank');
@@ -465,7 +481,7 @@ export function App() {
   };
 
   return (
-    <div className="app-container min-h-screen bg-black text-white overflow-auto">
+    <div className="app-container h-screen bg-black text-white overflow-hidden flex flex-col">
       <GlobalNav
         variant="timeline"
         timelineId={timelineId}
@@ -495,6 +511,8 @@ export function App() {
         onEventsChange={handleBulkEventsChange}
         scale={scale}
         onScaleChange={handleScaleChange}
+        groupByCategory={groupByCategory}
+        onGroupByCategoryChange={handleGroupByCategoryChange}
         activePanel={activePanel}
         onActivePanelChange={setActivePanel}
         showAddEventModal={showAddEventModal}
@@ -502,7 +520,7 @@ export function App() {
         onCloseAddEventModal={() => setShowAddEventModal(false)}
       />
       {!user && events.length > 0 && !nudgeDismissed && (
-        <div className="mx-4 mt-2 px-4 py-3 bg-blue-900/40 border border-blue-800/50 rounded-lg flex items-center justify-between text-sm">
+        <div className="mx-4 mt-2 px-4 py-3 bg-blue-900/40 border border-blue-800/50 rounded-lg flex items-center justify-between text-sm shrink-0">
           <span className="text-blue-200">
             Your work isn't saved to the cloud yet.{' '}
             <button
@@ -522,7 +540,7 @@ export function App() {
         </div>
       )}
       {timelineError ? (
-        <div className="flex items-center justify-center py-20">
+        <div className="flex-1 flex items-center justify-center py-20">
           <div className="bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full text-center">
             <p className="text-red-400 mb-4">{timelineError}</p>
             <button
@@ -534,13 +552,14 @@ export function App() {
           </div>
         </div>
       ) : (
-        <main className="timeline-container relative mt-[140px]">
+        <main className="timeline-container relative flex-1 min-h-0 flex flex-col pt-[140px]">
           <Timeline
             events={events}
             categories={categories}
             onAddEvent={addEvent}
             onUpdateEvent={handleUpdateEvent}
             scale={currentScale}
+            groupByCategory={groupByCategory}
             pendingScrollDate={pendingScrollDate}
             onScrollComplete={() => setPendingScrollDate(null)}
           />

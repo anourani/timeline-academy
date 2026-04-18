@@ -8,10 +8,10 @@ import { TimelineOverview } from './TimelineOverview';
 import { TimelineEvent as ITimelineEvent, CategoryConfig } from '../../types/event';
 import { TimelineScale } from '../../types/timeline';
 import { getTimelineRange, shiftEventDates } from '../../utils/dateUtils';
-import { calculateEventStacks } from '../../utils/eventStacking';
+import { calculateEventStacks, StackedEvent } from '../../utils/eventStacking';
 import { useTimelineScroll } from '../../hooks/useTimelineScroll';
 import { useEventDrag } from '../../hooks/useEventDrag';
-import { EVENT_HEIGHT, CATEGORY_PADDING, CATEGORY_MIN_HEIGHT, SCROLL_INDICATOR_HEIGHT, HEADER_HEIGHT } from '../../constants/timeline';
+import { EVENT_HEIGHT, EVENT_ROW_HEIGHT, CATEGORY_PADDING, CATEGORY_MIN_HEIGHT, SCROLL_INDICATOR_HEIGHT, HEADER_HEIGHT } from '../../constants/timeline';
 import { EventForm } from '../EventForm/EventForm';
 import {
   Dialog,
@@ -24,11 +24,24 @@ interface TimelineProps {
   events: ITimelineEvent[];
   categories: CategoryConfig[];
   isFullScreen?: boolean;
-  onAddEvent?: (event: Omit<ITimelineEvent, 'id'>) => void;
+  onAddEvent?: (event: Omit<ITimelineEvent, 'id'>) => ITimelineEvent | void;
   onUpdateEvent?: (event: ITimelineEvent) => void;
   scale: TimelineScale;
+  groupByCategory?: boolean;
   pendingScrollDate?: string | null;
   onScrollComplete?: () => void;
+}
+
+interface CategoryBand {
+  id: string;
+  height: number;
+  offset: number;
+  events: StackedEvent[];
+}
+
+interface LayoutData {
+  bands: CategoryBand[];
+  totalHeight: number;
 }
 
 export function Timeline({
@@ -38,12 +51,13 @@ export function Timeline({
   onAddEvent,
   onUpdateEvent,
   scale,
+  groupByCategory = false,
   pendingScrollDate,
   onScrollComplete
 }: TimelineProps) {
   // Filter visible categories and their events
   const visibleCategories = categories.filter(cat => cat.visible);
-  const visibleEvents = events.filter(event => 
+  const visibleEvents = events.filter(event =>
     visibleCategories.some(cat => cat.id === event.category)
   );
 
@@ -53,7 +67,8 @@ export function Timeline({
   const [showEventModal, setShowEventModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [editingEvent, setEditingEvent] = useState<ITimelineEvent | null>(null);
-  
+  const [pendingScrollEventId, setPendingScrollEventId] = useState<string | null>(null);
+
   const { visibleRange } = useTimelineScroll(scrollContainerRef, months.length * 4);
 
   const scrollToDate = useCallback((dateStr: string) => {
@@ -93,32 +108,47 @@ export function Timeline({
     }
   }, [pendingScrollDate, scrollToDate, onScrollComplete]);
 
-  // Calculate stacks and heights for each category
-  const categoryData = React.useMemo(() => {
-    let currentOffset = 0;
-    const data = visibleCategories.map(category => {
-      const categoryEvents = visibleEvents.filter(event => event.category === category.id);
-      const stackedEvents = calculateEventStacks(categoryEvents, months, scale.monthWidth);
-      const maxStack = Math.max(...stackedEvents.map(event => event.stackIndex), 0);
-      
-      const height = (maxStack + 1) * EVENT_HEIGHT + CATEGORY_PADDING;
+  // Compute layout: either one band per visible category (grouped mode)
+  // or a single band containing all visible events (default).
+  const layout = React.useMemo<LayoutData>(() => {
+    if (groupByCategory) {
+      let currentOffset = 0;
+      const bands: CategoryBand[] = visibleCategories.map(category => {
+        const categoryEvents = visibleEvents.filter(event => event.category === category.id);
+        const stackedEvents = calculateEventStacks(categoryEvents, months, scale.monthWidth);
+        const maxStack = Math.max(...stackedEvents.map(event => event.stackIndex), 0);
 
-      const result = {
-        id: category.id,
-        height: Math.max(height, CATEGORY_MIN_HEIGHT),
-        offset: currentOffset,
-        events: stackedEvents,
+        const height = (maxStack + 1) * EVENT_HEIGHT + CATEGORY_PADDING;
+
+        const band: CategoryBand = {
+          id: category.id,
+          height: Math.max(height, CATEGORY_MIN_HEIGHT),
+          offset: currentOffset,
+          events: stackedEvents,
+        };
+
+        currentOffset += band.height;
+        return band;
+      });
+
+      return {
+        bands,
+        totalHeight: currentOffset || CATEGORY_MIN_HEIGHT,
       };
+    }
 
-      currentOffset += result.height;
-      return result;
-    });
+    // Default: single global stacking pass.
+    const stackedEvents = calculateEventStacks(visibleEvents, months, scale.monthWidth);
+    const maxStack = Math.max(...stackedEvents.map(event => event.stackIndex), 0);
+    const height = stackedEvents.length === 0
+      ? EVENT_ROW_HEIGHT
+      : (maxStack + 1) * EVENT_ROW_HEIGHT + CATEGORY_PADDING;
 
     return {
-      categories: data,
-      totalHeight: currentOffset || CATEGORY_MIN_HEIGHT,
+      bands: [{ id: 'all', height, offset: 0, events: stackedEvents }],
+      totalHeight: height,
     };
-  }, [visibleEvents, visibleCategories, months, scale.monthWidth]);
+  }, [groupByCategory, visibleEvents, visibleCategories, months, scale.monthWidth]);
 
   const handleMonthClick = useCallback((monthIndex: number) => {
     if (!onAddEvent || justDraggedRef.current) return;
@@ -140,10 +170,14 @@ export function Timeline({
   }, [onUpdateEvent, justDraggedRef]);
 
   const handleSubmit = useCallback((eventData: Omit<ITimelineEvent, 'id'>) => {
+    let newEventId: string | null = null;
     if (editingEvent) {
       onUpdateEvent?.({ ...eventData, id: editingEvent.id });
     } else {
-      onAddEvent?.(eventData);
+      const newEvent = onAddEvent?.(eventData);
+      if (newEvent && typeof newEvent === 'object' && 'id' in newEvent) {
+        newEventId = newEvent.id;
+      }
     }
     setShowEventModal(false);
     setEditingEvent(null);
@@ -152,104 +186,119 @@ export function Timeline({
     requestAnimationFrame(() => {
       scrollToDate(eventData.startDate);
     });
+
+    if (newEventId) {
+      // Defer until after the next layout pass so the event has a stackIndex
+      // and rendered DOM node we can scroll to.
+      setPendingScrollEventId(newEventId);
+    }
   }, [editingEvent, onAddEvent, onUpdateEvent, scrollToDate]);
 
-  return (
-    <div className={isFullScreen ? 'h-[calc(100vh-6rem)]' : 'relative'}>
-      <div
-        className="absolute left-0 z-10 pointer-events-none"
-        style={{ top: SCROLL_INDICATOR_HEIGHT + HEADER_HEIGHT, height: categoryData.totalHeight }}
-      >
-        <TimelineCategoryLabels
-          categories={categoryData.categories}
-          customCategories={visibleCategories}
-        />
-      </div>
+  const handleEventMounted = useCallback((eventId: string, node: HTMLDivElement | null) => {
+    if (!node) return;
+    if (eventId === pendingScrollEventId) {
+      // scrollIntoView handles vertical scroll on the page; horizontal scroll
+      // is handled separately by scrollToDate.
+      node.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+      setPendingScrollEventId(null);
+    }
+  }, [pendingScrollEventId]);
 
-      <div className="relative">
+  const showCategoryLabels = groupByCategory;
+  const rowHeight = groupByCategory ? EVENT_HEIGHT : EVENT_ROW_HEIGHT;
+
+  return (
+    <div className={isFullScreen ? 'h-[calc(100vh-6rem)] relative' : 'flex-1 min-h-0 flex flex-col relative'}>
+      {showCategoryLabels && (
+        <div
+          className="absolute left-0 z-10 pointer-events-none"
+          style={{ top: SCROLL_INDICATOR_HEIGHT + HEADER_HEIGHT, height: layout.totalHeight }}
+        >
+          <TimelineCategoryLabels
+            categories={layout.bands.map(b => ({ id: b.id, height: b.height }))}
+            customCategories={visibleCategories}
+          />
+        </div>
+      )}
+
+      <div className="relative flex-1 min-h-0 flex flex-col">
         <TimelineScrollIndicator
           months={months}
           visibleRange={visibleRange}
         />
-        <div className="overflow-hidden">
+        <div
+          ref={scrollContainerRef}
+          className="flex-1 min-h-0 overflow-auto scrollbar-hide"
+        >
           <div
-            ref={scrollContainerRef}
-            className="overflow-x-auto scrollbar-hide"
+            className="relative timeline-grid transition-[min-width] duration-200 ease-in-out flex flex-col"
+            style={{
+              minWidth: `${months.length * scale.monthWidth}px`,
+              minHeight: '100%',
+              cursor: onAddEvent ? 'pointer' : 'default'
+            }}
           >
-            <div 
-              className="relative timeline-grid transition-all duration-200 ease-in-out"
-              style={{ 
-                display: 'grid',
-                gridTemplateColumns: `repeat(${months.length * 4}, ${scale.quarterWidth}px)`,
-                minWidth: `${months.length * scale.monthWidth}px`,
-                cursor: onAddEvent ? 'pointer' : 'default'
-              }}
-            >
-              <TimelineHeader months={months} scale={scale} />
-              {categoryData.categories.map((category) => (
-                <div 
-                  key={`category-${category.id}`}
-                  className="relative border-l border-[#171717]"
-                  style={{ 
-                    height: category.height,
-                    gridColumn: `1 / span ${months.length * 4}`,
-                    display: 'grid',
-                    gridTemplateColumns: `repeat(${months.length * 4}, ${scale.quarterWidth}px)`,
-                    gridAutoRows: `${EVENT_HEIGHT}px`,
-                    gap: 0,
-                  }}
-                >
-                  <TimelineGrid 
-                    months={months} 
-                    height={category.height}
-                    onMonthHover={setHoveredMonth}
-                    onMonthClick={handleMonthClick}
-                    scale={scale}
-                  />
-                  {category.events.map((event) => (
-                    <TimelineEvent
-                      key={event.id}
-                      event={event}
-                      months={months}
-                      categoryOffset={category.offset}
-                      categoryColor={visibleCategories.find(c => c.id === category.id)?.color}
-                      onEventClick={onUpdateEvent ? handleEventClick : undefined}
-                      scale={scale}
-                      isDragging={dragState.isDragging && dragState.draggedEventId === event.id}
-                      dragDeltaPixels={dragState.draggedEventId === event.id ? dragState.deltaPixels : 0}
-                      onPointerDown={onUpdateEvent ? handlePointerDown : undefined}
-                    />
-                  ))}
-                </div>
-              ))}
-
-              {/* Filler row: extends vertical grid lines to bottom of viewport */}
+            <TimelineHeader months={months} scale={scale} />
+            {layout.bands.map((band) => (
               <div
-                className="relative border-l border-[#171717]"
+                key={`band-${band.id}`}
+                className="relative border-l border-[#171717] shrink-0"
                 style={{
-                  gridColumn: `1 / span ${months.length * 4}`,
-                  minHeight: `calc(100vh - ${categoryData.totalHeight + HEADER_HEIGHT + SCROLL_INDICATOR_HEIGHT}px - 6rem)`,
+                  height: band.height,
+                  display: 'grid',
+                  gridTemplateColumns: `repeat(${months.length * 4}, ${scale.quarterWidth}px)`,
+                  gridAutoRows: `${rowHeight}px`,
+                  gap: 0,
                 }}
               >
                 <TimelineGrid
                   months={months}
+                  height={band.height}
                   onMonthHover={setHoveredMonth}
                   onMonthClick={handleMonthClick}
                   scale={scale}
                 />
+                {band.events.map((event) => (
+                  <TimelineEvent
+                    key={event.id}
+                    event={event}
+                    months={months}
+                    categoryOffset={band.offset}
+                    categoryColor={visibleCategories.find(c => c.id === event.category)?.color}
+                    onEventClick={onUpdateEvent ? handleEventClick : undefined}
+                    scale={scale}
+                    isDragging={dragState.isDragging && dragState.draggedEventId === event.id}
+                    dragDeltaPixels={dragState.draggedEventId === event.id ? dragState.deltaPixels : 0}
+                    onPointerDown={onUpdateEvent ? handlePointerDown : undefined}
+                    rowHeight={rowHeight}
+                    onMounted={handleEventMounted}
+                  />
+                ))}
               </div>
+            ))}
 
-              {/* Add Event Cursor — hidden during drag */}
-              {hoveredMonth !== null && onAddEvent && !dragState.isDragging && (
-                <div
-                  className="absolute top-[64px] bottom-0 bg-[#FBFBFB]/25 pointer-events-none transition-transform duration-75 ease-out"
-                  style={{
-                    transform: `translateX(${hoveredMonth * scale.monthWidth}px)`,
-                    width: `${scale.monthWidth}px`,
-                  }}
-                />
-              )}
+            {/* Filler: extends vertical grid lines through remaining space.
+                flex-1 lets it fill the scroll container when events are short,
+                and the whole grid scrolls vertically when they aren't. */}
+            <div className="relative border-l border-[#171717] flex-1 min-h-0">
+              <TimelineGrid
+                months={months}
+                onMonthHover={setHoveredMonth}
+                onMonthClick={handleMonthClick}
+                scale={scale}
+              />
             </div>
+
+            {/* Add Event Cursor — hidden during drag */}
+            {hoveredMonth !== null && onAddEvent && !dragState.isDragging && (
+              <div
+                className="absolute top-[64px] bottom-0 bg-[#FBFBFB]/25 pointer-events-none transition-transform duration-75 ease-out"
+                style={{
+                  transform: `translateX(${hoveredMonth * scale.monthWidth}px)`,
+                  width: `${scale.monthWidth}px`,
+                }}
+              />
+            )}
           </div>
         </div>
 

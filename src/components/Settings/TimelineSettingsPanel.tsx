@@ -38,7 +38,10 @@ interface TimelineSettingsPanelProps {
   onDescriptionChange: (description: string) => void;
   scale: 'large' | 'small';
   onScaleChange: (scale: 'large' | 'small') => void;
+  groupByCategory: boolean;
+  onGroupByCategoryChange: (value: boolean) => void;
   categories: CategoryConfig[];
+  onCategoriesChange?: (categories: CategoryConfig[]) => void;
 }
 
 export function TimelineSettingsPanel({
@@ -53,6 +56,8 @@ export function TimelineSettingsPanel({
   onDescriptionChange,
   scale,
   onScaleChange,
+  groupByCategory,
+  onGroupByCategoryChange,
   categories,
 }: TimelineSettingsPanelProps) {
   const [showClearConfirmation, setShowClearConfirmation] = useState(false);
@@ -211,6 +216,33 @@ export function TimelineSettingsPanel({
 
               <div className="border-t pt-4">
                 <ScaleSelector value={scale} onChange={onScaleChange} />
+              </div>
+
+              <div className="border-t pt-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="groupByCategoryToggle">Group by category</Label>
+                    <p className="text-xs text-muted-foreground">
+                      When on, events stack within their category band. When off, all events pack to the top of the timeline.
+                    </p>
+                  </div>
+                  <button
+                    id="groupByCategoryToggle"
+                    type="button"
+                    role="switch"
+                    aria-checked={groupByCategory}
+                    onClick={() => onGroupByCategoryChange(!groupByCategory)}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors mt-1 ${
+                      groupByCategory ? 'bg-primary' : 'bg-input'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-background shadow-lg ring-0 transition-transform ${
+                        groupByCategory ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
               </div>
 
               <div className="border-t pt-4">

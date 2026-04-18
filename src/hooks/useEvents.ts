@@ -9,12 +9,13 @@ export interface AddEventsResult {
 export function useEvents() {
   const [events, setEvents] = useState<TimelineEvent[]>([]);
 
-  const addEvent = useCallback((event: Omit<TimelineEvent, 'id'>) => {
+  const addEvent = useCallback((event: Omit<TimelineEvent, 'id'>): TimelineEvent => {
     const newEvent: TimelineEvent = {
       ...event,
       id: crypto.randomUUID(),
     };
     setEvents(prev => [...prev, newEvent]);
+    return newEvent;
   }, []);
 
   const updateEvent = useCallback((updatedEvent: TimelineEvent) => {
