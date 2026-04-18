@@ -89,6 +89,7 @@ export function NewTimelineScreen({
   const [placeholderIndex, setPlaceholderIndex] = useState(0)
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [hasEngaged, setHasEngaged] = useState(false)
+  const [renderDropdown, setRenderDropdown] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
 
@@ -143,6 +144,16 @@ export function NewTimelineScreen({
   const dropdownVisible =
     showSuggestions && !isWorking && suggestionsForQuery(name).length > 0
 
+  useEffect(() => {
+    if (dropdownVisible) {
+      setRenderDropdown(true)
+      return
+    }
+    if (!renderDropdown) return
+    const t = setTimeout(() => setRenderDropdown(false), 180)
+    return () => clearTimeout(t)
+  }, [dropdownVisible, renderDropdown])
+
   return (
     <div className="relative min-h-screen bg-surface-primary overflow-auto">
       <BackgroundPattern />
@@ -159,7 +170,7 @@ export function NewTimelineScreen({
               Generate a timeline of any subject
             </h1>
 
-            <div className="flex flex-col items-center gap-[4px] w-[340px] max-w-full">
+            <div className="relative w-[340px] max-w-full">
               <input
                 ref={inputRef}
                 type="text"
@@ -177,11 +188,18 @@ export function NewTimelineScreen({
                 className="block w-full min-w-[280px] h-[62px] px-[10px] font-['Aleo'] text-[32px] leading-[1.25] text-center text-text-secondary placeholder-text-tertiary bg-[#171717] border border-[#404040] rounded-[8px] outline-none shadow-[0px_8px_32px_0px_rgba(155,158,163,0.04)] focus:border-[#4d4e50] disabled:opacity-70"
               />
 
-              {dropdownVisible && (
-                <SubjectSuggestions
-                  query={name}
-                  onSelect={handleSelectSuggestion}
-                />
+              {renderDropdown && (
+                <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-20 flex justify-center">
+                  <div
+                    data-state={dropdownVisible ? 'open' : 'closed'}
+                    className="duration-150 ease-in data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-1 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-1 data-[state=closed]:pointer-events-none"
+                  >
+                    <SubjectSuggestions
+                      query={name}
+                      onSelect={handleSelectSuggestion}
+                    />
+                  </div>
+                </div>
               )}
             </div>
 
