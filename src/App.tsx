@@ -110,9 +110,29 @@ export function App() {
           events: TimelineEvent[];
           categories: CategoryConfig[];
         };
+        importedEvents?: TimelineEvent[];
       } | null;
 
-      if (routeState?.aiGenerated) {
+      if (routeState?.importedEvents) {
+        const newDraft = createDraft();
+        if (!newDraft) {
+          alert(limitReachedMessage('timeline'));
+          routerNavigate('/', { replace: true });
+          setDraftHydrated(true);
+          return;
+        }
+        const imported = routeState.importedEvents;
+        setActiveDraftId(newDraft.id);
+        setTitle(newDraft.title);
+        setDescription(newDraft.description);
+        setEvents(imported);
+        updateCategories(newDraft.categories);
+        handleScaleChange(newDraft.scale);
+        if (imported.length > 0) {
+          const earliest = imported.reduce((a, b) => a.startDate < b.startDate ? a : b);
+          setPendingScrollDate(earliest.startDate);
+        }
+      } else if (routeState?.aiGenerated) {
         // Arriving from /ai with a freshly generated timeline — create a draft
         // and seed it with the generated data.
         const newDraft = createDraft();
@@ -267,10 +287,23 @@ export function App() {
         events: TimelineEvent[];
         categories: CategoryConfig[];
       };
+      importedEvents?: TimelineEvent[];
     } | null;
     if (!user || handledRouteStateRef.current) return;
 
-    if (state?.aiGenerated) {
+    if (state?.importedEvents) {
+      handledRouteStateRef.current = true;
+      const imported = state.importedEvents;
+      (async () => {
+        await switchTimeline('new');
+        setEvents(imported);
+        if (imported.length > 0) {
+          const earliest = imported.reduce((a, b) => a.startDate < b.startDate ? a : b);
+          setPendingScrollDate(earliest.startDate);
+        }
+      })();
+      routerNavigate('/editor', { replace: true, state: {} });
+    } else if (state?.aiGenerated) {
       handledRouteStateRef.current = true;
       const aiData = state.aiGenerated;
       (async () => {
