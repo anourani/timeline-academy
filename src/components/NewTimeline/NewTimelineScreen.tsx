@@ -73,7 +73,7 @@ function suggestionsForQuery(query: string): string[] {
   const trimmed = query.trim()
   if (trimmed.length === 0) return DEFAULT_SUBJECT_SUGGESTIONS
   const lower = trimmed.toLowerCase()
-  return SUBJECT_SUGGESTIONS.filter((s) => s.toLowerCase().includes(lower))
+  return SUBJECT_SUGGESTIONS.filter((s) => s.toLowerCase().includes(lower)).slice(0, 6)
 }
 
 export function NewTimelineScreen({

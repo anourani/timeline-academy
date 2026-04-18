@@ -13,7 +13,7 @@ export function SubjectSuggestions({ query, onSelect }: SubjectSuggestionsProps)
 
   const suggestions = useMemo(() => {
     if (trimmed.length === 0) return DEFAULT_SUBJECT_SUGGESTIONS
-    return SUBJECT_SUGGESTIONS.filter((s) => s.toLowerCase().includes(lowerQuery))
+    return SUBJECT_SUGGESTIONS.filter((s) => s.toLowerCase().includes(lowerQuery)).slice(0, 6)
   }, [trimmed, lowerQuery])
 
   useEffect(() => {
