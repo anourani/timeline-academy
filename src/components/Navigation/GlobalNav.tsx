@@ -102,7 +102,7 @@ export function GlobalNav({
                 </p>
               )}
               <div className="flex items-center gap-2 shrink-0">
-                <span className="font-['JetBrains_Mono',monospace] font-light text-[12px] leading-[1.4] text-text-tertiary whitespace-nowrap">
+                <span className="label-s-type1 text-text-tertiary whitespace-nowrap">
                   {yearRange}
                 </span>
                 <span
@@ -110,7 +110,7 @@ export function GlobalNav({
                   style={{ backgroundColor: timelineAccentColor }}
                   aria-hidden
                 />
-                <span className="font-['JetBrains_Mono',monospace] font-light text-[12px] leading-[1.4] text-text-tertiary whitespace-nowrap">
+                <span className="label-s-type1 text-text-tertiary whitespace-nowrap">
                   {eventCountLabel}
                 </span>
               </div>
