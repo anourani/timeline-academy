@@ -59,7 +59,7 @@ export function GlobalNav({
 
   return (
     <div>
-      <div className="flex h-[64px] items-center gap-5 px-6 py-4 relative">
+      <div className="flex h-[80px] items-start gap-5 px-6 py-[22px] relative">
         {/* Left cluster: panel toggle + optional timeline identity */}
         <div className="flex items-center gap-5 min-w-0">
           <div
@@ -79,7 +79,7 @@ export function GlobalNav({
           </div>
 
           {showTitleCluster && (
-            <div className="flex items-center gap-6 min-w-0">
+            <div className="flex flex-col gap-1 min-w-0">
               {onTimelineTitleChange ? (
                 <input
                   type="text"
