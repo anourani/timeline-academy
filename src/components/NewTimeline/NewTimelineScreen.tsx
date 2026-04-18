@@ -192,7 +192,7 @@ export function NewTimelineScreen({
                 <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-20 flex justify-center">
                   <div
                     data-state={dropdownVisible ? 'open' : 'closed'}
-                    className="duration-150 ease-in data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-1 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-1 data-[state=closed]:pointer-events-none"
+                    className="duration-150 ease-in fill-mode-forwards data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-1 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-1 data-[state=closed]:pointer-events-none"
                   >
                     <SubjectSuggestions
                       query={name}
