@@ -63,15 +63,17 @@ export function SubjectSuggestions({ query, onSelect }: SubjectSuggestionsProps)
               i === highlight ? 'bg-[#262626]' : 'hover:bg-[#262626]',
             ].join(' ')}
           >
-            {matchIdx >= 0 ? (
-              <>
-                {before && <span className="text-text-tertiary">{before}</span>}
-                <span className="text-text-secondary">{match}</span>
-                {after && <span className="text-text-tertiary">{after}</span>}
-              </>
-            ) : (
-              <span className="text-text-secondary">{s}</span>
-            )}
+            <span className="flex-1 min-w-0 truncate">
+              {matchIdx >= 0 ? (
+                <>
+                  {before && <span className="text-text-tertiary">{before}</span>}
+                  <span className="text-text-secondary">{match}</span>
+                  {after && <span className="text-text-tertiary">{after}</span>}
+                </>
+              ) : (
+                <span className="text-text-secondary">{s}</span>
+              )}
+            </span>
           </button>
         )
       })}
