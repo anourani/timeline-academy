@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MoreVertical, PanelLeft, Trash2, LogOut, Video } from 'lucide-react'
+import { FileDown, MoreVertical, PanelLeft, Trash2, LogOut, Video } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useSidePanel } from '@/hooks/useSidePanel'
 import { useTimelines } from '@/hooks/useTimelines'
@@ -14,7 +14,8 @@ import {
 } from '@/components/ui/dialog'
 import { FeedbackPanel } from '@/components/FeedbackPanel/FeedbackPanel'
 import { DEFAULT_TIMELINE_TITLE } from '@/constants/defaults'
-import { getAllDrafts, deleteDraft as deleteLocalDraft, type LocalDraft } from '@/utils/draftStorage'
+import { getAllDrafts, getDraft, deleteDraft as deleteLocalDraft, type LocalDraft } from '@/utils/draftStorage'
+import { exportEventsToExcel } from '@/utils/excelExport'
 import { EventCounter } from './EventCounter'
 
 interface TileRow {
@@ -23,7 +24,7 @@ interface TileRow {
   kind: 'timeline' | 'draft'
 }
 
-function TileMenuButton({ onDelete }: { onDelete: () => void }) {
+function TileMenuButton({ onDelete, onExport }: { onDelete: () => void; onExport: () => void }) {
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
@@ -52,6 +53,17 @@ function TileMenuButton({ onDelete }: { onDelete: () => void }) {
           className="absolute right-0 top-[calc(100%+4px)] z-10 w-36 bg-[#171717] border border-[#404040] rounded-md py-1 shadow-lg"
           style={{ filter: 'drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3))' }}
         >
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              setOpen(false)
+              onExport()
+            }}
+            className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-[#c9ced4] hover:bg-white/5"
+          >
+            <FileDown size={14} />
+            Export data
+          </button>
           <button
             onClick={(e) => {
               e.stopPropagation()
@@ -131,6 +143,39 @@ export function SidePanelBody() {
   const confirmDelete = (row: TileRow) => {
     setPendingDeleteId(row.id)
     setPendingDeleteKind(row.kind)
+  }
+
+  const handleExport = async (row: TileRow) => {
+    try {
+      const title = row.title || DEFAULT_TIMELINE_TITLE
+      if (row.kind === 'draft') {
+        const draft = getDraft(row.id)
+        if (!draft) {
+          alert('Could not find draft to export.')
+          return
+        }
+        exportEventsToExcel(draft.events, title)
+        return
+      }
+
+      const { data, error: fetchError } = await supabase
+        .from('events')
+        .select('*')
+        .eq('timeline_id', row.id)
+      if (fetchError) throw fetchError
+
+      const events = (data || []).map(event => ({
+        id: event.id,
+        title: event.title,
+        startDate: event.start_date,
+        endDate: event.end_date,
+        category: event.category,
+      }))
+      exportEventsToExcel(events, title)
+    } catch (err) {
+      console.error('Failed to export timeline:', err)
+      alert('Failed to export. Please try again.')
+    }
   }
 
   const handleDelete = async () => {
@@ -249,7 +294,10 @@ export function SidePanelBody() {
                       isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
                     }`}
                   >
-                    <TileMenuButton onDelete={() => confirmDelete(row)} />
+                    <TileMenuButton
+                      onDelete={() => confirmDelete(row)}
+                      onExport={() => handleExport(row)}
+                    />
                   </div>
                 </div>
               )
