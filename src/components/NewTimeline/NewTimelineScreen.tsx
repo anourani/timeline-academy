@@ -71,9 +71,9 @@ function BackgroundPattern() {
 
 function suggestionsForQuery(query: string): string[] {
   const trimmed = query.trim()
-  if (trimmed.length < 3) return DEFAULT_SUBJECT_SUGGESTIONS
+  if (trimmed.length === 0) return DEFAULT_SUBJECT_SUGGESTIONS
   const lower = trimmed.toLowerCase()
-  return SUBJECT_SUGGESTIONS.filter((s) => s.toLowerCase().startsWith(lower))
+  return SUBJECT_SUGGESTIONS.filter((s) => s.toLowerCase().includes(lower))
 }
 
 export function NewTimelineScreen({
@@ -88,21 +88,19 @@ export function NewTimelineScreen({
   const [name, setName] = useState('')
   const [placeholderIndex, setPlaceholderIndex] = useState(0)
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const [hasEngaged, setHasEngaged] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
 
   const isWorking = isClassifying || isGenerating
 
   useEffect(() => {
+    if (hasEngaged) return
     const interval = setInterval(() => {
       setPlaceholderIndex((i) => (i + 1) % PLACEHOLDER_NAMES.length)
     }, 3000)
     return () => clearInterval(interval)
-  }, [])
-
-  useEffect(() => {
-    inputRef.current?.focus()
-  }, [])
+  }, [hasEngaged])
 
   useEffect(() => {
     if (!showSuggestions) return
@@ -171,9 +169,10 @@ export function NewTimelineScreen({
                   if (!isWorking) setShowSuggestions(true)
                 }}
                 onFocus={() => {
+                  setHasEngaged(true)
                   if (!isWorking) setShowSuggestions(true)
                 }}
-                placeholder={PLACEHOLDER_NAMES[placeholderIndex]}
+                placeholder={hasEngaged ? '' : PLACEHOLDER_NAMES[placeholderIndex]}
                 disabled={isWorking}
                 className="block w-full min-w-[280px] h-[62px] px-[10px] font-['Aleo'] text-[32px] leading-[1.25] text-center text-text-secondary placeholder-text-tertiary bg-[#171717] border border-[#404040] rounded-[8px] outline-none shadow-[0px_8px_32px_0px_rgba(155,158,163,0.04)] focus:border-[#4d4e50] disabled:opacity-70"
               />
