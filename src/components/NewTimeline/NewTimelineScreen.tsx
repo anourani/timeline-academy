@@ -202,12 +202,11 @@ export function NewTimelineScreen({
                   size="none"
                   disabled={!hasText}
                   className={[
-                    'gap-[6px] transition-opacity disabled:cursor-not-allowed',
+                    'transition-opacity disabled:cursor-not-allowed',
                     hasText ? 'opacity-100' : 'opacity-50',
                   ].join(' ')}
                 >
-                  <span className="text-base leading-none">↵</span>
-                  <span>Enter</span>
+                  Enter
                 </Button>
               )}
             </div>
