@@ -56,7 +56,7 @@ export function FeedbackPanel({ open, onOpenChange }: FeedbackPanelProps) {
             className="relative flex items-center justify-center p-1.5 rounded-lg border border-white/15 bg-white/10 backdrop-blur-[12px] text-[#c9ced4] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4),inset_0px_1px_0px_0px_rgba(255,255,255,0.1)] hover:bg-white/20 hover:text-[#dadee5] transition-colors"
             aria-label="Close feedback panel"
           >
-            <X size={20} />
+            <X size={16} strokeWidth={1.25} />
           </button>
         </div>
 

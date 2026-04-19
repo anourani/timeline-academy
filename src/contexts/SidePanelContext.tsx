@@ -20,6 +20,12 @@ interface SidePanelContextValue {
   /** Live title for the active timeline — lets the editor push title edits to the panel before autosave lands. */
   activeTimelineTitle: string | null
   setActiveTimelineTitle: (title: string | null) => void
+  /** Live event count for the active timeline/draft so the panel badge updates before autosave lands. */
+  activeEventCount: number | null
+  setActiveEventCount: (count: number | null) => void
+  /** Live dominant-category color for the active timeline/draft so the panel badge color stays in sync. */
+  activeDominantCategoryColor: string | null
+  setActiveDominantCategoryColor: (color: string | null) => void
 }
 
 export const SidePanelContext = createContext<SidePanelContextValue | null>(null)
@@ -29,6 +35,8 @@ export function SidePanelProvider({ children }: { children: ReactNode }) {
   const [activeTimelineId, setActiveTimelineId] = useState<string | null>(null)
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null)
   const [activeTimelineTitle, setActiveTimelineTitle] = useState<string | null>(null)
+  const [activeEventCount, setActiveEventCount] = useState<number | null>(null)
+  const [activeDominantCategoryColor, setActiveDominantCategoryColor] = useState<string | null>(null)
   const navigate = useNavigate()
   const customHandlerRef = useRef<TimelineSelectHandler | null>(null)
   const customDraftHandlerRef = useRef<DraftSelectHandler | null>(null)
@@ -76,7 +84,11 @@ export function SidePanelProvider({ children }: { children: ReactNode }) {
     setActiveDraftId,
     activeTimelineTitle,
     setActiveTimelineTitle,
-  }), [isOpen, open, close, toggle, onTimelineSelect, setOnTimelineSelect, onDraftSelect, setOnDraftSelect, activeTimelineId, activeDraftId, activeTimelineTitle])
+    activeEventCount,
+    setActiveEventCount,
+    activeDominantCategoryColor,
+    setActiveDominantCategoryColor,
+  }), [isOpen, open, close, toggle, onTimelineSelect, setOnTimelineSelect, onDraftSelect, setOnDraftSelect, activeTimelineId, activeDraftId, activeTimelineTitle, activeEventCount, activeDominantCategoryColor])
 
   return (
     <SidePanelContext.Provider value={value}>
