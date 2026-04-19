@@ -1,6 +1,5 @@
-import { createBrowserRouter, RouterProvider, Outlet } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Outlet, Navigate } from 'react-router-dom';
 import { App } from './App';
-import { Homepage } from './components/Homepage/Homepage';
 import { AIModePage } from './components/AIMode/AIModePage';
 import { TimelineViewer } from './components/TimelineViewer/TimelineViewer';
 import { SidePanelProvider } from './contexts/SidePanelContext';
@@ -20,9 +19,9 @@ const router = createBrowserRouter([
   {
     element: <LayoutRoute />,
     children: [
-      { path: '/', element: <Homepage /> },
+      { path: '/', element: <AIModePage /> },
       { path: '/editor', element: <App /> },
-      { path: '/ai', element: <AIModePage /> },
+      { path: '/ai', element: <Navigate to="/" replace /> },
     ],
   },
   {

@@ -1,6 +1,20 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FileDown, MoreVertical, PanelLeft, Trash2, LogOut, Video } from 'lucide-react'
+import {
+  Balloon,
+  Copy,
+  Download,
+  FileDown,
+  FileSpreadsheet,
+  Flower,
+  LogOut,
+  MoreVertical,
+  PanelLeft,
+  Share2,
+  Trash2,
+  Video,
+} from 'lucide-react'
+import { utils, writeFile } from 'xlsx'
 import { useAuth } from '@/hooks/useAuth'
 import { useSidePanel } from '@/hooks/useSidePanel'
 import { useTimelines } from '@/hooks/useTimelines'
@@ -13,10 +27,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { FeedbackPanel } from '@/components/FeedbackPanel/FeedbackPanel'
+import { ImportCSVModal } from '@/components/AIMode/ImportCSVModal'
 import { DEFAULT_TIMELINE_TITLE } from '@/constants/defaults'
 import { getAllDrafts, getDraft, deleteDraft as deleteLocalDraft, type LocalDraft } from '@/utils/draftStorage'
 import { exportEventsToExcel } from '@/utils/excelExport'
+import type { TimelineEvent } from '@/types/event'
 import { EventCounter } from './EventCounter'
+import { SidePanelActionButton } from './SidePanelActionButton'
 
 interface TileRow {
   id: string
@@ -24,7 +41,17 @@ interface TileRow {
   kind: 'timeline' | 'draft'
 }
 
-function TileMenuButton({ onDelete, onExport }: { onDelete: () => void; onExport: () => void }) {
+function TileMenuButton({
+  onShare,
+  onDuplicate,
+  onExport,
+  onDelete,
+}: {
+  onShare?: () => void
+  onDuplicate?: () => void
+  onExport: () => void
+  onDelete: () => void
+}) {
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
@@ -53,6 +80,32 @@ function TileMenuButton({ onDelete, onExport }: { onDelete: () => void; onExport
           className="absolute right-0 top-[calc(100%+4px)] z-10 w-36 bg-[#171717] border border-[#404040] rounded-md py-1 shadow-lg"
           style={{ filter: 'drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3))' }}
         >
+          {onShare && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setOpen(false)
+                onShare()
+              }}
+              className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-[#c9ced4] hover:bg-white/5"
+            >
+              <Share2 size={14} />
+              Share
+            </button>
+          )}
+          {onDuplicate && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setOpen(false)
+                onDuplicate()
+              }}
+              className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-[#c9ced4] hover:bg-white/5"
+            >
+              <Copy size={14} />
+              Duplicate
+            </button>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation()
@@ -92,6 +145,7 @@ export function SidePanelBody() {
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false)
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false)
   const [isVideoTutorialOpen, setIsVideoTutorialOpen] = useState(false)
+  const [isImportOpen, setIsImportOpen] = useState(false)
 
   useEffect(() => {
     if (!user) {
@@ -221,6 +275,101 @@ export function SidePanelBody() {
     }
   }
 
+  const handleBuildWithAI = () => {
+    navigate('/')
+  }
+
+  const handleBuildFromScratch = () => {
+    if (user) {
+      navigate('/editor', { state: { timelineId: 'new', skipCreationScreen: true } })
+    } else {
+      navigate('/editor', { state: { newTimeline: true, skipCreationScreen: true } })
+    }
+  }
+
+  const handleImportData = () => {
+    setIsImportOpen(true)
+  }
+
+  const handleDownloadTemplate = () => {
+    const wb = utils.book_new()
+    const headers = ['Event Title', 'Start Date', 'End Date', 'Category']
+    const instructions = [
+      '55 char limit',
+      'Format: MM/DD/YYYY',
+      'Format: MM/DD/YYYY',
+      'Must match a timeline category',
+    ]
+    const data = [
+      headers,
+      instructions,
+      ['Sample Event 1', '1/15/2024', '1/20/2024', 'Personal Life'],
+      ['Sample Event 2', '10/14/2024', '10/16/2024', 'Career'],
+    ]
+    const ws = utils.aoa_to_sheet(data)
+    utils.book_append_sheet(wb, ws, 'Timeline Events')
+    writeFile(wb, 'timeline-template.xlsx')
+  }
+
+  const handleImportEvents = (events: TimelineEvent[]) => {
+    setIsImportOpen(false)
+    navigate('/editor', { state: { importedEvents: events } })
+  }
+
+  const handleShare = (row: TileRow) => {
+    const shareUrl = `${window.location.origin}/view/${row.id}`
+    navigator.clipboard.writeText(shareUrl)
+    alert('Share link copied to clipboard!')
+  }
+
+  const handleDuplicate = async (row: TileRow) => {
+    if (!user) return
+    try {
+      const { data: original, error: fetchError } = await supabase
+        .from('timelines')
+        .select('*')
+        .eq('id', row.id)
+        .single()
+      if (fetchError || !original) throw fetchError
+
+      const { data: newTimeline, error: createError } = await supabase
+        .from('timelines')
+        .insert({
+          title: `${original.title} (Copy)`,
+          user_id: user.id,
+          scale: original.scale,
+        })
+        .select()
+        .single()
+      if (createError || !newTimeline) throw createError
+
+      const { data: events, error: eventsError } = await supabase
+        .from('events')
+        .select('*')
+        .eq('timeline_id', row.id)
+      if (eventsError) throw eventsError
+
+      if (events && events.length > 0) {
+        const newEvents = events.map((event) => ({
+          title: event.title,
+          start_date: event.start_date,
+          end_date: event.end_date,
+          category: event.category,
+          timeline_id: newTimeline.id,
+        }))
+        const { error: insertError } = await supabase
+          .from('events')
+          .insert(newEvents)
+        if (insertError) throw insertError
+      }
+
+      loadTimelines()
+    } catch (err) {
+      console.error('Error duplicating timeline:', err)
+      alert('Failed to duplicate timeline. Please try again.')
+    }
+  }
+
   return (
     <>
       {/* Header */}
@@ -238,6 +387,14 @@ export function SidePanelBody() {
         >
           <PanelLeft size={20} />
         </button>
+      </div>
+
+      {/* Creation actions */}
+      <div className="flex flex-col gap-1.5 p-3 shrink-0">
+        <SidePanelActionButton icon={Flower} label="Build with AI" onClick={handleBuildWithAI} />
+        <SidePanelActionButton icon={Balloon} label="Build from Scratch" onClick={handleBuildFromScratch} />
+        <SidePanelActionButton icon={FileSpreadsheet} label="Import Data" onClick={handleImportData} />
+        <SidePanelActionButton icon={Download} label="Download Template" onClick={handleDownloadTemplate} />
       </div>
 
       {/* Body */}
@@ -295,8 +452,10 @@ export function SidePanelBody() {
                     }`}
                   >
                     <TileMenuButton
-                      onDelete={() => confirmDelete(row)}
+                      onShare={row.kind === 'timeline' ? () => handleShare(row) : undefined}
+                      onDuplicate={row.kind === 'timeline' ? () => handleDuplicate(row) : undefined}
                       onExport={() => handleExport(row)}
+                      onDelete={() => confirmDelete(row)}
                     />
                   </div>
                 </div>
@@ -311,14 +470,14 @@ export function SidePanelBody() {
         <button
           type="button"
           onClick={() => setIsVideoTutorialOpen(true)}
-          className="w-full flex items-center px-[7px] py-[9px] rounded-[10px] border border-transparent backdrop-blur-[12px] font-['Avenir',sans-serif] font-medium text-[14px] leading-[1.5] text-[#9b9ea3] hover:bg-[#262626] hover:text-[#dadee5] transition-colors"
+          className="w-full flex items-center px-1.5 py-2 h-[38px] rounded-[10px] border border-transparent backdrop-blur-[12px] font-['Avenir',sans-serif] font-medium text-[14px] leading-[1.5] text-[#9b9ea3] hover:bg-[#262626] hover:text-[#dadee5] transition-colors"
         >
           How it Works
         </button>
         <button
           type="button"
           onClick={() => setIsFeedbackOpen(true)}
-          className="w-full flex items-center px-[7px] py-[9px] rounded-[10px] border border-transparent backdrop-blur-[12px] font-['Avenir',sans-serif] font-medium text-[14px] leading-[1.5] text-[#9b9ea3] hover:bg-[#262626] hover:text-[#dadee5] transition-colors"
+          className="w-full flex items-center px-1.5 py-2 h-[38px] rounded-[10px] border border-transparent backdrop-blur-[12px] font-['Avenir',sans-serif] font-medium text-[14px] leading-[1.5] text-[#9b9ea3] hover:bg-[#262626] hover:text-[#dadee5] transition-colors"
         >
           Feedback
         </button>
@@ -369,6 +528,12 @@ export function SidePanelBody() {
         message="Are you sure you want to sign out?"
         confirmLabel="Sign Out"
         cancelLabel="Cancel"
+      />
+
+      <ImportCSVModal
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        onImportEvents={handleImportEvents}
       />
 
       <FeedbackPanel open={isFeedbackOpen} onOpenChange={setIsFeedbackOpen} />

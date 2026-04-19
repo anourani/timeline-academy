@@ -136,7 +136,7 @@ export function App() {
           setPendingScrollDate(earliest.startDate);
         }
       } else if (routeState?.aiGenerated) {
-        // Arriving from /ai with a freshly generated timeline — create a draft
+        // Arriving from AI mode with a freshly generated timeline — create a draft
         // and seed it with the generated data.
         const newDraft = createDraft();
         if (!newDraft) {
@@ -172,7 +172,7 @@ export function App() {
         updateCategories(newDraft.categories);
         handleScaleChange(newDraft.scale);
       } else if (routeState?.draftId) {
-        // Clicking a local draft tile on Homepage
+        // Resuming a local draft (e.g. from the side panel)
         const draft = loadDraft(routeState.draftId);
         if (draft) {
           setActiveDraftId(draft.id);
@@ -183,7 +183,7 @@ export function App() {
           handleScaleChange(draft.scale);
           handleGroupByCategoryChange(draft.groupByCategory ?? false);
         } else {
-          routerNavigate('/ai', { replace: true });
+          routerNavigate('/', { replace: true });
           setDraftHydrated(true);
           return;
         }
@@ -200,7 +200,7 @@ export function App() {
           handleScaleChange(mostRecent.scale);
           handleGroupByCategoryChange(mostRecent.groupByCategory ?? false);
         } else {
-          routerNavigate('/ai', { replace: true });
+          routerNavigate('/', { replace: true });
           setDraftHydrated(true);
           return;
         }
@@ -290,7 +290,7 @@ export function App() {
     }
   }, [loadTimeline, setTitle, setDescription, setEvents, updateCategories, resetCategories, handleScaleChange, handleGroupByCategoryChange]);
 
-  // Handle navigation from Homepage (or /ai) with a specific timeline to load
+  // Handle navigation from AI mode or the side panel with a specific timeline to load
   useEffect(() => {
     const state = location.state as {
       timelineId?: string;
@@ -339,8 +339,8 @@ export function App() {
       if (state.timelineId === 'new' && state.skipCreationScreen) {
         switchTimeline('new');
       } else if (state.timelineId === 'new') {
-        // "new" without skipCreationScreen now means "go to AI mode"
-        routerNavigate('/ai', { replace: true });
+        // "new" without skipCreationScreen now means "go to AI mode" (which lives at /)
+        routerNavigate('/', { replace: true });
         return;
       } else {
         switchTimeline(state.timelineId);
@@ -351,7 +351,7 @@ export function App() {
 
   const handleTimelineSwitch = async (newTimelineId: string) => {
     if (newTimelineId === 'new') {
-      routerNavigate('/ai');
+      routerNavigate('/');
       return;
     }
 
@@ -425,7 +425,7 @@ export function App() {
   // Keep the side panel informed of which timeline/draft is active so it can
   // highlight it. useLayoutEffect ensures the context update commits
   // synchronously with the editor's render. Cleanup clears it on unmount so
-  // non-editor routes (e.g. Homepage) don't show a stale highlight.
+  // non-editor routes (e.g. AI mode) don't show a stale highlight.
   useLayoutEffect(() => {
     setActiveTimelineId(timelineId);
     return () => setActiveTimelineId(null);
