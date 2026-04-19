@@ -438,7 +438,7 @@ export function SidePanelBody() {
                   <button
                     type="button"
                     onClick={() => handleTileClick(row)}
-                    className={`flex-1 min-w-0 text-left font-['Avenir',sans-serif] text-[16px] leading-[24px] truncate bg-transparent border-none p-0 cursor-pointer transition-colors ${
+                    className={`flex-1 min-w-0 text-left body-m truncate bg-transparent border-none p-0 cursor-pointer transition-colors ${
                       isActive
                         ? 'text-[#dadee5]'
                         : 'text-[#9b9ea3] group-hover:text-[#dadee5]'
