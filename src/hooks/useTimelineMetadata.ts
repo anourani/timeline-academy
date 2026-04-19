@@ -3,14 +3,13 @@ import { supabase } from '../lib/supabase';
 import { getTimelineYearRange } from '../utils/timelineUtils';
 import { TimelineCategory } from '../types/event';
 import { DEFAULT_CATEGORIES } from '../constants/categories';
+import { computeDominantCategoryColor, DEFAULT_DOT_COLOR } from '../utils/dominantCategory';
 
 export interface TimelineMetadata {
   eventCount: number;
   yearRange: string;
   dominantCategoryColor: string;
 }
-
-const DEFAULT_DOT_COLOR = '#4196E4';
 
 export function useTimelineMetadata(timelineIds: string[]): Map<string, TimelineMetadata> {
   const [metadata, setMetadata] = useState<Map<string, TimelineMetadata>>(new Map());
@@ -80,29 +79,10 @@ export function useTimelineMetadata(timelineIds: string[]): Map<string, Timeline
           category: 'category_1' as TimelineCategory,
         }));
 
-        // Find dominant category color
-        const categoryCounts = new Map<string, number>();
-        for (const e of events) {
-          if (e.category) {
-            categoryCounts.set(e.category, (categoryCounts.get(e.category) || 0) + 1);
-          }
-        }
-        let dominantCategoryColor = DEFAULT_DOT_COLOR;
-        if (categoryCounts.size > 0) {
-          let maxCount = 0;
-          let dominantCategoryId = '';
-          for (const [catId, count] of categoryCounts) {
-            if (count > maxCount) {
-              maxCount = count;
-              dominantCategoryId = catId;
-            }
-          }
-          const categories = timelineCategoriesMap.get(timelineId) || DEFAULT_CATEGORIES;
-          const category = categories.find(c => c.id === dominantCategoryId);
-          if (category) {
-            dominantCategoryColor = category.color;
-          }
-        }
+        const dominantCategoryColor = computeDominantCategoryColor(
+          events,
+          timelineCategoriesMap.get(timelineId) ?? DEFAULT_CATEGORIES,
+        );
 
         result.set(timelineId, {
           eventCount: events.length,

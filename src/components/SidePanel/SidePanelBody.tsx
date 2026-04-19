@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Balloon,
@@ -18,6 +18,8 @@ import { utils, writeFile } from 'xlsx'
 import { useAuth } from '@/hooks/useAuth'
 import { useSidePanel } from '@/hooks/useSidePanel'
 import { useTimelines } from '@/hooks/useTimelines'
+import { useTimelineMetadata } from '@/hooks/useTimelineMetadata'
+import { computeDominantCategoryColor, DEFAULT_DOT_COLOR } from '@/utils/dominantCategory'
 import { supabase } from '@/lib/supabase'
 import { ConfirmationModal } from '@/components/Modal/ConfirmationModal'
 import {
@@ -173,16 +175,17 @@ export function SidePanelBody() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, user])
 
-  const baseRows: TileRow[] = user
-    ? timelines.map(t => ({ id: t.id, title: t.title || DEFAULT_TIMELINE_TITLE, kind: 'timeline' as const }))
-    : localDrafts.map(d => ({ id: d.id, title: d.title || DEFAULT_TIMELINE_TITLE, kind: 'draft' as const }))
+  const rows = useMemo<TileRow[]>(() => {
+    const baseRows: TileRow[] = user
+      ? timelines.map(t => ({ id: t.id, title: t.title || DEFAULT_TIMELINE_TITLE, kind: 'timeline' as const }))
+      : localDrafts.map(d => ({ id: d.id, title: d.title || DEFAULT_TIMELINE_TITLE, kind: 'draft' as const }))
 
-  // If the editor's active timeline isn't in the fetched list yet (new-timeline
-  // race, stale list, or dropped realtime event), synthesize a tile for it at
-  // the top using live context values so the user always sees their session.
-  const hasActiveRow = !!(user && activeTimelineId && baseRows.some(r => r.kind === 'timeline' && r.id === activeTimelineId))
-  const rows: TileRow[] = (!hasActiveRow && user && activeTimelineId)
-    ? [
+    // If the editor's active timeline isn't in the fetched list yet (new-timeline
+    // race, stale list, or dropped realtime event), synthesize a tile for it at
+    // the top using live context values so the user always sees their session.
+    const hasActiveRow = !!(user && activeTimelineId && baseRows.some(r => r.kind === 'timeline' && r.id === activeTimelineId))
+    if (!hasActiveRow && user && activeTimelineId) {
+      return [
         {
           id: activeTimelineId,
           title: activeTimelineTitle && activeTimelineTitle.length > 0
@@ -192,7 +195,15 @@ export function SidePanelBody() {
         },
         ...baseRows,
       ]
-    : baseRows
+    }
+    return baseRows
+  }, [user, timelines, localDrafts, activeTimelineId, activeTimelineTitle])
+
+  const timelineIds = useMemo(
+    () => rows.filter(r => r.kind === 'timeline').map(r => r.id),
+    [rows],
+  )
+  const timelineMetadata = useTimelineMetadata(timelineIds)
 
   const handleTileClick = (row: TileRow) => {
     if (row.kind === 'timeline') {
@@ -462,23 +473,45 @@ export function SidePanelBody() {
               const displayTitle = isActive && activeTimelineTitle != null
                 ? (activeTimelineTitle.length > 0 ? activeTimelineTitle : DEFAULT_TIMELINE_TITLE)
                 : row.title
+
+              let count = 0
+              let badgeColor = DEFAULT_DOT_COLOR
+              if (row.kind === 'timeline') {
+                const meta = timelineMetadata.get(row.id)
+                count = meta?.eventCount ?? 0
+                badgeColor = meta?.dominantCategoryColor ?? DEFAULT_DOT_COLOR
+              } else {
+                const draft = localDrafts.find(d => d.id === row.id)
+                if (draft) {
+                  count = draft.events.length
+                  badgeColor = computeDominantCategoryColor(draft.events, draft.categories)
+                }
+              }
+
               return (
                 <div
                   key={`${row.kind}:${row.id}`}
-                  className={`group flex items-center gap-4 px-2 py-2.5 rounded-[10px] transition-colors ${
+                  className={`group flex items-center gap-1 px-1.5 py-2.5 h-10 rounded-[10px] transition-colors ${
                     isActive ? 'bg-surface-primary' : 'hover:bg-[#262626]'
                   }`}
                 >
                   <button
                     type="button"
                     onClick={() => handleTileClick(row)}
-                    className={`flex-1 min-w-0 text-left body-m truncate bg-transparent border-none p-0 cursor-pointer transition-colors ${
-                      isActive
-                        ? 'text-[#dadee5]'
-                        : 'text-[#9b9ea3] group-hover:text-[#dadee5]'
-                    }`}
+                    className="flex-1 min-w-0 flex items-center gap-1.5 bg-transparent border-none p-0 cursor-pointer text-left"
                   >
-                    {displayTitle}
+                    <span className="label-s-type1 shrink-0" style={{ color: badgeColor }}>
+                      {count}
+                    </span>
+                    <span
+                      className={`flex-1 min-w-0 body-m truncate transition-colors ${
+                        isActive
+                          ? 'text-[#dadee5]'
+                          : 'text-[#9b9ea3] group-hover:text-[#dadee5]'
+                      }`}
+                    >
+                      {displayTitle}
+                    </span>
                   </button>
                   <div
                     className={`shrink-0 transition-opacity ${
