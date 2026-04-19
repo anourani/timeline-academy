@@ -8,6 +8,7 @@ import { useTimeline } from './hooks/useTimeline';
 import { useAuth } from './hooks/useAuth';
 import { useAutosave } from './hooks/useAutosave';
 import { useSidePanel } from './hooks/useSidePanel';
+import { computeDominantCategoryColor } from './utils/dominantCategory';
 import { AuthModal } from './components/Auth/AuthModal';
 import { UnsavedChangesModal } from './components/Modal/UnsavedChangesModal';
 import { useLocalDraft } from './hooks/useLocalDraft';
@@ -46,7 +47,7 @@ export function App() {
   const { loadAllDrafts, loadDraft, saveDraft, saveDraftImmediate, createDraft, clearAllDrafts } = useLocalDraft();
   const handledRouteStateRef = useRef(false);
   const migrationDoneRef = useRef(false);
-  const { setOnTimelineSelect, setOnDraftSelect, setActiveTimelineId, setActiveDraftId: setPanelActiveDraftId, setActiveTimelineTitle } = useSidePanel();
+  const { setOnTimelineSelect, setOnDraftSelect, setActiveTimelineId, setActiveDraftId: setPanelActiveDraftId, setActiveTimelineTitle, setActiveEventCount, setActiveDominantCategoryColor } = useSidePanel();
 
   const timelineData = {
     id: timelineId,
@@ -65,24 +66,11 @@ export function App() {
     setShowAddEventModal(true);
   };
 
-  // Derive the dominant category color for the nav's status dot.
-  const timelineAccentColor = useMemo(() => {
-    if (events.length === 0) return '#4196E4';
-    const counts = new Map<string, number>();
-    for (const e of events) {
-      if (e.category) counts.set(e.category, (counts.get(e.category) || 0) + 1);
-    }
-    let dominantId = '';
-    let max = 0;
-    for (const [id, count] of counts) {
-      if (count > max) {
-        max = count;
-        dominantId = id;
-      }
-    }
-    const category = categories.find(c => c.id === dominantId);
-    return category?.color || '#4196E4';
-  }, [events, categories]);
+  // Derive the dominant category color for the nav's status dot and the side-panel badge.
+  const timelineAccentColor = useMemo(
+    () => computeDominantCategoryColor(events, categories),
+    [events, categories],
+  );
 
   // Trigger autosave when timeline data changes
   useEffect(() => {
@@ -441,6 +429,19 @@ export function App() {
     setActiveTimelineTitle(title);
     return () => setActiveTimelineTitle(null);
   }, [title, setActiveTimelineTitle]);
+
+  // Push live event count + dominant category color to the side panel so the
+  // badge updates the instant the user adds/removes/edits an event — without
+  // waiting on autosave + the metadata refetch cycle.
+  useLayoutEffect(() => {
+    setActiveEventCount(events.length);
+    return () => setActiveEventCount(null);
+  }, [events.length, setActiveEventCount]);
+
+  useLayoutEffect(() => {
+    setActiveDominantCategoryColor(timelineAccentColor);
+    return () => setActiveDominantCategoryColor(null);
+  }, [timelineAccentColor, setActiveDominantCategoryColor]);
 
   const handlePresentMode = () => {
     if (timelineId) {

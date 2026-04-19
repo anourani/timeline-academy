@@ -147,7 +147,7 @@ function TileMenuButton({
 export function SidePanelBody() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { isOpen, close, onTimelineSelect, onDraftSelect, activeTimelineId, activeDraftId, activeTimelineTitle } = useSidePanel()
+  const { isOpen, close, onTimelineSelect, onDraftSelect, activeTimelineId, activeDraftId, activeTimelineTitle, activeEventCount, activeDominantCategoryColor } = useSidePanel()
   const { timelines, isLoading, error, loadTimelines } = useTimelines()
   const [localDrafts, setLocalDrafts] = useState<LocalDraft[]>([])
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
@@ -486,6 +486,13 @@ export function SidePanelBody() {
                   count = draft.events.length
                   badgeColor = computeDominantCategoryColor(draft.events, draft.categories)
                 }
+              }
+              // When the editor is live on this row, trust its in-memory event
+              // count and dominant color over the fetched metadata (which only
+              // refreshes when the timeline ID set changes).
+              if (isActive) {
+                if (activeEventCount != null) count = activeEventCount
+                if (activeDominantCategoryColor != null) badgeColor = activeDominantCategoryColor
               }
 
               return (
