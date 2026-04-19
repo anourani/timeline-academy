@@ -500,7 +500,7 @@ export function SidePanelBody() {
                     onClick={() => handleTileClick(row)}
                     className="flex-1 min-w-0 flex items-center gap-1.5 bg-transparent border-none p-0 cursor-pointer text-left"
                   >
-                    <span className="label-s-type1 shrink-0" style={{ color: badgeColor }}>
+                    <span className="label-s-type1 shrink-0 w-4 text-left" style={{ color: badgeColor }}>
                       {count}
                     </span>
                     <span
