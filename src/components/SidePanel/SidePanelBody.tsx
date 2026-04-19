@@ -465,22 +465,10 @@ export function SidePanelBody() {
         </div>
       </div>
 
-      {/* Action links: How it Works / Feedback */}
+      {/* Action links: How it works / Feedback */}
       <div className="flex flex-col items-start p-3 shrink-0">
-        <button
-          type="button"
-          onClick={() => setIsVideoTutorialOpen(true)}
-          className="w-full flex items-center px-1.5 py-2 h-[38px] rounded-[10px] border border-transparent backdrop-blur-[12px] font-['Avenir',sans-serif] font-medium text-[14px] leading-[1.5] text-[#9b9ea3] hover:bg-[#262626] hover:text-[#dadee5] transition-colors"
-        >
-          How it Works
-        </button>
-        <button
-          type="button"
-          onClick={() => setIsFeedbackOpen(true)}
-          className="w-full flex items-center px-1.5 py-2 h-[38px] rounded-[10px] border border-transparent backdrop-blur-[12px] font-['Avenir',sans-serif] font-medium text-[14px] leading-[1.5] text-[#9b9ea3] hover:bg-[#262626] hover:text-[#dadee5] transition-colors"
-        >
-          Feedback
-        </button>
+        <SidePanelActionButton label="How it works" onClick={() => setIsVideoTutorialOpen(true)} />
+        <SidePanelActionButton label="Feedback" onClick={() => setIsFeedbackOpen(true)} />
       </div>
 
       {/* Event Counter */}
