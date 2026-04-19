@@ -74,7 +74,7 @@ export function GlobalNav({
               aria-label="Open timelines panel"
               tabIndex={isPanelOpen ? -1 : 0}
             >
-              <PanelLeft size={20} />
+              <PanelLeft size={16} strokeWidth={1.25} />
             </button>
           </div>
 
