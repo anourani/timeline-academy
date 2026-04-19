@@ -28,8 +28,16 @@ import {
 } from '@/components/ui/dialog'
 import { FeedbackPanel } from '@/components/FeedbackPanel/FeedbackPanel'
 import { ImportCSVModal } from '@/components/AIMode/ImportCSVModal'
+import { AuthModal } from '@/components/Auth/AuthModal'
 import { DEFAULT_TIMELINE_TITLE } from '@/constants/defaults'
-import { getAllDrafts, getDraft, deleteDraft as deleteLocalDraft, type LocalDraft } from '@/utils/draftStorage'
+import {
+  getAllDrafts,
+  getDraft,
+  saveDraft,
+  deleteDraft as deleteLocalDraft,
+  MAX_DRAFTS,
+  type LocalDraft,
+} from '@/utils/draftStorage'
 import { exportEventsToExcel } from '@/utils/excelExport'
 import type { TimelineEvent } from '@/types/event'
 import { EventCounter } from './EventCounter'
@@ -146,6 +154,7 @@ export function SidePanelBody() {
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false)
   const [isVideoTutorialOpen, setIsVideoTutorialOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
 
   useEffect(() => {
     if (!user) {
@@ -317,12 +326,37 @@ export function SidePanelBody() {
   }
 
   const handleShare = (row: TileRow) => {
+    if (row.kind === 'draft') {
+      setIsAuthModalOpen(true)
+      return
+    }
     const shareUrl = `${window.location.origin}/view/${row.id}`
     navigator.clipboard.writeText(shareUrl)
     alert('Share link copied to clipboard!')
   }
 
   const handleDuplicate = async (row: TileRow) => {
+    if (row.kind === 'draft') {
+      const original = getDraft(row.id)
+      if (!original) {
+        alert('Could not find draft to duplicate.')
+        return
+      }
+      if (getAllDrafts().length >= MAX_DRAFTS) {
+        alert('Draft limit reached. Sign in to save more timelines.')
+        return
+      }
+      const clone: LocalDraft = {
+        ...original,
+        id: crypto.randomUUID(),
+        title: `${original.title} (Copy)`,
+        savedAt: new Date().toISOString(),
+      }
+      saveDraft(clone)
+      setLocalDrafts(getAllDrafts())
+      return
+    }
+
     if (!user) return
     try {
       const { data: original, error: fetchError } = await supabase
@@ -452,8 +486,8 @@ export function SidePanelBody() {
                     }`}
                   >
                     <TileMenuButton
-                      onShare={row.kind === 'timeline' ? () => handleShare(row) : undefined}
-                      onDuplicate={row.kind === 'timeline' ? () => handleDuplicate(row) : undefined}
+                      onShare={() => handleShare(row)}
+                      onDuplicate={() => handleDuplicate(row)}
                       onExport={() => handleExport(row)}
                       onDelete={() => confirmDelete(row)}
                     />
@@ -523,6 +557,8 @@ export function SidePanelBody() {
         onClose={() => setIsImportOpen(false)}
         onImportEvents={handleImportEvents}
       />
+
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
 
       <FeedbackPanel open={isFeedbackOpen} onOpenChange={setIsFeedbackOpen} />
 
