@@ -432,7 +432,7 @@ export function SidePanelBody() {
                 <div
                   key={`${row.kind}:${row.id}`}
                   className={`group flex items-center gap-4 px-2 py-2.5 rounded-[10px] transition-colors ${
-                    isActive ? 'bg-surface-primary' : ''
+                    isActive ? 'bg-surface-primary' : 'hover:bg-[#262626]'
                   }`}
                 >
                   <button
@@ -441,7 +441,7 @@ export function SidePanelBody() {
                     className={`flex-1 min-w-0 text-left font-['Avenir',sans-serif] text-[16px] leading-[24px] truncate bg-transparent border-none p-0 cursor-pointer transition-colors ${
                       isActive
                         ? 'text-[#dadee5]'
-                        : 'text-[#9b9ea3] hover:text-[#c9ced4]'
+                        : 'text-[#9b9ea3] group-hover:text-[#dadee5]'
                     }`}
                   >
                     {displayTitle}
