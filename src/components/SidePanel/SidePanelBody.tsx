@@ -390,7 +390,7 @@ export function SidePanelBody() {
       </div>
 
       {/* Creation actions */}
-      <div className="flex flex-col gap-1.5 p-3 shrink-0">
+      <div className="flex flex-col p-3 shrink-0">
         <SidePanelActionButton icon={Flower} label="Build with AI" onClick={handleBuildWithAI} />
         <SidePanelActionButton icon={Balloon} label="Build from Scratch" onClick={handleBuildFromScratch} />
         <SidePanelActionButton icon={FileSpreadsheet} label="Import Data" onClick={handleImportData} />
