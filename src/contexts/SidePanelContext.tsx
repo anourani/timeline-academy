@@ -1,4 +1,4 @@
-import { createContext, useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 type TimelineSelectHandler = (timelineId: string) => void
@@ -30,8 +30,20 @@ interface SidePanelContextValue {
 
 export const SidePanelContext = createContext<SidePanelContextValue | null>(null)
 
+const STORAGE_KEY = 'side_panel_open'
+
+function readStoredIsOpen(): boolean {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw === null) return true
+    return raw === 'true'
+  } catch {
+    return true
+  }
+}
+
 export function SidePanelProvider({ children }: { children: ReactNode }) {
-  const [isOpen, setIsOpen] = useState(false)
+  const [isOpen, setIsOpen] = useState(readStoredIsOpen)
   const [activeTimelineId, setActiveTimelineId] = useState<string | null>(null)
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null)
   const [activeTimelineTitle, setActiveTimelineTitle] = useState<string | null>(null)
@@ -40,6 +52,14 @@ export function SidePanelProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate()
   const customHandlerRef = useRef<TimelineSelectHandler | null>(null)
   const customDraftHandlerRef = useRef<DraftSelectHandler | null>(null)
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, String(isOpen))
+    } catch {
+      // storage full or disabled — silently ignore
+    }
+  }, [isOpen])
 
   const open = useCallback(() => setIsOpen(true), [])
   const close = useCallback(() => setIsOpen(false), [])
