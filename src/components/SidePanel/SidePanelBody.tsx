@@ -262,6 +262,9 @@ export function SidePanelBody() {
 
   const handleDelete = async () => {
     if (!pendingDeleteId || !pendingDeleteKind) return
+    const wasActive = pendingDeleteKind === 'timeline'
+      ? pendingDeleteId === activeTimelineId
+      : pendingDeleteId === activeDraftId
     try {
       if (pendingDeleteKind === 'timeline') {
         const { error: deleteError } = await supabase
@@ -269,18 +272,16 @@ export function SidePanelBody() {
           .delete()
           .eq('id', pendingDeleteId)
         if (deleteError) throw deleteError
-        if (pendingDeleteId === activeTimelineId) {
-          const remaining = timelines.find(t => t.id !== pendingDeleteId)
-          if (remaining) {
-            onTimelineSelect(remaining.id)
-          } else {
-            onTimelineSelect('new')
-          }
-        }
         loadTimelines()
       } else {
         deleteLocalDraft(pendingDeleteId)
         setLocalDrafts(getAllDrafts())
+      }
+      // If the user just deleted the timeline/draft they were viewing in the
+      // editor, land them back on home instead of leaving the deleted content
+      // on screen.
+      if (wasActive) {
+        navigate('/')
       }
     } catch (err) {
       console.error('Failed to delete:', err)
