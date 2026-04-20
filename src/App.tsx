@@ -14,6 +14,8 @@ import { UnsavedChangesModal } from './components/Modal/UnsavedChangesModal';
 import { useLocalDraft } from './hooks/useLocalDraft';
 import { TimelineEvent, CategoryConfig } from './types/event';
 import { LimitReachedError, getCurrentLimits } from './lib/limits';
+import { supabase } from './lib/supabase';
+import { DEFAULT_TIMELINE_TITLE } from './constants/defaults';
 
 function limitReachedMessage(kind: 'event' | 'timeline'): string {
   const { eventLimit, timelineLimit } = getCurrentLimits();
@@ -44,10 +46,10 @@ export function App() {
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
-  const { loadAllDrafts, loadDraft, saveDraft, saveDraftImmediate, createDraft, clearAllDrafts } = useLocalDraft();
+  const { loadAllDrafts, loadDraft, saveDraft, saveDraftImmediate, createDraft, clearAllDrafts, deleteDraft: deleteLocalDraft } = useLocalDraft();
   const handledRouteStateRef = useRef(false);
   const migrationDoneRef = useRef(false);
-  const { setOnTimelineSelect, setOnDraftSelect, setActiveTimelineId, setActiveDraftId: setPanelActiveDraftId, setActiveTimelineTitle, setActiveEventCount, setActiveDominantCategoryColor } = useSidePanel();
+  const { setOnTimelineSelect, setOnDraftSelect, refreshTimelines, setActiveTimelineId, setActiveDraftId: setPanelActiveDraftId, setActiveTimelineTitle, setActiveEventCount, setActiveDominantCategoryColor } = useSidePanel();
 
   const timelineData = {
     id: timelineId,
@@ -274,9 +276,18 @@ export function App() {
       handleGroupByCategoryChange(newGroupByCategory ?? false);
     } catch (error) {
       console.error('Error switching timeline:', error);
+      // `.single()` returns PGRST116 when the row doesn't exist — that's the
+      // "stale tile pointing at a deleted timeline" case. Land the user back
+      // on home quietly rather than stranding them in /editor with an alert.
+      const code = (error as { code?: string } | null)?.code;
+      if (code === 'PGRST116') {
+        setActiveTimelineId(null);
+        routerNavigate('/', { replace: true });
+        return;
+      }
       alert('Failed to load timeline. Please try again.');
     }
-  }, [loadTimeline, setTitle, setDescription, setEvents, updateCategories, resetCategories, handleScaleChange, handleGroupByCategoryChange]);
+  }, [loadTimeline, setTitle, setDescription, setEvents, updateCategories, resetCategories, handleScaleChange, handleGroupByCategoryChange, routerNavigate, setActiveTimelineId]);
 
   // Handle navigation from AI mode or the side panel with a specific timeline to load
   useEffect(() => {
@@ -463,6 +474,38 @@ export function App() {
     clearEvents();
   };
 
+  const handleDeleteTimeline = async () => {
+    try {
+      if (user && timelineId) {
+        const { error: deleteError } = await supabase
+          .from('timelines')
+          .delete()
+          .eq('id', timelineId);
+        if (deleteError) throw deleteError;
+      } else if (activeDraftId) {
+        deleteLocalDraft(activeDraftId);
+      }
+    } catch (err) {
+      console.error('Failed to delete timeline:', err);
+      alert('Failed to delete. Please try again.');
+      return;
+    }
+
+    // Clear the side panel's active id first so the synthetic-row fallback
+    // can't keep the deleted tile visible, then force a refetch — the
+    // realtime DELETE event isn't fast enough to rely on here.
+    setActiveTimelineId(null);
+    refreshTimelines();
+
+    setTitle(DEFAULT_TIMELINE_TITLE);
+    setDescription('');
+    setEvents([]);
+    resetCategories();
+    setActiveDraftId(null);
+    setActivePanel(null);
+    routerNavigate('/');
+  };
+
   const handleUpdateEvent = (updatedEvent: TimelineEvent) => {
     updateEvent(updatedEvent);
   };
@@ -519,6 +562,7 @@ export function App() {
         showAddEventModal={showAddEventModal}
         onAddEventClick={handleAddEventClick}
         onCloseAddEventModal={() => setShowAddEventModal(false)}
+        onDeleteTimeline={handleDeleteTimeline}
       />
       {!user && events.length > 0 && !nudgeDismissed && (
         <div className="mx-4 mt-2 px-4 py-3 bg-blue-900/40 border border-blue-800/50 rounded-lg flex items-center justify-between text-sm shrink-0">

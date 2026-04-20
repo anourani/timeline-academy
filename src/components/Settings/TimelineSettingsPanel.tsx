@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { FileDown, FileUp, Trash2, RotateCcw, Download } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { X, FileSpreadsheet, Download, Trash2 } from 'lucide-react';
 import { TimelineEvent, CategoryConfig } from '../../types/event';
 import type { AddEventsResult } from '../../hooks/useEvents';
 import { exportEventsToExcel } from '../../utils/excelExport';
 import { ConfirmationModal } from '../Modal/ConfirmationModal';
 import { ScaleSelector } from './ScaleSelector';
+import { SidePanelActionButton } from '../SidePanel/SidePanelActionButton';
 import { DEFAULT_TIMELINE_DESCRIPTION } from '../../constants/defaults';
-import { utils, writeFile } from 'xlsx';
-import { read } from 'xlsx';
+import { utils, read } from 'xlsx';
 
 interface ExcelRow {
   'Event Title'?: string;
@@ -15,16 +16,6 @@ interface ExcelRow {
   'End Date'?: string | number | Date;
   'Category'?: string;
 }
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from '@/components/ui/sheet';
 
 interface TimelineSettingsPanelProps {
   isOpen: boolean;
@@ -42,6 +33,7 @@ interface TimelineSettingsPanelProps {
   onGroupByCategoryChange: (value: boolean) => void;
   categories: CategoryConfig[];
   onCategoriesChange?: (categories: CategoryConfig[]) => void;
+  onDeleteTimeline: () => Promise<void> | void;
 }
 
 export function TimelineSettingsPanel({
@@ -51,7 +43,6 @@ export function TimelineSettingsPanel({
   timelineTitle,
   timelineDescription,
   onImportEvents,
-  onClearTimeline,
   onTitleChange,
   onDescriptionChange,
   scale,
@@ -59,10 +50,10 @@ export function TimelineSettingsPanel({
   groupByCategory,
   onGroupByCategoryChange,
   categories,
+  onDeleteTimeline,
 }: TimelineSettingsPanelProps) {
-  const [showClearConfirmation, setShowClearConfirmation] = useState(false);
-  const [showResetConfirmation, setShowResetConfirmation] = useState(false);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const maxDescriptionLength = 260;
 
   useEffect(() => {
@@ -70,6 +61,15 @@ export function TimelineSettingsPanel({
       onDescriptionChange(DEFAULT_TIMELINE_DESCRIPTION);
     }
   }, [isOpen, timelineDescription, onDescriptionChange]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [isOpen, onClose]);
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onTitleChange(e.target.value);
@@ -86,33 +86,6 @@ export function TimelineSettingsPanel({
     exportEventsToExcel(events, timelineTitle);
   };
 
-  const handleDownloadTemplate = () => {
-    const wb = utils.book_new();
-    const headers = ['Event Title', 'Start Date', 'End Date', 'Category'];
-    const instructions = [
-      '55 char limit',
-      'Format: MM/DD/YYYY',
-      'Format: MM/DD/YYYY',
-      'Must match a timeline category'
-    ];
-    const data = [
-      headers,
-      instructions,
-      ['Sample Event 1', '1/15/2024', '1/20/2024', categories[0]?.label || 'Personal Life'],
-      ['Sample Event 2', '10/14/2024', '10/16/2024', categories[1]?.label || 'Career']
-    ];
-    const ws = utils.aoa_to_sheet(data);
-    utils.book_append_sheet(wb, ws, 'Timeline Events');
-    writeFile(wb, 'timeline-template.xlsx');
-  };
-
-  const handleResetData = () => {
-    onClearTimeline();
-    onTitleChange('Timeline');
-    onDescriptionChange('');
-    setShowResetConfirmation(false);
-  };
-
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -124,7 +97,7 @@ export function TimelineSettingsPanel({
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
         const rows = utils.sheet_to_json<ExcelRow>(worksheet);
-        const events = rows.slice(2).map(row => {
+        const imported = rows.slice(2).map(row => {
           let startDate = '';
           let endDate = '';
           if (row['Start Date']) {
@@ -149,8 +122,8 @@ export function TimelineSettingsPanel({
           };
         }).filter(event => event.title && event.startDate && event.category);
 
-        if (events.length > 0) {
-          const result = onImportEvents(events);
+        if (imported.length > 0) {
+          const result = onImportEvents(imported);
           if (result.added === 0) {
             alert('All events already exist in the timeline');
           }
@@ -170,6 +143,12 @@ export function TimelineSettingsPanel({
     }
   };
 
+  const handleConfirmDelete = async () => {
+    await onDeleteTimeline();
+  };
+
+  if (typeof document === 'undefined') return null;
+
   return (
     <>
       <input
@@ -180,147 +159,135 @@ export function TimelineSettingsPanel({
         style={{ display: 'none' }}
       />
 
-      <Sheet open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
-        <SheetContent side="right" className="w-[400px] min-w-[360px] p-0">
-          <SheetDescription className="sr-only">Timeline settings panel</SheetDescription>
-          <div className="h-full flex flex-col">
-            <SheetHeader className="px-6 py-4 border-b">
-              <SheetTitle className="text-xl font-semibold">Settings</SheetTitle>
-            </SheetHeader>
-
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide">
-              <div>
-                <Label htmlFor="timelineTitle">Timeline Title</Label>
-                <Input
-                  type="text"
-                  id="timelineTitle"
-                  value={timelineTitle}
-                  onChange={handleTitleChange}
-                  className="mt-1"
-                />
+      {createPortal(
+        <>
+          <div
+            onClick={onClose}
+            className={`fixed inset-0 z-40 bg-black/50 transition-opacity duration-300 ease-out ${
+              isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            }`}
+            aria-hidden="true"
+          />
+          <aside
+            className={`fixed inset-y-0 right-0 z-50 w-[320px] pr-[6px] py-[6px] transition-transform duration-300 ease-out ${
+              isOpen ? 'translate-x-0' : 'translate-x-full'
+            }`}
+            aria-hidden={!isOpen}
+            aria-label="Settings side panel"
+          >
+            <div className="h-full w-full bg-[#171717] rounded-[6px] border border-[#262626] flex flex-col overflow-hidden">
+              {/* Header */}
+              <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-2 border-b border-[#404040] shrink-0">
+                <h2 className="header-xsmall text-[#c9ced4] m-0">Settings</h2>
+                <button
+                  onClick={onClose}
+                  className="relative flex items-center justify-center p-1.5 rounded-lg border border-white/15 bg-white/10 backdrop-blur-[12px] text-[#c9ced4] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4),inset_0px_1px_0px_0px_rgba(255,255,255,0.1)] hover:bg-white/20 hover:text-[#dadee5] transition-colors"
+                  aria-label="Close settings panel"
+                >
+                  <X size={16} strokeWidth={1.25} />
+                </button>
               </div>
 
-              <div>
-                <Label htmlFor="timelineDescription">
-                  Description <span className="text-muted-foreground">({timelineDescription.length}/{maxDescriptionLength})</span>
-                </Label>
-                <textarea
-                  id="timelineDescription"
-                  value={timelineDescription}
-                  onChange={handleDescriptionChange}
-                  rows={3}
-                  maxLength={maxDescriptionLength}
-                  className="mt-1 w-full px-3 py-2 bg-background rounded-md border border-input focus:border-ring focus:ring-1 focus:ring-ring outline-none resize-none text-foreground"
-                />
-              </div>
-
-              <div className="border-t pt-4">
-                <ScaleSelector value={scale} onChange={onScaleChange} />
-              </div>
-
-              <div className="border-t pt-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-1">
-                    <Label htmlFor="groupByCategoryToggle">Group by category</Label>
-                    <p className="text-xs text-muted-foreground">
-                      When on, events stack within their category band. When off, all events pack to the top of the timeline.
-                    </p>
-                  </div>
-                  <button
-                    id="groupByCategoryToggle"
-                    type="button"
-                    role="switch"
-                    aria-checked={groupByCategory}
-                    onClick={() => onGroupByCategoryChange(!groupByCategory)}
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors mt-1 ${
-                      groupByCategory ? 'bg-primary' : 'bg-input'
-                    }`}
-                  >
-                    <span
-                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-background shadow-lg ring-0 transition-transform ${
-                        groupByCategory ? 'translate-x-5' : 'translate-x-0'
-                      }`}
+              {/* Body */}
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <div className="flex flex-col px-5 pt-6 pb-2 gap-8 min-h-full">
+                  {/* Title */}
+                  <div>
+                    <label htmlFor="timelineTitle" className="label-m-type2 text-[#9B9EA3] mb-1 block">
+                      Title
+                    </label>
+                    <input
+                      type="text"
+                      id="timelineTitle"
+                      value={timelineTitle}
+                      onChange={handleTitleChange}
+                      className="w-full h-9 bg-[#242526] border border-[#262626] rounded-[8px] px-3 py-[7.5px] body-m text-[#DADEE5] outline-none focus:border-[#404040]"
                     />
-                  </button>
-                </div>
-              </div>
+                  </div>
 
-              <div className="border-t pt-4">
-                <Label>Import / Export</Label>
-                <div className="space-y-2 mt-3">
-                  <Button
-                    variant="outline"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-full justify-between px-4 py-3 h-auto"
-                  >
-                    <span>Import Data</span>
-                    <FileUp size={20} className="text-muted-foreground" />
-                  </Button>
+                  {/* Description */}
+                  <div>
+                    <label htmlFor="timelineDescription" className="label-m-type2 text-[#9B9EA3] mb-1 block">
+                      Description <span className="text-muted-foreground">({timelineDescription.length}/{maxDescriptionLength})</span>
+                    </label>
+                    <textarea
+                      id="timelineDescription"
+                      value={timelineDescription}
+                      onChange={handleDescriptionChange}
+                      maxLength={maxDescriptionLength}
+                      className="w-full h-[76px] bg-[#262626] border border-[#262626] rounded-[8px] p-2 body-m text-[#DADEE5] outline-none focus:border-[#404040]"
+                    />
+                  </div>
 
-                  <Button
-                    variant="outline"
-                    onClick={handleDownloadTemplate}
-                    className="w-full justify-between px-4 py-3 h-auto"
-                  >
-                    <span>Download Template to Import Data</span>
-                    <Download size={20} className="text-muted-foreground" />
-                  </Button>
+                  {/* Visual Settings */}
+                  <div className="flex flex-col gap-2.5">
+                    <span className="label-m-type2 text-[#9B9EA3]">Visual Settings</span>
+                    <div className="h-px bg-[#262626] w-full" />
 
-                  <Button
-                    variant="outline"
-                    onClick={handleExportExcel}
-                    className="w-full justify-between px-4 py-3 h-auto"
-                  >
-                    <span>Export Data</span>
-                    <FileDown size={20} className="text-muted-foreground" />
-                  </Button>
-                </div>
-              </div>
+                    {/* Timeline scale row */}
+                    <div className="flex flex-row items-center justify-between h-10">
+                      <span className="label-m-type2 text-[#9B9EA3]">Timeline scale</span>
+                      <ScaleSelector value={scale} onChange={onScaleChange} />
+                    </div>
 
-              <div className="border-t pt-4">
-                <Label>Danger Zone</Label>
-                <div className="space-y-2 mt-3">
-                  <Button
-                    variant="destructive"
-                    onClick={() => setShowClearConfirmation(true)}
-                    className="w-full justify-between px-4 py-3 h-auto"
-                  >
-                    <span>Clear Timeline</span>
-                    <Trash2 size={20} />
-                  </Button>
+                    <div className="h-px bg-[#262626] w-full" />
 
-                  <Button
-                    variant="destructive"
-                    onClick={() => setShowResetConfirmation(true)}
-                    className="w-full justify-between px-4 py-3 h-auto"
-                  >
-                    <span>Reset All Data</span>
-                    <RotateCcw size={20} />
-                  </Button>
+                    {/* Group-by-category row */}
+                    <div className="flex flex-row items-center justify-between h-6 gap-2">
+                      <span className="body-m text-[#9B9EA3]">Group events by category</span>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={groupByCategory}
+                        onClick={() => onGroupByCategoryChange(!groupByCategory)}
+                        className={`relative inline-flex shrink-0 w-11 h-6 rounded-[50px] transition-colors ${
+                          groupByCategory ? 'bg-[#259E23]' : 'bg-[rgba(37,158,35,0.3)]'
+                        }`}
+                      >
+                        <span
+                          className="absolute top-1/2 left-0 w-5 h-5 -translate-y-1/2 rounded-full bg-[#F5F5F5] transition-transform"
+                          style={{ transform: `translate(${groupByCategory ? 22 : 2}px, -50%)` }}
+                        />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Spacer */}
+                  <div className="flex-1" />
+
+                  {/* Bottom action group */}
+                  <div className="flex flex-col p-3 -mx-5">
+                    <SidePanelActionButton
+                      icon={FileSpreadsheet}
+                      label="Import Data"
+                      onClick={() => fileInputRef.current?.click()}
+                    />
+                    <SidePanelActionButton
+                      icon={Download}
+                      label="Download Timeline Data"
+                      onClick={handleExportExcel}
+                    />
+                    <SidePanelActionButton
+                      icon={Trash2}
+                      label="Delete Timeline"
+                      onClick={() => setShowDeleteConfirmation(true)}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </SheetContent>
-      </Sheet>
+          </aside>
+        </>,
+        document.body
+      )}
 
       <ConfirmationModal
-        isOpen={showClearConfirmation}
-        onClose={() => setShowClearConfirmation(false)}
-        onConfirm={onClearTimeline}
-        title="Clear Timeline"
-        message="Are you sure you want to clear the timeline? This action cannot be undone."
-        confirmLabel="Clear Timeline"
-        cancelLabel="Cancel"
-      />
-
-      <ConfirmationModal
-        isOpen={showResetConfirmation}
-        onClose={() => setShowResetConfirmation(false)}
-        onConfirm={handleResetData}
-        title="Reset All Data"
-        message="Are you sure you want to reset all data? This will clear all events and reset the timeline title. This action cannot be undone."
-        confirmLabel="Reset All Data"
+        isOpen={showDeleteConfirmation}
+        onClose={() => setShowDeleteConfirmation(false)}
+        onConfirm={handleConfirmDelete}
+        title="Delete Timeline"
+        message="Are you sure you want to delete this timeline? This action cannot be undone."
+        confirmLabel="Delete Timeline"
         cancelLabel="Cancel"
       />
     </>

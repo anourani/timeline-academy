@@ -32,6 +32,7 @@ interface HeaderProps {
   showAddEventModal: boolean;
   onAddEventClick: () => void;
   onCloseAddEventModal: () => void;
+  onDeleteTimeline: () => Promise<void> | void;
 }
 
 export function Header({
@@ -55,6 +56,7 @@ export function Header({
   showAddEventModal,
   onAddEventClick,
   onCloseAddEventModal,
+  onDeleteTimeline,
 }: HeaderProps) {
   const closePanel = () => onActivePanelChange(null);
   const togglePanel = (panel: 'events' | 'settings') => {
@@ -108,6 +110,7 @@ export function Header({
         onScaleChange={onScaleChange}
         groupByCategory={groupByCategory}
         onGroupByCategoryChange={onGroupByCategoryChange}
+        onDeleteTimeline={onDeleteTimeline}
       />
 
       <EventTableEditor

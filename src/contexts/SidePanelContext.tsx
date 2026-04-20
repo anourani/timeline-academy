@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 
 type TimelineSelectHandler = (timelineId: string) => void
 type DraftSelectHandler = (draftId: string) => void
+type TimelinesRefreshHandler = () => void
 
 interface SidePanelContextValue {
   isOpen: boolean
@@ -13,6 +14,9 @@ interface SidePanelContextValue {
   setOnTimelineSelect: (handler: TimelineSelectHandler | null) => void
   onDraftSelect: DraftSelectHandler
   setOnDraftSelect: (handler: DraftSelectHandler | null) => void
+  /** Force the timelines list to refetch (e.g. after deleting from the editor). No-op if nothing is registered. */
+  refreshTimelines: () => void
+  setRefreshTimelines: (handler: TimelinesRefreshHandler | null) => void
   activeTimelineId: string | null
   setActiveTimelineId: (id: string | null) => void
   activeDraftId: string | null
@@ -52,6 +56,7 @@ export function SidePanelProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate()
   const customHandlerRef = useRef<TimelineSelectHandler | null>(null)
   const customDraftHandlerRef = useRef<DraftSelectHandler | null>(null)
+  const customRefreshRef = useRef<TimelinesRefreshHandler | null>(null)
 
   useEffect(() => {
     try {
@@ -89,6 +94,14 @@ export function SidePanelProvider({ children }: { children: ReactNode }) {
     customDraftHandlerRef.current = handler
   }, [])
 
+  const refreshTimelines = useCallback(() => {
+    customRefreshRef.current?.()
+  }, [])
+
+  const setRefreshTimelines = useCallback((handler: TimelinesRefreshHandler | null) => {
+    customRefreshRef.current = handler
+  }, [])
+
   const value = useMemo<SidePanelContextValue>(() => ({
     isOpen,
     open,
@@ -98,6 +111,8 @@ export function SidePanelProvider({ children }: { children: ReactNode }) {
     setOnTimelineSelect,
     onDraftSelect,
     setOnDraftSelect,
+    refreshTimelines,
+    setRefreshTimelines,
     activeTimelineId,
     setActiveTimelineId,
     activeDraftId,
@@ -108,7 +123,7 @@ export function SidePanelProvider({ children }: { children: ReactNode }) {
     setActiveEventCount,
     activeDominantCategoryColor,
     setActiveDominantCategoryColor,
-  }), [isOpen, open, close, toggle, onTimelineSelect, setOnTimelineSelect, onDraftSelect, setOnDraftSelect, activeTimelineId, activeDraftId, activeTimelineTitle, activeEventCount, activeDominantCategoryColor])
+  }), [isOpen, open, close, toggle, onTimelineSelect, setOnTimelineSelect, onDraftSelect, setOnDraftSelect, refreshTimelines, setRefreshTimelines, activeTimelineId, activeDraftId, activeTimelineTitle, activeEventCount, activeDominantCategoryColor])
 
   return (
     <SidePanelContext.Provider value={value}>

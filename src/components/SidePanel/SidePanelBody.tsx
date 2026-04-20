@@ -147,7 +147,7 @@ function TileMenuButton({
 export function SidePanelBody() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { isOpen, close, onTimelineSelect, onDraftSelect, activeTimelineId, activeDraftId, activeTimelineTitle, activeEventCount, activeDominantCategoryColor } = useSidePanel()
+  const { isOpen, close, onTimelineSelect, onDraftSelect, setRefreshTimelines, activeTimelineId, activeDraftId, activeTimelineTitle, activeEventCount, activeDominantCategoryColor } = useSidePanel()
   const { timelines, isLoading, error, loadTimelines } = useTimelines()
   const [localDrafts, setLocalDrafts] = useState<LocalDraft[]>([])
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
@@ -174,6 +174,14 @@ export function SidePanelBody() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, user])
+
+  // Expose loadTimelines to the context so actions originating outside this
+  // component (e.g. deleting from the editor's settings panel) can force an
+  // immediate refetch instead of waiting on the realtime channel.
+  useEffect(() => {
+    setRefreshTimelines(() => loadTimelines())
+    return () => setRefreshTimelines(null)
+  }, [setRefreshTimelines, loadTimelines])
 
   const rows = useMemo<TileRow[]>(() => {
     const baseRows: TileRow[] = user
@@ -254,6 +262,9 @@ export function SidePanelBody() {
 
   const handleDelete = async () => {
     if (!pendingDeleteId || !pendingDeleteKind) return
+    const wasActive = pendingDeleteKind === 'timeline'
+      ? pendingDeleteId === activeTimelineId
+      : pendingDeleteId === activeDraftId
     try {
       if (pendingDeleteKind === 'timeline') {
         const { error: deleteError } = await supabase
@@ -261,18 +272,16 @@ export function SidePanelBody() {
           .delete()
           .eq('id', pendingDeleteId)
         if (deleteError) throw deleteError
-        if (pendingDeleteId === activeTimelineId) {
-          const remaining = timelines.find(t => t.id !== pendingDeleteId)
-          if (remaining) {
-            onTimelineSelect(remaining.id)
-          } else {
-            onTimelineSelect('new')
-          }
-        }
         loadTimelines()
       } else {
         deleteLocalDraft(pendingDeleteId)
         setLocalDrafts(getAllDrafts())
+      }
+      // If the user just deleted the timeline/draft they were viewing in the
+      // editor, land them back on home instead of leaving the deleted content
+      // on screen.
+      if (wasActive) {
+        navigate('/')
       }
     } catch (err) {
       console.error('Failed to delete:', err)
