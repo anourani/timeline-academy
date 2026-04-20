@@ -117,7 +117,7 @@ export function useTimeline() {
           description: '',
           events: [],
           categories: undefined, // Will use default categories
-          scale: 'large',
+          scale: 'small',
           groupByCategory: false
         };
       }
@@ -158,7 +158,7 @@ export function useTimeline() {
           category: event.category
         })),
         categories: categories || undefined,
-        scale: timeline.scale || 'large',
+        scale: timeline.scale || 'small',
         groupByCategory: timeline.group_by_category ?? false
       };
     } catch (error) {
@@ -168,7 +168,7 @@ export function useTimeline() {
     }
   }, [user, timelineId]);
 
-  const saveTimeline = useCallback(async (title: string, events: TimelineEvent[], scale: 'large' | 'small' = 'large') => {
+  const saveTimeline = useCallback(async (title: string, events: TimelineEvent[], scale: 'large' | 'small' = 'small') => {
     if (!user) throw new Error('Must be signed in to save');
 
     try {

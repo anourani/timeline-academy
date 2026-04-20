@@ -272,7 +272,7 @@ export function App() {
       } else {
         resetCategories();
       }
-      handleScaleChange(newScale || 'large');
+      handleScaleChange(newScale || 'small');
       handleGroupByCategoryChange(newGroupByCategory ?? false);
     } catch (error) {
       console.error('Error switching timeline:', error);
