@@ -164,7 +164,7 @@ export function NewTimelineScreen({
           <form
             ref={formRef}
             onSubmit={handleSubmit}
-            className="mt-[64px] flex flex-col items-center gap-[16px] w-[360px] max-w-full"
+            className="mt-[64px] flex flex-col items-center gap-[16px] w-full"
           >
             <h1 className="header-small text-text-tertiary text-center">
               Generate a timeline of any subject
