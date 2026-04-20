@@ -147,7 +147,7 @@ function TileMenuButton({
 export function SidePanelBody() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { isOpen, close, onTimelineSelect, onDraftSelect, activeTimelineId, activeDraftId, activeTimelineTitle, activeEventCount, activeDominantCategoryColor } = useSidePanel()
+  const { isOpen, close, onTimelineSelect, onDraftSelect, setRefreshTimelines, activeTimelineId, activeDraftId, activeTimelineTitle, activeEventCount, activeDominantCategoryColor } = useSidePanel()
   const { timelines, isLoading, error, loadTimelines } = useTimelines()
   const [localDrafts, setLocalDrafts] = useState<LocalDraft[]>([])
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
@@ -174,6 +174,14 @@ export function SidePanelBody() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, user])
+
+  // Expose loadTimelines to the context so actions originating outside this
+  // component (e.g. deleting from the editor's settings panel) can force an
+  // immediate refetch instead of waiting on the realtime channel.
+  useEffect(() => {
+    setRefreshTimelines(() => loadTimelines())
+    return () => setRefreshTimelines(null)
+  }, [setRefreshTimelines, loadTimelines])
 
   const rows = useMemo<TileRow[]>(() => {
     const baseRows: TileRow[] = user

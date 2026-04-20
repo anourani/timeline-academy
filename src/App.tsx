@@ -49,7 +49,7 @@ export function App() {
   const { loadAllDrafts, loadDraft, saveDraft, saveDraftImmediate, createDraft, clearAllDrafts, deleteDraft: deleteLocalDraft } = useLocalDraft();
   const handledRouteStateRef = useRef(false);
   const migrationDoneRef = useRef(false);
-  const { setOnTimelineSelect, setOnDraftSelect, setActiveTimelineId, setActiveDraftId: setPanelActiveDraftId, setActiveTimelineTitle, setActiveEventCount, setActiveDominantCategoryColor } = useSidePanel();
+  const { setOnTimelineSelect, setOnDraftSelect, refreshTimelines, setActiveTimelineId, setActiveDraftId: setPanelActiveDraftId, setActiveTimelineTitle, setActiveEventCount, setActiveDominantCategoryColor } = useSidePanel();
 
   const timelineData = {
     id: timelineId,
@@ -276,9 +276,18 @@ export function App() {
       handleGroupByCategoryChange(newGroupByCategory ?? false);
     } catch (error) {
       console.error('Error switching timeline:', error);
+      // `.single()` returns PGRST116 when the row doesn't exist — that's the
+      // "stale tile pointing at a deleted timeline" case. Land the user back
+      // on home quietly rather than stranding them in /editor with an alert.
+      const code = (error as { code?: string } | null)?.code;
+      if (code === 'PGRST116') {
+        setActiveTimelineId(null);
+        routerNavigate('/', { replace: true });
+        return;
+      }
       alert('Failed to load timeline. Please try again.');
     }
-  }, [loadTimeline, setTitle, setDescription, setEvents, updateCategories, resetCategories, handleScaleChange, handleGroupByCategoryChange]);
+  }, [loadTimeline, setTitle, setDescription, setEvents, updateCategories, resetCategories, handleScaleChange, handleGroupByCategoryChange, routerNavigate, setActiveTimelineId]);
 
   // Handle navigation from AI mode or the side panel with a specific timeline to load
   useEffect(() => {
@@ -481,6 +490,12 @@ export function App() {
       alert('Failed to delete. Please try again.');
       return;
     }
+
+    // Clear the side panel's active id first so the synthetic-row fallback
+    // can't keep the deleted tile visible, then force a refetch — the
+    // realtime DELETE event isn't fast enough to rely on here.
+    setActiveTimelineId(null);
+    refreshTimelines();
 
     setTitle(DEFAULT_TIMELINE_TITLE);
     setDescription('');
