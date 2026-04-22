@@ -15,13 +15,12 @@
 9. [Category Height Calculation](#category-height-calculation)
 10. [Drag-and-Drop System](#drag-and-drop-system)
 11. [Scale / Zoom System](#scale--zoom-system)
-12. [Timeline Overview (Mini-Map)](#timeline-overview-mini-map)
-13. [Date-to-Grid Math](#date-to-grid-math)
-14. [Timeline Range Calculation](#timeline-range-calculation)
-15. [Data Flow & Persistence](#data-flow--persistence)
-16. [Key Constants](#key-constants)
-17. [Key Types](#key-types)
-18. [Hook Reference](#hook-reference)
+12. [Date-to-Grid Math](#date-to-grid-math)
+13. [Timeline Range Calculation](#timeline-range-calculation)
+14. [Data Flow & Persistence](#data-flow--persistence)
+15. [Key Constants](#key-constants)
+16. [Key Types](#key-types)
+17. [Hook Reference](#hook-reference)
 
 ---
 
@@ -38,8 +37,7 @@ Timeline.tsx                    ← Main orchestrator
 │   │   ├── TimelineGrid        ← Transparent interaction overlay (month hover/click)
 │   │   └── TimelineEvent[]     ← Events positioned in CSS Grid
 │   └── Month Hover Overlay     ← Semi-transparent highlight on hovered month
-├── TimelineScrollIndicator     ← Floating year label at left edge
-└── TimelineOverview            ← Mini-map (only for timelines ≥ 600 months / ~50 years)
+└── TimelineScrollIndicator     ← Floating year label at left edge
 ```
 
 ---
@@ -289,31 +287,6 @@ Two scale options:
 
 ---
 
-## Timeline Overview (Mini-Map)
-
-**Component:** `TimelineOverview.tsx`
-
-A fixed-position mini-map at the bottom center of the viewport, shown only for long timelines (≥ 600 months / ~50 years).
-
-- **Position:** `fixed bottom-4 left-1/2 -translate-x-1/2`
-- **Style:** `backdrop-blur-sm bg-gray-900/90`, rounded, with padding
-- **Width:** `totalYears × 4px`
-- **Height:** 24px
-
-### Elements
-- **Event dots:** Absolute-positioned colored bars per event
-  - Width: `max(((endYear - startYear) × pixelsPerYear) || 2, 2)` (minimum 2px)
-  - Left: `(startYear - firstYear) × pixelsPerYear`
-  - Vertical stacking: `top: ${(index % 3) × 6 + 6}px` (3 rows, 6px apart)
-  - Color: category color at 0.7 opacity
-
-- **Visible range indicator:** `absolute h-full bg-white/20 border border-white/40 rounded`
-  - Width and position calculated from `visibleRange` prop (start/end month indices)
-
-- **Year labels:** Start and end year markers with border separators
-
----
-
 ## Date-to-Grid Math
 
 How dates map to CSS Grid columns:
@@ -380,7 +353,7 @@ useTimelineState    ← Composes all timeline state hooks into a single entry po
 useTimeline         ← Loads/saves timeline record + events from/to Supabase
 useAutosave         ← Watches for changes, debounced save (2000ms)
 useLocalDraft       ← localStorage backup for unsaved work
-useTimelineScroll   ← Scroll position tracking for indicator + mini-map
+useTimelineScroll   ← Scroll position tracking for the scroll indicator
 useEventDrag        ← Drag interaction state machine
 ```
 
@@ -510,7 +483,7 @@ interface StackedEvent extends TimelineEvent {
 | `useCategories` | `hooks/useCategories.ts` | Category config state |
 | `useTimelineTitle` | `hooks/useTimelineTitle.ts` | Title and description state |
 | `useEventDrag` | `hooks/useEventDrag.ts` | Drag-and-drop interaction handling |
-| `useTimelineScroll` | `hooks/useTimelineScroll.ts` | Scroll position and visible range tracking |
+| `useTimelineScroll` | `hooks/useTimelineScroll.ts` | Scroll position and visible range tracking for the scroll indicator |
 | `useLocalDraft` | `hooks/useLocalDraft.ts` | localStorage draft backup |
 | `useAIMode` | `hooks/useAIMode.ts` | AI-powered timeline generation |
 | `useTimelines` | `hooks/useTimelines.ts` | Timeline list with real-time subscription |
