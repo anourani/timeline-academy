@@ -33,8 +33,8 @@ function BackgroundGrid() {
           left: '120px',
           right: '0',
           backgroundImage:
-            'repeating-linear-gradient(to right, rgba(210,210,210,0.2) 0 1px, transparent 1px 200px)',
-          borderLeft: '1px solid rgba(210,210,210,0.2)',
+            'repeating-linear-gradient(to right, rgba(210,210,210,0.1) 0 1px, transparent 1px 200px)',
+          borderLeft: '1px solid rgba(210,210,210,0.1)',
         }}
       />
     </div>

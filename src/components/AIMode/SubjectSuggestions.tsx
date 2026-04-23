@@ -39,7 +39,7 @@ export function SubjectSuggestions({ query, onSelect }: SubjectSuggestionsProps)
 
   return (
     <div
-      className="flex flex-col items-stretch gap-[2px] w-[320px] max-w-full py-[12px] px-[8px] rounded-[8px] border border-[#262626] bg-[rgba(184,184,184,0.04)] backdrop-blur-[4px] shadow-[0px_8px_32px_0px_rgba(155,158,163,0.04)]"
+      className="flex flex-col items-start gap-[2px] w-[320px] h-[270px] max-w-full py-[12px] px-[8px] rounded-[8px] border border-[#262626] bg-[rgba(184,184,184,0.04)] backdrop-blur-[4px] shadow-[0px_8px_32px_0px_rgba(155,158,163,0.04)]"
       role="listbox"
     >
       {suggestions.map((s, i) => {
@@ -59,7 +59,7 @@ export function SubjectSuggestions({ query, onSelect }: SubjectSuggestionsProps)
             }}
             onMouseEnter={() => setHighlight(i)}
             className={[
-              'header-xsmall text-left h-[36px] px-[12px] py-[4px] rounded-[8px] flex items-center transition-colors',
+              'header-xsmall text-left self-stretch h-[36px] px-[12px] py-[4px] rounded-[8px] flex items-center transition-colors',
               i === highlight ? 'bg-[#262626]' : 'hover:bg-[#262626]',
             ].join(' ')}
           >
