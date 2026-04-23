@@ -4,7 +4,6 @@ import { TimelineGrid } from './TimelineGrid';
 import { TimelineCategoryLabels } from './TimelineCategoryLabels';
 import { TimelineEvent } from './TimelineEvent';
 import { TimelineScrollIndicator } from './TimelineScrollIndicator';
-import { TimelineOverview } from './TimelineOverview';
 import { TimelineEvent as ITimelineEvent, CategoryConfig } from '../../types/event';
 import { TimelineScale } from '../../types/timeline';
 import { getTimelineRange, shiftEventDates } from '../../utils/dateUtils';
@@ -301,16 +300,6 @@ export function Timeline({
             )}
           </div>
         </div>
-
-        {!isFullScreen && (
-          <TimelineOverview
-            months={months}
-            events={visibleEvents}
-            visibleRange={visibleRange}
-            categories={visibleCategories}
-            scale={scale}
-          />
-        )}
       </div>
 
       {/* Event Dialog */}
