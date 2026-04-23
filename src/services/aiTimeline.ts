@@ -3,6 +3,26 @@ import { getSessionToken } from './sessionToken';
 import { TimelineCategory } from '../types/event';
 import type { SubjectType, PillDefinition } from '../constants/pillDefinitions';
 
+// supabase.functions.invoke() surfaces non-2xx responses as a generic
+// "Edge Function returned a non-2xx status code". The real payload is on
+// the Response object at error.context — read it so we can display the
+// server's {error: "..."} message instead of the generic string.
+async function extractFunctionError(
+  error: unknown,
+  fallback: string
+): Promise<string> {
+  const ctx = (error as { context?: Response } | null)?.context;
+  if (ctx && typeof ctx.json === 'function') {
+    try {
+      const body = await ctx.clone().json();
+      if (body && typeof body.error === 'string') return body.error;
+    } catch {
+      // body wasn't JSON — fall through
+    }
+  }
+  return (error as { message?: string } | null)?.message || fallback;
+}
+
 export interface GeneratedTimeline {
   timelineTitle: string;
   timelineDescription: string;
@@ -35,7 +55,7 @@ export async function classifySubject(
   );
 
   if (error) {
-    throw new Error(error.message || 'Failed to classify subject');
+    throw new Error(await extractFunctionError(error, 'Failed to classify subject'));
   }
 
   const result = data as ClassificationResult | { error: string };
@@ -88,7 +108,7 @@ export async function generateTimeline(
   );
 
   if (error) {
-    throw new Error(error.message || 'Failed to generate timeline');
+    throw new Error(await extractFunctionError(error, 'Failed to generate timeline'));
   }
 
   // supabase.functions.invoke returns parsed JSON when Content-Type is application/json

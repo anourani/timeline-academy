@@ -130,9 +130,34 @@ Deno.serve(async (req: Request) => {
     });
   } catch (err) {
     console.error("generate-timeline error:", err);
-    const message =
+    const rawMessage =
       err instanceof Error ? err.message : "Internal server error";
-    return new Response(JSON.stringify({ error: message }), {
+
+    // Detect known upstream provider failures (billing, quota, capacity) and
+    // surface a user-friendly message with a 503 so the UI can distinguish
+    // them from real server bugs. The raw message is still logged above.
+    const lower = rawMessage.toLowerCase();
+    const isUpstreamUnavailable =
+      lower.includes("credit balance") ||
+      lower.includes("insufficient_quota") ||
+      lower.includes("quota") ||
+      lower.includes("rate_limit") ||
+      lower.includes("overloaded");
+
+    if (isUpstreamUnavailable) {
+      return new Response(
+        JSON.stringify({
+          error:
+            "AI service is temporarily unavailable. Please try again in a bit.",
+        }),
+        {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    return new Response(JSON.stringify({ error: rawMessage }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
