@@ -70,6 +70,56 @@ export function Timeline({
 
   const { visibleRange } = useTimelineScroll(scrollContainerRef, months.length * 4);
 
+  // Translate vertical wheel into smooth horizontal scroll. A rAF loop lerps
+  // scrollLeft toward an accumulated target so fast ticks glide instead of
+  // jumping. Scoped to the container ref so wheel events inside side panels
+  // and dialogs (rendered outside this subtree) keep their native vertical scroll.
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+
+    let target = el.scrollLeft;
+    let rafId: number | null = null;
+
+    const step = () => {
+      const current = el.scrollLeft;
+      const diff = target - current;
+      if (Math.abs(diff) < 0.5) {
+        el.scrollLeft = target;
+        rafId = null;
+        return;
+      }
+      el.scrollLeft = current + diff * 0.18;
+      rafId = requestAnimationFrame(step);
+    };
+
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) return;
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      if (e.deltaY === 0) return;
+
+      e.preventDefault();
+
+      // Normalize line/page delta modes to pixels.
+      const delta =
+        e.deltaMode === 1 ? e.deltaY * 16
+        : e.deltaMode === 2 ? e.deltaY * el.clientHeight
+        : e.deltaY;
+
+      const maxScroll = el.scrollWidth - el.clientWidth;
+      if (rafId === null) target = el.scrollLeft;
+      target = Math.max(0, Math.min(maxScroll, target + delta));
+
+      if (rafId === null) rafId = requestAnimationFrame(step);
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
+  }, []);
+
   const scrollToDate = useCallback((dateStr: string) => {
     if (!months.length || !scrollContainerRef.current) return;
 
