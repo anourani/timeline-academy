@@ -239,11 +239,21 @@ export function NewTimelineScreen({
                 onBlur={() => {
                   if (name.trim().length === 0) setHasEngaged(false)
                 }}
-                placeholder={hasEngaged ? '' : placeholderText}
+                placeholder=""
                 disabled={isWorking}
-                className="flex-1 min-w-0 bg-transparent border-0 outline-none p-0 font-['Aleo'] text-[60px] leading-[100%] font-normal text-text-secondary placeholder-text-tertiary disabled:opacity-70"
+                className="flex-1 min-w-0 bg-transparent border-0 outline-none p-0 font-['Aleo'] text-[60px] leading-[100%] font-normal text-text-secondary disabled:opacity-70"
                 aria-label="Subject for timeline generation"
               />
+
+              {!hasEngaged && name === '' && (
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-0 bottom-[2px] font-['Aleo'] text-[60px] leading-[100%] font-normal text-text-tertiary select-none"
+                >
+                  {placeholderText}
+                  <span className="animate-blink-caret">|</span>
+                </div>
+              )}
 
               {renderDropdown && (
                 <div
