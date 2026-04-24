@@ -120,6 +120,8 @@ export function NewTimelineScreen({
   error,
 }: NewTimelineScreenProps) {
   const [name, setName] = useState('')
+  const [placeholderText, setPlaceholderText] = useState('')
+  const [placeholderPhase, setPlaceholderPhase] = useState<'typing' | 'deleting'>('typing')
   const [placeholderIndex, setPlaceholderIndex] = useState(0)
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [hasEngaged, setHasEngaged] = useState(false)
@@ -131,11 +133,28 @@ export function NewTimelineScreen({
 
   useEffect(() => {
     if (hasEngaged) return
-    const interval = setInterval(() => {
-      setPlaceholderIndex((i) => (i + 1) % PLACEHOLDER_NAMES.length)
-    }, 3000)
-    return () => clearInterval(interval)
-  }, [hasEngaged])
+    const currentName = PLACEHOLDER_NAMES[placeholderIndex]
+
+    if (placeholderPhase === 'typing') {
+      if (placeholderText.length < currentName.length) {
+        const t = setTimeout(() => {
+          setPlaceholderText(currentName.slice(0, placeholderText.length + 1))
+        }, 80)
+        return () => clearTimeout(t)
+      }
+      const t = setTimeout(() => setPlaceholderPhase('deleting'), 1500)
+      return () => clearTimeout(t)
+    }
+
+    if (placeholderText.length > 0) {
+      const t = setTimeout(() => {
+        setPlaceholderText(currentName.slice(0, placeholderText.length - 1))
+      }, 40)
+      return () => clearTimeout(t)
+    }
+    setPlaceholderIndex((i) => (i + 1) % PLACEHOLDER_NAMES.length)
+    setPlaceholderPhase('typing')
+  }, [placeholderText, placeholderPhase, placeholderIndex, hasEngaged])
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -220,7 +239,7 @@ export function NewTimelineScreen({
                 onBlur={() => {
                   if (name.trim().length === 0) setHasEngaged(false)
                 }}
-                placeholder={hasEngaged ? '' : PLACEHOLDER_NAMES[placeholderIndex]}
+                placeholder={hasEngaged ? '' : placeholderText}
                 disabled={isWorking}
                 className="flex-1 min-w-0 bg-transparent border-0 outline-none p-0 font-['Aleo'] text-[60px] leading-[100%] font-normal text-text-secondary placeholder-text-tertiary disabled:opacity-70"
                 aria-label="Subject for timeline generation"
