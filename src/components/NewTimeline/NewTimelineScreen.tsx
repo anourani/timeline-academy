@@ -34,7 +34,6 @@ function BackgroundGrid() {
           right: '0',
           backgroundImage:
             'repeating-linear-gradient(to right, rgba(210,210,210,0.1) 0 1px, transparent 1px 200px)',
-          borderLeft: '1px solid rgba(210,210,210,0.1)',
         }}
       />
     </div>
@@ -217,6 +216,9 @@ export function NewTimelineScreen({
                 onFocus={() => {
                   setHasEngaged(true)
                   if (!isWorking) setShowSuggestions(true)
+                }}
+                onBlur={() => {
+                  if (name.trim().length === 0) setHasEngaged(false)
                 }}
                 placeholder={hasEngaged ? '' : PLACEHOLDER_NAMES[placeholderIndex]}
                 disabled={isWorking}
