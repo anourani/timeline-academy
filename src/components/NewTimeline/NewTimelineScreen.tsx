@@ -1,16 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import type { SubjectType } from '@/constants/pillDefinitions'
-import { Button } from '@/components/ui/button'
-import { ModeSwitcher } from '@/components/AIMode/ModeSwitcher'
 import { SubjectSuggestions } from '@/components/AIMode/SubjectSuggestions'
-import { SineWaveLoader } from '@/components/AIMode/SineWaveLoader'
 import { DEFAULT_SUBJECT_SUGGESTIONS, SUBJECT_SUGGESTIONS } from '@/constants/aiSubjectSuggestions'
 
 interface NewTimelineScreenProps {
   onAIGenerate: (subject: string) => void
   onCancel: () => void
-  onStartFresh: () => void
-  onImportCSV: () => void
   isGenerating: boolean
   isClassifying: boolean
   classifiedType: SubjectType | null
@@ -26,6 +21,25 @@ const PLACEHOLDER_NAMES = [
   'Martin Luther King Jr.',
 ]
 
+function BackgroundGrid() {
+  return (
+    <div
+      className="absolute inset-0 pointer-events-none overflow-hidden"
+      aria-hidden="true"
+    >
+      <div
+        className="absolute top-0 bottom-0"
+        style={{
+          left: '120px',
+          right: '0',
+          backgroundImage:
+            'repeating-linear-gradient(to right, rgba(210,210,210,0.1) 0 1px, transparent 1px 200px)',
+        }}
+      />
+    </div>
+  )
+}
+
 function BackgroundPattern() {
   return (
     <div
@@ -35,34 +49,56 @@ function BackgroundPattern() {
       <div
         className="absolute rounded-full"
         style={{
-          width: 800,
-          height: 800,
-          left: '20%',
-          bottom: '-10%',
-          background: 'radial-gradient(circle, rgba(34,120,60,0.25) 0%, transparent 70%)',
-          filter: 'blur(80px)',
+          width: 878,
+          height: 879,
+          left: '-567px',
+          top: '77px',
+          background: 'rgba(143, 146, 252, 0.08)',
+          filter: 'blur(100px)',
         }}
       />
       <div
         className="absolute rounded-full"
         style={{
-          width: 700,
-          height: 700,
-          right: '-5%',
-          top: '10%',
-          background: 'radial-gradient(circle, rgba(30,50,120,0.3) 0%, transparent 70%)',
-          filter: 'blur(80px)',
+          width: 837,
+          height: 839,
+          left: '1004px',
+          top: '-93px',
+          background: 'rgba(37, 158, 35, 0.06)',
+          filter: 'blur(100px)',
         }}
       />
       <div
         className="absolute rounded-full"
         style={{
-          width: 500,
-          height: 500,
-          left: '5%',
-          top: '-5%',
-          background: 'radial-gradient(circle, rgba(140,100,30,0.15) 0%, transparent 70%)',
-          filter: 'blur(80px)',
+          width: 911,
+          height: 911,
+          left: '259px',
+          top: '158px',
+          background: 'rgba(65, 150, 228, 0.06)',
+          filter: 'blur(100px)',
+        }}
+      />
+      <div
+        className="absolute rounded-full"
+        style={{
+          width: 405,
+          height: 405,
+          left: '274px',
+          top: '-205px',
+          background: 'rgba(120, 44, 0, 0.09)',
+          filter: 'blur(100px)',
+        }}
+      />
+      <div
+        className="absolute rounded-full"
+        style={{
+          width: 375,
+          height: 375,
+          left: '875px',
+          top: '-28px',
+          background: 'rgba(100, 0, 120, 0.04)',
+          filter: 'blur(100px)',
         }}
       />
     </div>
@@ -79,13 +115,13 @@ function suggestionsForQuery(query: string): string[] {
 export function NewTimelineScreen({
   onAIGenerate,
   onCancel,
-  onStartFresh,
-  onImportCSV,
   isGenerating,
   isClassifying,
   error,
 }: NewTimelineScreenProps) {
   const [name, setName] = useState('')
+  const [placeholderText, setPlaceholderText] = useState('')
+  const [placeholderPhase, setPlaceholderPhase] = useState<'typing' | 'deleting'>('typing')
   const [placeholderIndex, setPlaceholderIndex] = useState(0)
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [hasEngaged, setHasEngaged] = useState(false)
@@ -97,21 +133,42 @@ export function NewTimelineScreen({
 
   useEffect(() => {
     if (hasEngaged) return
-    const interval = setInterval(() => {
-      setPlaceholderIndex((i) => (i + 1) % PLACEHOLDER_NAMES.length)
-    }, 3000)
-    return () => clearInterval(interval)
-  }, [hasEngaged])
+    const currentName = PLACEHOLDER_NAMES[placeholderIndex]
+
+    if (placeholderPhase === 'typing') {
+      if (placeholderText.length < currentName.length) {
+        const t = setTimeout(() => {
+          setPlaceholderText(currentName.slice(0, placeholderText.length + 1))
+        }, 80)
+        return () => clearTimeout(t)
+      }
+      const t = setTimeout(() => setPlaceholderPhase('deleting'), 1500)
+      return () => clearTimeout(t)
+    }
+
+    if (placeholderText.length > 0) {
+      const t = setTimeout(() => {
+        setPlaceholderText(currentName.slice(0, placeholderText.length - 1))
+      }, 40)
+      return () => clearTimeout(t)
+    }
+    setPlaceholderIndex((i) => (i + 1) % PLACEHOLDER_NAMES.length)
+    setPlaceholderPhase('typing')
+  }, [placeholderText, placeholderPhase, placeholderIndex, hasEngaged])
 
   useEffect(() => {
-    if (!showSuggestions) return
     const handleClick = (e: MouseEvent) => {
       if (formRef.current && !formRef.current.contains(e.target as Node)) {
         setShowSuggestions(false)
       }
     }
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setShowSuggestions(false)
+      if (e.key !== 'Escape') return
+      if (isWorking) {
+        onCancel()
+      } else {
+        setShowSuggestions(false)
+      }
     }
     window.addEventListener('mousedown', handleClick)
     window.addEventListener('keydown', handleKey)
@@ -119,7 +176,7 @@ export function NewTimelineScreen({
       window.removeEventListener('mousedown', handleClick)
       window.removeEventListener('keydown', handleKey)
     }
-  }, [showSuggestions])
+  }, [showSuggestions, isWorking, onCancel])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -129,18 +186,12 @@ export function NewTimelineScreen({
     onAIGenerate(trimmed)
   }
 
-  const handleCancel = () => {
-    setName('')
-    onCancel()
-  }
-
   const handleSelectSuggestion = (suggestion: string) => {
     setName(suggestion)
     setShowSuggestions(false)
     inputRef.current?.focus()
   }
 
-  const hasText = name.trim().length > 0
   const dropdownVisible =
     showSuggestions && !isWorking && suggestionsForQuery(name).length > 0
 
@@ -156,21 +207,23 @@ export function NewTimelineScreen({
 
   return (
     <div className="relative min-h-screen bg-surface-primary overflow-auto">
+      <BackgroundGrid />
       <BackgroundPattern />
       <div className="relative z-10">
-        <div className="px-4 pt-[120px] pb-[80px] flex flex-col items-center">
-          <ModeSwitcher onStartFresh={onStartFresh} onImportCSV={onImportCSV} />
-
+        <div
+          className="flex flex-col items-start gap-[40px]"
+          style={{ padding: '200px 120px 120px 120px' }}
+        >
           <form
             ref={formRef}
             onSubmit={handleSubmit}
-            className="mt-[64px] flex flex-col items-center gap-[16px] w-full"
+            className="w-[996px] max-w-full flex flex-col"
           >
-            <h1 className="header-small text-text-tertiary text-center">
-              Generate a timeline of any subject
-            </h1>
+            <h2 className="header-xsmall text-text-tertiary m-0">
+              Search for a person, place, or event
+            </h2>
 
-            <div className="relative w-[360px] max-w-full">
+            <div className="relative flex flex-row items-end gap-[10px] pt-[8px] pb-[2px] min-h-[80px]">
               <input
                 ref={inputRef}
                 type="text"
@@ -183,58 +236,42 @@ export function NewTimelineScreen({
                   setHasEngaged(true)
                   if (!isWorking) setShowSuggestions(true)
                 }}
-                placeholder={hasEngaged ? '' : PLACEHOLDER_NAMES[placeholderIndex]}
+                onBlur={() => {
+                  if (name.trim().length === 0) setHasEngaged(false)
+                }}
+                placeholder=""
                 disabled={isWorking}
-                className="block w-full min-w-[280px] h-[62px] px-[10px] font-['Aleo'] text-[32px] leading-[1.25] text-center text-text-secondary placeholder-text-tertiary bg-[#171717] border border-[#404040] rounded-[8px] outline-none shadow-[0px_8px_32px_0px_rgba(155,158,163,0.04)] focus:border-[#4d4e50] disabled:opacity-70"
+                className="flex-1 min-w-0 bg-transparent border-0 outline-none p-0 font-['Aleo'] text-[60px] leading-[100%] font-normal text-text-secondary disabled:opacity-70"
+                aria-label="Subject for timeline generation"
               />
 
+              {!hasEngaged && name === '' && (
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-0 bottom-[2px] font-['Aleo'] text-[60px] leading-[100%] font-normal text-text-tertiary select-none"
+                >
+                  {placeholderText}
+                  <span className="animate-blink-caret">|</span>
+                </div>
+              )}
+
               {renderDropdown && (
-                <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-20 flex justify-center">
-                  <div
-                    data-state={dropdownVisible ? 'open' : 'closed'}
-                    className="duration-150 ease-in fill-mode-forwards data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-1 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-1 data-[state=closed]:pointer-events-none"
-                  >
-                    <SubjectSuggestions
-                      query={name}
-                      onSelect={handleSelectSuggestion}
-                    />
-                  </div>
+                <div
+                  data-state={dropdownVisible ? 'open' : 'closed'}
+                  className="absolute left-0 top-[calc(100%+4px)] z-20 duration-150 ease-in fill-mode-forwards data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-1 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-1 data-[state=closed]:pointer-events-none"
+                >
+                  <SubjectSuggestions
+                    query={name}
+                    onSelect={handleSelectSuggestion}
+                  />
                 </div>
               )}
             </div>
 
-            <div className="mt-[8px]">
-              {isWorking ? (
-                <button
-                  type="button"
-                  onClick={handleCancel}
-                  className="relative inline-flex items-center justify-center h-[36px] min-w-[80px] px-[16px] rounded-[10px] border border-[rgba(255,255,255,0.15)] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4)] font-avenir text-sm font-medium text-text-secondary"
-                >
-                  <div aria-hidden="true" className="absolute inset-0 rounded-[10px] backdrop-blur-[12px] bg-[rgba(255,255,255,0.1)] pointer-events-none" />
-                  <span className="relative">Cancel</span>
-                </button>
-              ) : (
-                <Button
-                  type="submit"
-                  variant="primary-sm"
-                  size="none"
-                  disabled={!hasText}
-                  className={[
-                    'transition-opacity disabled:cursor-not-allowed',
-                    hasText ? 'opacity-100' : 'opacity-50',
-                  ].join(' ')}
-                >
-                  Enter
-                </Button>
-              )}
-            </div>
+            {error && (
+              <p className="mt-[16px] text-sm text-red-400">{error}</p>
+            )}
           </form>
-
-          {error && (
-            <p className="mt-[16px] text-sm text-red-400 text-center">{error}</p>
-          )}
-
-          {isWorking && <SineWaveLoader className="mt-[32px]" />}
         </div>
       </div>
     </div>
