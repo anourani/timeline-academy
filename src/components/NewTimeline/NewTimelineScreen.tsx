@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import type { SubjectType } from '@/constants/pillDefinitions'
 import { SubjectSuggestions } from '@/components/AIMode/SubjectSuggestions'
-import { DEFAULT_SUBJECT_SUGGESTIONS, SUBJECT_SUGGESTIONS } from '@/constants/aiSubjectSuggestions'
+import { useSubjectSuggestions } from '@/hooks/useSubjectSuggestions'
 
 interface NewTimelineScreenProps {
   onAIGenerate: (subject: string) => void
@@ -105,13 +105,6 @@ function BackgroundPattern() {
   )
 }
 
-function suggestionsForQuery(query: string): string[] {
-  const trimmed = query.trim()
-  if (trimmed.length === 0) return DEFAULT_SUBJECT_SUGGESTIONS
-  const lower = trimmed.toLowerCase()
-  return SUBJECT_SUGGESTIONS.filter((s) => s.toLowerCase().includes(lower)).slice(0, 6)
-}
-
 export function NewTimelineScreen({
   onAIGenerate,
   onCancel,
@@ -130,6 +123,7 @@ export function NewTimelineScreen({
   const formRef = useRef<HTMLFormElement>(null)
 
   const isWorking = isClassifying || isGenerating
+  const { suggestions, isLoading: suggestionsLoading } = useSubjectSuggestions(name)
 
   useEffect(() => {
     if (hasEngaged) return
@@ -193,7 +187,7 @@ export function NewTimelineScreen({
   }
 
   const dropdownVisible =
-    showSuggestions && !isWorking && suggestionsForQuery(name).length > 0
+    showSuggestions && !isWorking && (suggestions.length > 0 || suggestionsLoading)
 
   useEffect(() => {
     if (dropdownVisible) {
@@ -262,6 +256,8 @@ export function NewTimelineScreen({
                 >
                   <SubjectSuggestions
                     query={name}
+                    suggestions={suggestions}
+                    isLoading={suggestionsLoading}
                     onSelect={handleSelectSuggestion}
                   />
                 </div>
