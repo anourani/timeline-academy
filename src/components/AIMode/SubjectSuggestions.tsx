@@ -42,7 +42,7 @@ export function SubjectSuggestions({
 
   return (
     <div
-      className="flex flex-col items-start gap-[2px] w-[320px] h-[270px] max-w-full py-[12px] px-[8px] rounded-[8px] border border-[#262626] bg-[rgba(184,184,184,0.04)] backdrop-blur-[4px] shadow-[0px_8px_32px_0px_rgba(155,158,163,0.04)]"
+      className="flex flex-col items-start gap-[2px] min-w-[350px] w-fit h-[270px] max-w-full py-[12px] px-[8px] rounded-[8px] border border-[#262626] bg-[rgba(184,184,184,0.04)] backdrop-blur-[4px] shadow-[0px_8px_32px_0px_rgba(155,158,163,0.04)]"
       role="listbox"
       aria-busy={isLoading ? 'true' : 'false'}
     >
@@ -80,7 +80,7 @@ export function SubjectSuggestions({
                   i === highlight ? 'bg-[#262626]' : 'hover:bg-[#262626]',
                 ].join(' ')}
               >
-                <span className="flex-1 min-w-0 truncate">
+                <span className="whitespace-nowrap">
                   {matchIdx >= 0 ? (
                     <>
                       {before && <span className="text-text-tertiary">{before}</span>}
@@ -91,7 +91,7 @@ export function SubjectSuggestions({
                     <span className="text-text-secondary">{s.title}</span>
                   )}
                   {s.description && (
-                    <span className="body-m text-text-tertiary"> · {s.description}</span>
+                    <span className="body-m text-text-tertiary ml-[8px]">{s.description}</span>
                   )}
                 </span>
               </button>
