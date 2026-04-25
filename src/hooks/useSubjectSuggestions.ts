@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react'
-import { DEFAULT_SUBJECT_SUGGESTIONS } from '@/constants/aiSubjectSuggestions'
-import { searchWikipediaTitles } from '@/services/wikipediaSearch'
+import {
+  DEFAULT_SUBJECT_SUGGESTIONS,
+  type SubjectSuggestion,
+} from '@/constants/aiSubjectSuggestions'
+import { searchWikipedia } from '@/services/wikipediaSearch'
 
 export interface UseSubjectSuggestionsResult {
-  suggestions: string[]
+  suggestions: SubjectSuggestion[]
   isLoading: boolean
 }
 
 export function useSubjectSuggestions(query: string): UseSubjectSuggestionsResult {
-  const [suggestions, setSuggestions] = useState<string[]>(DEFAULT_SUBJECT_SUGGESTIONS)
+  const [suggestions, setSuggestions] = useState<SubjectSuggestion[]>(DEFAULT_SUBJECT_SUGGESTIONS)
   const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
@@ -31,7 +34,7 @@ export function useSubjectSuggestions(query: string): UseSubjectSuggestionsResul
     const controller = new AbortController()
     const timeoutId = setTimeout(async () => {
       try {
-        const result = await searchWikipediaTitles(trimmed, {
+        const result = await searchWikipedia(trimmed, {
           signal: controller.signal,
           limit: 6,
         })

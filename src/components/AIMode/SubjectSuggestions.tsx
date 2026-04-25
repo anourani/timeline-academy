@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
+import type { SubjectSuggestion } from '@/constants/aiSubjectSuggestions'
 
 interface SubjectSuggestionsProps {
   query: string
-  suggestions: string[]
+  suggestions: SubjectSuggestion[]
   isLoading: boolean
   onSelect: (suggestion: string) => void
 }
@@ -59,19 +60,19 @@ export function SubjectSuggestions({
             </div>
           ))
         : suggestions.map((s, i) => {
-            const matchIdx = lowerQuery.length > 0 ? s.toLowerCase().indexOf(lowerQuery) : -1
-            const before = matchIdx > 0 ? s.slice(0, matchIdx) : ''
-            const match = matchIdx >= 0 ? s.slice(matchIdx, matchIdx + lowerQuery.length) : ''
-            const after = matchIdx >= 0 ? s.slice(matchIdx + lowerQuery.length) : ''
+            const matchIdx = lowerQuery.length > 0 ? s.title.toLowerCase().indexOf(lowerQuery) : -1
+            const before = matchIdx > 0 ? s.title.slice(0, matchIdx) : ''
+            const match = matchIdx >= 0 ? s.title.slice(matchIdx, matchIdx + lowerQuery.length) : ''
+            const after = matchIdx >= 0 ? s.title.slice(matchIdx + lowerQuery.length) : ''
             return (
               <button
-                key={s}
+                key={s.title}
                 type="button"
                 role="option"
                 aria-selected={i === highlight}
                 onMouseDown={(e) => {
                   e.preventDefault()
-                  onSelect(s)
+                  onSelect(s.title)
                 }}
                 onMouseEnter={() => setHighlight(i)}
                 className={[
@@ -87,7 +88,10 @@ export function SubjectSuggestions({
                       {after && <span className="text-text-tertiary">{after}</span>}
                     </>
                   ) : (
-                    <span className="text-text-secondary">{s}</span>
+                    <span className="text-text-secondary">{s.title}</span>
+                  )}
+                  {s.description && (
+                    <span className="text-text-tertiary"> · {s.description}</span>
                   )}
                 </span>
               </button>
