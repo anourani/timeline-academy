@@ -214,7 +214,7 @@ export function NewTimelineScreen({
             className="w-[996px] max-w-full flex flex-col"
           >
             <h2 className="header-xsmall text-text-tertiary m-0">
-              Search for a person, era, movement, or event
+              Search for a person, era, or event
             </h2>
 
             <div className="relative flex flex-row items-end gap-[10px] pt-[8px] pb-[2px] min-h-[80px]">
