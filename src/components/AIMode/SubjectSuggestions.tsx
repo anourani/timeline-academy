@@ -91,7 +91,7 @@ export function SubjectSuggestions({
                     <span className="text-text-secondary">{s.title}</span>
                   )}
                   {s.description && (
-                    <span className="text-text-tertiary"> · {s.description}</span>
+                    <span className="body-m text-text-tertiary"> · {s.description}</span>
                   )}
                 </span>
               </button>
