@@ -1,4 +1,13 @@
-export const DEFAULT_SUBJECT_SUGGESTIONS = ['Kobe Bryant', 'Frida Kahlo', 'Muhammad Ali']
+export interface SubjectSuggestion {
+  title: string
+  description?: string
+}
+
+export const DEFAULT_SUBJECT_SUGGESTIONS: SubjectSuggestion[] = [
+  { title: 'Kobe Bryant', description: 'American basketball player' },
+  { title: 'Frida Kahlo', description: 'Mexican painter' },
+  { title: 'Muhammad Ali', description: 'American boxer' },
+]
 
 export const SUBJECT_SUGGESTIONS: string[] = [
   // People — Athletes
