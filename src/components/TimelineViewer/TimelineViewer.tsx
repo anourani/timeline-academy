@@ -170,6 +170,7 @@ export function TimelineViewer() {
           categories={timeline.categories}
           scale={SCALES[timeline.scale]}
           groupByCategory={timeline.groupByCategory}
+          mode="present"
         />
       </main>
     </div>

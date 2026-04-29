@@ -3,8 +3,10 @@ import { Columns3, PanelLeft, Plus, Settings as SettingsIcon } from 'lucide-reac
 import { useSidePanel } from '@/hooks/useSidePanel'
 import { Button } from '@/components/ui/button'
 import { SaveStatusIndicator, type SaveStatus } from '@/components/SaveStatusIndicator/SaveStatusIndicator'
+import { PresentModeSelector } from '@/components/Navigation/PresentModeSelector'
 import { getTimelineYearRange } from '@/utils/timelineUtils'
 import type { TimelineEvent } from '@/types/event'
+import type { ViewMode } from '@/hooks/useViewMode'
 
 interface GlobalNavProps {
   variant?: 'default' | 'timeline'
@@ -19,7 +21,11 @@ interface GlobalNavProps {
   onEventsClick?: () => void
   onSettingsClick?: () => void
   activePanel?: 'events' | 'settings' | null
-  onPresentMode?: () => void
+  /** View mode — controls which edit affordances render */
+  mode?: ViewMode
+  onModeChange?: (mode: ViewMode) => void
+  /** When set, hides the mode toggle entirely and forces the given mode */
+  lockedMode?: ViewMode
   /** Save status — only rendered on variant="timeline" */
   saveStatus?: SaveStatus
   lastSavedTime?: Date
@@ -36,10 +42,15 @@ export function GlobalNav({
   onEventsClick,
   onSettingsClick,
   activePanel,
-  onPresentMode,
+  mode = 'edit',
+  onModeChange,
+  lockedMode,
   saveStatus,
   lastSavedTime,
 }: GlobalNavProps) {
+  const effectiveMode: ViewMode = lockedMode ?? mode
+  const showModeToggle = lockedMode === undefined && variant === 'timeline' && !!onModeChange
+  const isEditMode = effectiveMode === 'edit'
   const { isOpen: isPanelOpen, toggle: togglePanel } = useSidePanel()
 
   const handleShare = () => {
@@ -80,7 +91,7 @@ export function GlobalNav({
 
           {showTitleCluster && (
             <div className="flex flex-col gap-1 min-w-0">
-              {onTimelineTitleChange ? (
+              {onTimelineTitleChange && isEditMode ? (
                 <input
                   type="text"
                   value={timelineTitle ?? ''}
@@ -97,9 +108,9 @@ export function GlobalNav({
                   style={{ fieldSizing: 'content' } as CSSProperties}
                 />
               ) : (
-                <p className="font-['Aleo',serif] font-normal text-[18px] leading-[1.4] text-text-secondary truncate">
+                <span className="font-['Aleo',serif] font-normal text-[18px] leading-[1.4] text-text-secondary truncate">
                   {timelineTitle || 'Untitled Timeline'}
-                </p>
+                </span>
               )}
               <div className="flex items-center gap-2 shrink-0">
                 <span className="label-s-type1 text-text-tertiary whitespace-nowrap">
@@ -119,7 +130,7 @@ export function GlobalNav({
         </div>
 
         {/* Center cluster: editor action buttons */}
-        {variant === 'timeline' && (
+        {variant === 'timeline' && isEditMode && (
           <div className="hidden md:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 items-center gap-2.5">
             {onAddEventClick && (
               <Button variant="glass" size="none" onClick={onAddEventClick}>
@@ -158,13 +169,9 @@ export function GlobalNav({
           )}
           {variant === 'timeline' && (
             <>
-              <Button
-                variant="glass-sm"
-                size="none"
-                onClick={onPresentMode}
-              >
-                Present
-              </Button>
+              {showModeToggle && (
+                <PresentModeSelector value={effectiveMode} onChange={onModeChange!} />
+              )}
               <Button
                 variant="glass-sm"
                 size="none"
