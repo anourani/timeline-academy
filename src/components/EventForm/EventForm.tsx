@@ -1,11 +1,11 @@
-import React, { useState, useCallback, useEffect } from 'react'
-import { TimelineEvent, CategoryConfig } from '../../types/event'
+import React, { useState, useCallback, useEffect, useRef } from 'react'
+import { TimelineEvent, CategoryConfig, EventSource } from '../../types/event'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
 import { DialogClose } from '@/components/ui/dialog'
-import { CalendarDays } from 'lucide-react'
+import { CalendarDays, ChevronDown, Plus, Upload, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   parseDate,
@@ -14,8 +14,15 @@ import {
   darkCalendarClassNames,
 } from '@/utils/dateUtils'
 import { normalizeDate } from '@/utils/dateUtils'
+import { useAuth } from '@/hooks/useAuth'
+import { uploadEventImage, deleteEventImage } from '@/utils/eventImageUpload'
 
 const MAX_TITLE_LENGTH = 55
+const MAX_DESCRIPTION_LENGTH = 500
+
+function isValidUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url.trim())
+}
 
 interface EventFormProps {
   onSubmit: (event: Omit<TimelineEvent, 'id'>) => void
@@ -31,11 +38,22 @@ export function EventForm({
   initialStartDate,
   initialEvent
 }: EventFormProps) {
+  const { user } = useAuth()
   const [title, setTitle] = useState(initialEvent?.title || '')
   const [startDate, setStartDate] = useState(initialEvent?.startDate || initialStartDate || '')
   const [endDate, setEndDate] = useState(initialEvent?.endDate || '')
   const [category, setCategory] = useState(initialEvent?.category || categories[0]?.id || '')
   const [isEndDateFocused, setIsEndDateFocused] = useState(false)
+  const [description, setDescription] = useState(initialEvent?.description || '')
+  const [imageUrl, setImageUrl] = useState(initialEvent?.imageUrl || '')
+  const [sources, setSources] = useState<EventSource[]>(initialEvent?.sources ?? [])
+  const [detailsExpanded, setDetailsExpanded] = useState(
+    !!(initialEvent?.description || initialEvent?.imageUrl || (initialEvent?.sources?.length ?? 0) > 0)
+  )
+  const [imageError, setImageError] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [sourceUrlErrors, setSourceUrlErrors] = useState<Record<number, boolean>>({})
+  const eventIdRef = useRef<string>(initialEvent?.id || crypto.randomUUID())
 
   // Date display text states
   const [startDateText, setStartDateText] = useState(
@@ -55,6 +73,13 @@ export function EventForm({
       setCategory(initialEvent.category)
       setStartDateText(formatDateDisplay(initialEvent.startDate))
       setEndDateText(formatDateDisplay(initialEvent.endDate))
+      setDescription(initialEvent.description || '')
+      setImageUrl(initialEvent.imageUrl || '')
+      setSources(initialEvent.sources ?? [])
+      setDetailsExpanded(
+        !!(initialEvent.description || initialEvent.imageUrl || (initialEvent.sources?.length ?? 0) > 0)
+      )
+      eventIdRef.current = initialEvent.id
     }
   }, [initialEvent])
 
@@ -101,6 +126,59 @@ export function EventForm({
     }
   }, [endDateText, endDate, startDate])
 
+  const updateSource = useCallback((idx: number, field: keyof EventSource, value: string) => {
+    setSources(prev => prev.map((src, i) => i === idx ? { ...src, [field]: value } : src))
+    if (field === 'url') {
+      setSourceUrlErrors(prev => {
+        if (!prev[idx]) return prev
+        const next = { ...prev }
+        delete next[idx]
+        return next
+      })
+    }
+  }, [])
+
+  const removeSource = useCallback((idx: number) => {
+    setSources(prev => prev.filter((_, i) => i !== idx))
+    setSourceUrlErrors(prev => {
+      if (!prev[idx]) return prev
+      const next = { ...prev }
+      delete next[idx]
+      return next
+    })
+  }, [])
+
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!user) {
+      setImageError('Sign in to upload images.')
+      return
+    }
+    setImageError(null)
+    setUploading(true)
+    try {
+      const url = await uploadEventImage(file, user.id, eventIdRef.current)
+      setImageUrl(url)
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : 'Failed to upload image.')
+    } finally {
+      setUploading(false)
+    }
+  }, [user])
+
+  const handleRemoveImage = useCallback(() => {
+    const previousUrl = imageUrl
+    setImageUrl('')
+    setImageError(null)
+    if (previousUrl) {
+      // Best-effort: drop the storage object so cancelled uploads don't pile up.
+      // Errors are swallowed inside deleteEventImage.
+      void deleteEventImage(previousUrl)
+    }
+  }, [imageUrl])
+
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault()
     if (!category) {
@@ -118,11 +196,32 @@ export function EventForm({
       return
     }
 
+    // Drop empty source rows; validate the rest.
+    const cleanedSources: EventSource[] = []
+    const newErrors: Record<number, boolean> = {}
+    sources.forEach((source, idx) => {
+      const url = source.url.trim()
+      if (!url) return
+      if (!isValidUrl(url)) {
+        newErrors[idx] = true
+        return
+      }
+      cleanedSources.push({ label: source.label.trim(), url })
+    })
+    if (Object.keys(newErrors).length > 0) {
+      setSourceUrlErrors(newErrors)
+      return
+    }
+    setSourceUrlErrors({})
+
     onSubmit({
       title,
       startDate,
       endDate: endDate || startDate,
-      category
+      category,
+      description: description.trim() ? description : undefined,
+      imageUrl: imageUrl || undefined,
+      sources: cleanedSources.length > 0 ? cleanedSources : undefined,
     })
 
     setTitle('')
@@ -131,7 +230,13 @@ export function EventForm({
     setStartDateText('')
     setEndDateText('')
     setCategory(categories[0]?.id || '')
-  }, [title, startDate, endDate, category, categories, onSubmit])
+    setDescription('')
+    setImageUrl('')
+    setSources([])
+    setSourceUrlErrors({})
+    setDetailsExpanded(false)
+    eventIdRef.current = crypto.randomUUID()
+  }, [title, startDate, endDate, category, categories, description, imageUrl, sources, onSubmit])
 
   return (
     <form onSubmit={handleSubmit} className="rounded-lg">
@@ -324,6 +429,139 @@ export function EventForm({
               </PopoverContent>
             </Popover>
           </div>
+        </div>
+
+        {/* Collapsible details section */}
+        <div className="flex flex-col gap-3">
+          <button
+            type="button"
+            onClick={() => setDetailsExpanded(prev => !prev)}
+            aria-expanded={detailsExpanded}
+            className="flex items-center justify-between w-full label-m-type2 text-[#9B9EA3] hover:text-[#C9CED4] transition-colors"
+          >
+            Add more details
+            <ChevronDown
+              size={16}
+              className={`transition-transform ${detailsExpanded ? 'rotate-180' : ''}`}
+            />
+          </button>
+
+          {detailsExpanded && (
+            <div className="flex flex-col gap-4">
+              {/* Description */}
+              <div>
+                <label htmlFor="event-description" className="label-m-type2 text-[#9B9EA3] mb-1 block">
+                  Description{' '}
+                  <span className="text-muted-foreground">
+                    ({description.length}/{MAX_DESCRIPTION_LENGTH})
+                  </span>
+                </label>
+                <textarea
+                  id="event-description"
+                  value={description}
+                  onChange={(e) => {
+                    if (e.target.value.length <= MAX_DESCRIPTION_LENGTH) {
+                      setDescription(e.target.value)
+                    }
+                  }}
+                  maxLength={MAX_DESCRIPTION_LENGTH}
+                  rows={4}
+                  className="w-full bg-[#262626] border border-[#262626] rounded-[8px] p-2 body-m text-[#DADEE5] outline-none focus:border-[#404040]"
+                />
+              </div>
+
+              {/* Image */}
+              <div>
+                <label className="label-m-type2 text-[#9B9EA3] mb-1 block">Image</label>
+                {imageUrl ? (
+                  <div className="relative aspect-[4/3] rounded-lg overflow-hidden border border-[#262626]">
+                    <img src={imageUrl} alt="" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={handleRemoveImage}
+                      className="absolute top-2 right-2 p-1.5 rounded-md bg-black/70 hover:bg-black text-white"
+                      aria-label="Remove image"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center aspect-[4/3] rounded-lg border border-dashed border-[#404040] cursor-pointer hover:border-[#525252]">
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png"
+                      onChange={handleFileChange}
+                      className="hidden"
+                      disabled={uploading}
+                    />
+                    <Upload size={20} className="text-[#9B9EA3] mb-2" />
+                    <span className="body-m text-[#9B9EA3]">
+                      {uploading ? 'Uploading…' : 'Click to upload'}
+                    </span>
+                    <span className="label-s-type2 text-[#737373] mt-1">JPG or PNG, up to 5MB</span>
+                  </label>
+                )}
+                {imageError && (
+                  <p className="label-s-type2 text-red-400 mt-1">{imageError}</p>
+                )}
+              </div>
+
+              {/* Sources */}
+              <div>
+                <label className="label-m-type2 text-[#9B9EA3] mb-1 block">Sources</label>
+                <div className="flex flex-col gap-2">
+                  {sources.map((source, idx) => {
+                    const hasUrlError = !!sourceUrlErrors[idx]
+                    return (
+                      <div key={idx} className="flex gap-2 items-start">
+                        <div className="flex-1 flex flex-col gap-1">
+                          <input
+                            type="text"
+                            placeholder="Label (optional)"
+                            value={source.label}
+                            onChange={(e) => updateSource(idx, 'label', e.target.value)}
+                            className="w-full h-8 bg-[#262626] border border-[#262626] rounded-[8px] px-2 body-m text-[#DADEE5] outline-none focus:border-[#404040]"
+                          />
+                          <input
+                            type="url"
+                            placeholder="https://…"
+                            value={source.url}
+                            onChange={(e) => updateSource(idx, 'url', e.target.value)}
+                            className={cn(
+                              'w-full h-8 bg-[#262626] rounded-[8px] px-2 body-m text-[#DADEE5] outline-none border',
+                              hasUrlError
+                                ? 'border-red-500 focus:border-red-500'
+                                : 'border-[#262626] focus:border-[#404040]'
+                            )}
+                          />
+                          {hasUrlError && (
+                            <p className="label-s-type2 text-red-400">
+                              URL must start with http:// or https://
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeSource(idx)}
+                          className="p-1.5 rounded-md text-[#9B9EA3] hover:text-[#C9CED4] hover:bg-[#262626]"
+                          aria-label="Remove source"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSources(prev => [...prev, { label: '', url: '' }])}
+                  className="mt-2 flex items-center gap-1 label-m-type2 text-[#9B9EA3] hover:text-[#C9CED4]"
+                >
+                  <Plus size={14} /> Add source
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Buttons */}

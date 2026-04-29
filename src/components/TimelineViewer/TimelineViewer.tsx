@@ -92,7 +92,10 @@ export function TimelineViewer() {
           title: event.title,
           startDate: event.start_date,
           endDate: event.end_date || event.start_date,
-          category: event.category
+          category: event.category,
+          description: event.description ?? undefined,
+          imageUrl: event.image_url ?? undefined,
+          sources: event.sources ?? [],
         }));
 
         // Ensure all categories have the visible property
@@ -170,6 +173,7 @@ export function TimelineViewer() {
           categories={timeline.categories}
           scale={SCALES[timeline.scale]}
           groupByCategory={timeline.groupByCategory}
+          mode="present"
         />
       </main>
     </div>

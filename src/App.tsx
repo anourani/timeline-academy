@@ -12,6 +12,7 @@ import { computeDominantCategoryColor } from './utils/dominantCategory';
 import { AuthModal } from './components/Auth/AuthModal';
 import { UnsavedChangesModal } from './components/Modal/UnsavedChangesModal';
 import { useLocalDraft } from './hooks/useLocalDraft';
+import { useViewMode } from './hooks/useViewMode';
 import { TimelineEvent, CategoryConfig } from './types/event';
 import { LimitReachedError, getCurrentLimits } from './lib/limits';
 import { supabase } from './lib/supabase';
@@ -34,6 +35,7 @@ export function App() {
     groupByCategory, handleGroupByCategoryChange,
   } = useTimelineState();
   const { user } = useAuth();
+  const { mode, setMode } = useViewMode();
   const { saveTimeline, timelineId, loadTimeline, error: timelineError, retryInitialLoad } = useTimeline();
   const location = useLocation();
   const routerNavigate = useNavigate();
@@ -46,7 +48,7 @@ export function App() {
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
-  const { loadAllDrafts, loadDraft, saveDraft, saveDraftImmediate, createDraft, clearAllDrafts, deleteDraft: deleteLocalDraft } = useLocalDraft();
+  const { loadAllDrafts, loadDraft, saveDraft, createDraft, clearAllDrafts, deleteDraft: deleteLocalDraft } = useLocalDraft();
   const handledRouteStateRef = useRef(false);
   const migrationDoneRef = useRef(false);
   const { setOnTimelineSelect, setOnDraftSelect, refreshTimelines, setActiveTimelineId, setActiveDraftId: setPanelActiveDraftId, setActiveTimelineTitle, setActiveEventCount, setActiveDominantCategoryColor } = useSidePanel();
@@ -454,21 +456,15 @@ export function App() {
     return () => setActiveDominantCategoryColor(null);
   }, [timelineAccentColor, setActiveDominantCategoryColor]);
 
-  const handlePresentMode = () => {
-    if (timelineId) {
-      window.open(`/view/${timelineId}`, '_blank');
-    } else if (activeDraftId) {
-      // Flush current state to localStorage synchronously so the new tab can read it
-      saveDraftImmediate({
-        id: activeDraftId,
-        title, description, events, categories,
-        scale: currentScale.value,
-        groupByCategory,
-        savedAt: new Date().toISOString()
-      });
-      window.open(`/view/local?draftId=${activeDraftId}`, '_blank');
+  // Switching to present mode collapses any open editor surfaces. Panel
+  // overlays catch toggle clicks so this is mostly a safety net for
+  // programmatic switches.
+  useEffect(() => {
+    if (mode === 'present') {
+      setActivePanel(null);
+      setShowAddEventModal(false);
     }
-  };
+  }, [mode]);
 
   const handleClearTimeline = () => {
     clearEvents();
@@ -537,7 +533,8 @@ export function App() {
         onEventsClick={() => setActivePanel(prev => prev === 'events' ? null : 'events')}
         onSettingsClick={() => setActivePanel(prev => prev === 'settings' ? null : 'settings')}
         activePanel={activePanel}
-        onPresentMode={handlePresentMode}
+        mode={mode}
+        onModeChange={setMode}
         saveStatus={saveStatus}
         lastSavedTime={lastSavedTime}
       />
@@ -607,6 +604,7 @@ export function App() {
             groupByCategory={groupByCategory}
             pendingScrollDate={pendingScrollDate}
             onScrollComplete={() => setPendingScrollDate(null)}
+            mode={mode}
           />
         </main>
       )}

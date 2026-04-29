@@ -6,12 +6,14 @@ import { TimelineEvent } from './TimelineEvent';
 import { TimelineScrollIndicator } from './TimelineScrollIndicator';
 import { TimelineEvent as ITimelineEvent, CategoryConfig } from '../../types/event';
 import { TimelineScale } from '../../types/timeline';
+import type { ViewMode } from '../../hooks/useViewMode';
 import { getTimelineRange, shiftEventDates } from '../../utils/dateUtils';
 import { calculateEventStacks, StackedEvent } from '../../utils/eventStacking';
 import { useTimelineScroll } from '../../hooks/useTimelineScroll';
 import { useEventDrag } from '../../hooks/useEventDrag';
 import { EVENT_HEIGHT, EVENT_ROW_HEIGHT, CATEGORY_PADDING, CATEGORY_MIN_HEIGHT, SCROLL_INDICATOR_HEIGHT, HEADER_HEIGHT } from '../../constants/timeline';
 import { EventForm } from '../EventForm/EventForm';
+import { EventDetailPanel } from '../EventDetailPanel/EventDetailPanel';
 import {
   Dialog,
   DialogContent,
@@ -29,6 +31,7 @@ interface TimelineProps {
   groupByCategory?: boolean;
   pendingScrollDate?: string | null;
   onScrollComplete?: () => void;
+  mode?: ViewMode;
 }
 
 interface CategoryBand {
@@ -52,8 +55,10 @@ export function Timeline({
   scale,
   groupByCategory = false,
   pendingScrollDate,
-  onScrollComplete
+  onScrollComplete,
+  mode = 'edit',
 }: TimelineProps) {
+  const isEditMode = mode === 'edit';
   // Filter visible categories and their events
   const visibleCategories = categories.filter(cat => cat.visible);
   const visibleEvents = events.filter(event =>
@@ -66,7 +71,27 @@ export function Timeline({
   const [showEventModal, setShowEventModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [editingEvent, setEditingEvent] = useState<ITimelineEvent | null>(null);
+  const [selectedEventForDetail, setSelectedEventForDetail] = useState<ITimelineEvent | null>(null);
   const [pendingScrollEventId, setPendingScrollEventId] = useState<string | null>(null);
+
+  // Reflect upstream events into the open detail panel: keeps fields in sync
+  // if the underlying event is edited (or deleted) while the panel is open.
+  useEffect(() => {
+    if (!selectedEventForDetail) return;
+    const fresh = events.find(e => e.id === selectedEventForDetail.id);
+    if (!fresh) {
+      setSelectedEventForDetail(null);
+    } else if (fresh !== selectedEventForDetail) {
+      setSelectedEventForDetail(fresh);
+    }
+  }, [events, selectedEventForDetail]);
+
+  // When toggling back to edit mode, close any open detail panel.
+  useEffect(() => {
+    if (isEditMode) {
+      setSelectedEventForDetail(null);
+    }
+  }, [isEditMode]);
 
   const { visibleRange } = useTimelineScroll(scrollContainerRef, months.length * 4);
 
@@ -200,7 +225,7 @@ export function Timeline({
   }, [groupByCategory, visibleEvents, visibleCategories, months, scale.monthWidth]);
 
   const handleMonthClick = useCallback((monthIndex: number) => {
-    if (!onAddEvent || justDraggedRef.current) return;
+    if (!onAddEvent || !isEditMode || justDraggedRef.current) return;
 
     const clickedMonth = months[monthIndex];
     if (clickedMonth) {
@@ -209,14 +234,19 @@ export function Timeline({
       setEditingEvent(null);
       setShowEventModal(true);
     }
-  }, [months, onAddEvent, justDraggedRef]);
+  }, [months, onAddEvent, isEditMode, justDraggedRef]);
 
   const handleEventClick = useCallback((event: ITimelineEvent) => {
-    if (!onUpdateEvent || justDraggedRef.current) return;
-    setEditingEvent(event);
-    setSelectedDate(null);
-    setShowEventModal(true);
-  }, [onUpdateEvent, justDraggedRef]);
+    if (justDraggedRef.current) return;
+    if (isEditMode) {
+      if (!onUpdateEvent) return;
+      setEditingEvent(event);
+      setSelectedDate(null);
+      setShowEventModal(true);
+    } else {
+      setSelectedEventForDetail(event);
+    }
+  }, [onUpdateEvent, isEditMode, justDraggedRef]);
 
   const handleSubmit = useCallback((eventData: Omit<ITimelineEvent, 'id'>) => {
     let newEventId: string | null = null;
@@ -284,7 +314,7 @@ export function Timeline({
             style={{
               minWidth: `${months.length * scale.monthWidth}px`,
               minHeight: '100%',
-              cursor: onAddEvent ? 'pointer' : 'default'
+              cursor: onAddEvent && isEditMode ? 'pointer' : 'default'
             }}
           >
             <TimelineHeader months={months} scale={scale} />
@@ -303,7 +333,7 @@ export function Timeline({
                 <TimelineGrid
                   months={months}
                   height={band.height}
-                  onMonthHover={setHoveredMonth}
+                  onMonthHover={isEditMode ? setHoveredMonth : undefined}
                   onMonthClick={handleMonthClick}
                   scale={scale}
                 />
@@ -314,11 +344,11 @@ export function Timeline({
                     months={months}
                     categoryOffset={band.offset}
                     categoryColor={visibleCategories.find(c => c.id === event.category)?.color}
-                    onEventClick={onUpdateEvent ? handleEventClick : undefined}
+                    onEventClick={isEditMode && !onUpdateEvent ? undefined : handleEventClick}
                     scale={scale}
                     isDragging={dragState.isDragging && dragState.draggedEventId === event.id}
                     dragDeltaPixels={dragState.draggedEventId === event.id ? dragState.deltaPixels : 0}
-                    onPointerDown={onUpdateEvent ? handlePointerDown : undefined}
+                    onPointerDown={onUpdateEvent && isEditMode ? handlePointerDown : undefined}
                     rowHeight={rowHeight}
                     onMounted={handleEventMounted}
                   />
@@ -332,14 +362,14 @@ export function Timeline({
             <div className="relative border-l border-[#171717] flex-1 min-h-0">
               <TimelineGrid
                 months={months}
-                onMonthHover={setHoveredMonth}
+                onMonthHover={isEditMode ? setHoveredMonth : undefined}
                 onMonthClick={handleMonthClick}
                 scale={scale}
               />
             </div>
 
             {/* Add Event Cursor — hidden during drag */}
-            {hoveredMonth !== null && onAddEvent && !dragState.isDragging && (
+            {hoveredMonth !== null && onAddEvent && isEditMode && !dragState.isDragging && (
               <div
                 className="absolute top-[64px] bottom-0 bg-[#FBFBFB]/25 pointer-events-none transition-transform duration-75 ease-out"
                 style={{
@@ -351,6 +381,13 @@ export function Timeline({
           </div>
         </div>
       </div>
+
+      {/* Event detail panel (present mode) */}
+      <EventDetailPanel
+        isOpen={selectedEventForDetail !== null}
+        event={selectedEventForDetail}
+        onClose={() => setSelectedEventForDetail(null)}
+      />
 
       {/* Event Dialog */}
       <Dialog

@@ -155,7 +155,10 @@ export function useTimeline() {
           title: event.title,
           startDate: event.start_date,
           endDate: event.end_date,
-          category: event.category
+          category: event.category,
+          description: event.description ?? undefined,
+          imageUrl: event.image_url ?? undefined,
+          sources: event.sources ?? [],
         })),
         categories: categories || undefined,
         scale: timeline.scale || 'small',
@@ -196,7 +199,10 @@ export function useTimeline() {
                 title: event.title,
                 start_date: event.startDate,
                 end_date: event.endDate,
-                category: event.category
+                category: event.category,
+                description: event.description ?? null,
+                image_url: event.imageUrl ?? null,
+                sources: event.sources ?? [],
               }))
             );
 
