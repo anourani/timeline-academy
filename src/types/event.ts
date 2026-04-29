@@ -1,9 +1,17 @@
+export interface EventSource {
+  label: string;
+  url: string;
+}
+
 export interface TimelineEvent {
   id: string;
   title: string;
   startDate: string; // ISO date string
   endDate: string; // ISO date string
   category: TimelineCategory;
+  description?: string;
+  imageUrl?: string;
+  sources?: EventSource[];
 }
 
 export type TimelineCategory = 'category_1' | 'category_2' | 'category_3' | 'category_4';

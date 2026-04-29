@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
-import type { TimelineEvent } from '../types/event';
+import type { EventSource, TimelineEvent } from '../types/event';
+import { deleteEventImage } from './eventImageUpload';
 
 interface DbEvent {
   id: string;
@@ -7,6 +8,17 @@ interface DbEvent {
   start_date: string;
   end_date: string;
   category: string;
+  description: string | null;
+  image_url: string | null;
+  sources: EventSource[] | null;
+}
+
+function sourcesEqual(a: EventSource[], b: EventSource[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].label !== b[i].label || a[i].url !== b[i].url) return false;
+  }
+  return true;
 }
 
 /**
@@ -20,7 +32,7 @@ export async function saveTimelineEvents(
   // 1. Fetch current server events for this timeline
   const { data: serverRows, error: fetchError } = await supabase
     .from('events')
-    .select('id, title, start_date, end_date, category')
+    .select('id, title, start_date, end_date, category, description, image_url, sources')
     .eq('timeline_id', timelineId);
 
   if (fetchError) throw fetchError;
@@ -35,21 +47,27 @@ export async function saveTimelineEvents(
 
   for (const event of clientEvents) {
     const existing = serverMap.get(event.id);
+    const clientDescription = event.description ?? null;
+    const clientImageUrl = event.imageUrl ?? null;
+    const clientSources = event.sources ?? [];
+
     if (!existing) {
       toInsert.push(event);
     } else if (
       existing.title !== event.title ||
       existing.start_date !== event.startDate ||
       existing.end_date !== event.endDate ||
-      existing.category !== event.category
+      existing.category !== event.category ||
+      (existing.description ?? null) !== clientDescription ||
+      (existing.image_url ?? null) !== clientImageUrl ||
+      !sourcesEqual(existing.sources ?? [], clientSources)
     ) {
       toUpdate.push(event);
     }
   }
 
-  const toDeleteIds = serverEvents
-    .filter(e => !clientIds.has(e.id))
-    .map(e => e.id);
+  const toDelete = serverEvents.filter(e => !clientIds.has(e.id));
+  const toDeleteIds = toDelete.map(e => e.id);
 
   // 3. Execute operations: UPDATE first, then DELETE, then INSERT
 
@@ -63,6 +81,9 @@ export async function saveTimelineEvents(
         start_date: event.startDate,
         end_date: event.endDate,
         category: event.category,
+        description: event.description ?? null,
+        image_url: event.imageUrl ?? null,
+        sources: event.sources ?? [],
       })
       .eq('id', event.id)
       .eq('timeline_id', timelineId);
@@ -70,8 +91,15 @@ export async function saveTimelineEvents(
     if (error) throw error;
   }
 
-  // Deletes
+  // Deletes — best-effort image cleanup before removing the row so a
+  // failed image delete doesn't strand the DB row.
   if (toDeleteIds.length > 0) {
+    await Promise.all(
+      toDelete
+        .filter(e => !!e.image_url)
+        .map(e => deleteEventImage(e.image_url as string))
+    );
+
     const { error } = await supabase
       .from('events')
       .delete()
@@ -93,6 +121,9 @@ export async function saveTimelineEvents(
           start_date: event.startDate,
           end_date: event.endDate,
           category: event.category,
+          description: event.description ?? null,
+          image_url: event.imageUrl ?? null,
+          sources: event.sources ?? [],
         }))
       );
 

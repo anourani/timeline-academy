@@ -13,6 +13,7 @@ import { useTimelineScroll } from '../../hooks/useTimelineScroll';
 import { useEventDrag } from '../../hooks/useEventDrag';
 import { EVENT_HEIGHT, EVENT_ROW_HEIGHT, CATEGORY_PADDING, CATEGORY_MIN_HEIGHT, SCROLL_INDICATOR_HEIGHT, HEADER_HEIGHT } from '../../constants/timeline';
 import { EventForm } from '../EventForm/EventForm';
+import { EventDetailPanel } from '../EventDetailPanel/EventDetailPanel';
 import {
   Dialog,
   DialogContent,
@@ -70,7 +71,27 @@ export function Timeline({
   const [showEventModal, setShowEventModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [editingEvent, setEditingEvent] = useState<ITimelineEvent | null>(null);
+  const [selectedEventForDetail, setSelectedEventForDetail] = useState<ITimelineEvent | null>(null);
   const [pendingScrollEventId, setPendingScrollEventId] = useState<string | null>(null);
+
+  // Reflect upstream events into the open detail panel: keeps fields in sync
+  // if the underlying event is edited (or deleted) while the panel is open.
+  useEffect(() => {
+    if (!selectedEventForDetail) return;
+    const fresh = events.find(e => e.id === selectedEventForDetail.id);
+    if (!fresh) {
+      setSelectedEventForDetail(null);
+    } else if (fresh !== selectedEventForDetail) {
+      setSelectedEventForDetail(fresh);
+    }
+  }, [events, selectedEventForDetail]);
+
+  // When toggling back to edit mode, close any open detail panel.
+  useEffect(() => {
+    if (isEditMode) {
+      setSelectedEventForDetail(null);
+    }
+  }, [isEditMode]);
 
   const { visibleRange } = useTimelineScroll(scrollContainerRef, months.length * 4);
 
@@ -216,10 +237,15 @@ export function Timeline({
   }, [months, onAddEvent, isEditMode, justDraggedRef]);
 
   const handleEventClick = useCallback((event: ITimelineEvent) => {
-    if (!onUpdateEvent || !isEditMode || justDraggedRef.current) return;
-    setEditingEvent(event);
-    setSelectedDate(null);
-    setShowEventModal(true);
+    if (justDraggedRef.current) return;
+    if (isEditMode) {
+      if (!onUpdateEvent) return;
+      setEditingEvent(event);
+      setSelectedDate(null);
+      setShowEventModal(true);
+    } else {
+      setSelectedEventForDetail(event);
+    }
   }, [onUpdateEvent, isEditMode, justDraggedRef]);
 
   const handleSubmit = useCallback((eventData: Omit<ITimelineEvent, 'id'>) => {
@@ -318,7 +344,7 @@ export function Timeline({
                     months={months}
                     categoryOffset={band.offset}
                     categoryColor={visibleCategories.find(c => c.id === event.category)?.color}
-                    onEventClick={onUpdateEvent && isEditMode ? handleEventClick : undefined}
+                    onEventClick={isEditMode && !onUpdateEvent ? undefined : handleEventClick}
                     scale={scale}
                     isDragging={dragState.isDragging && dragState.draggedEventId === event.id}
                     dragDeltaPixels={dragState.draggedEventId === event.id ? dragState.deltaPixels : 0}
@@ -355,6 +381,13 @@ export function Timeline({
           </div>
         </div>
       </div>
+
+      {/* Event detail panel (present mode) */}
+      <EventDetailPanel
+        isOpen={selectedEventForDetail !== null}
+        event={selectedEventForDetail}
+        onClose={() => setSelectedEventForDetail(null)}
+      />
 
       {/* Event Dialog */}
       <Dialog
