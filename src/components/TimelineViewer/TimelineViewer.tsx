@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { Timeline } from '../Timeline/Timeline';
 import { TimelineTitle } from '../TimelineTitle/TimelineTitle';
+import { EventDetailPanel } from '../EventDetailPanel/EventDetailPanel';
 import { SCALES } from '../../constants/scales';
 import { DEFAULT_CATEGORIES } from '../../constants/categories';
 import { TimelineEvent, CategoryConfig } from '../../types/event';
@@ -23,6 +24,7 @@ export function TimelineViewer() {
   const [timeline, setTimeline] = useState<TimelineData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [detailPanelEvent, setDetailPanelEvent] = useState<TimelineEvent | null>(null);
 
   useEffect(() => {
     const loadTimeline = async () => {
@@ -92,7 +94,11 @@ export function TimelineViewer() {
           title: event.title,
           startDate: event.start_date,
           endDate: event.end_date || event.start_date,
-          category: event.category
+          category: event.category,
+          description: event.description ?? null,
+          imageUrl: event.image_url ?? null,
+          imageAttribution: event.image_attribution ?? null,
+          sources: event.sources ?? null,
         }));
 
         // Ensure all categories have the visible property
@@ -170,8 +176,22 @@ export function TimelineViewer() {
           categories={timeline.categories}
           scale={SCALES[timeline.scale]}
           groupByCategory={timeline.groupByCategory}
+          mode="view"
+          onOpenDetails={(event) => setDetailPanelEvent(event)}
         />
       </main>
+
+      <EventDetailPanel
+        open={detailPanelEvent !== null}
+        event={detailPanelEvent}
+        timelineTitle={timeline.title}
+        mode="view"
+        onClose={() => setDetailPanelEvent(null)}
+        onEventChange={() => {
+          // Public viewers cannot mutate event details — view mode hides the
+          // footer buttons, so this should never fire. No-op for safety.
+        }}
+      />
     </div>
   );
 }

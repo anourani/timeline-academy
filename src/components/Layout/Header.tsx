@@ -33,6 +33,7 @@ interface HeaderProps {
   onAddEventClick: () => void;
   onCloseAddEventModal: () => void;
   onDeleteTimeline: () => Promise<void> | void;
+  mode?: 'edit' | 'view';
 }
 
 export function Header({
@@ -57,6 +58,7 @@ export function Header({
   onAddEventClick,
   onCloseAddEventModal,
   onDeleteTimeline,
+  mode = 'edit',
 }: HeaderProps) {
   const closePanel = () => onActivePanelChange(null);
   const togglePanel = (panel: 'events' | 'settings') => {
@@ -70,15 +72,18 @@ export function Header({
 
   return (
     <>
-      {/* Mobile toolbar — desktop toolbar lives in GlobalNav */}
-      <div className="md:hidden">
-        <FloatingToolbar
-          onAddEventClick={onAddEventClick}
-          onEventsClick={() => togglePanel('events')}
-          onSettingsClick={() => togglePanel('settings')}
-          activePanel={activePanel}
-        />
-      </div>
+      {/* Mobile toolbar — desktop toolbar lives in GlobalNav.
+          Hidden in view mode (no editing affordances). */}
+      {mode === 'edit' && (
+        <div className="md:hidden">
+          <FloatingToolbar
+            onAddEventClick={onAddEventClick}
+            onEventsClick={() => togglePanel('events')}
+            onSettingsClick={() => togglePanel('settings')}
+            activePanel={activePanel}
+          />
+        </div>
+      )}
 
       <Dialog open={showAddEventModal} onOpenChange={(open) => { if (!open) onCloseAddEventModal(); }}>
         <DialogContent className="bg-surface-secondary border-[rgba(210,210,210,0.15)] max-w-[360px] rounded-[20px] px-5 py-6">

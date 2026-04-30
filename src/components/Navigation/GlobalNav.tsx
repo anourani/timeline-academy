@@ -23,6 +23,9 @@ interface GlobalNavProps {
   /** Save status — only rendered on variant="timeline" */
   saveStatus?: SaveStatus
   lastSavedTime?: Date
+  /** Edit/View mode toggle — only rendered on variant="timeline" */
+  mode?: 'edit' | 'view'
+  onModeChange?: (mode: 'edit' | 'view') => void
 }
 
 export function GlobalNav({
@@ -39,6 +42,8 @@ export function GlobalNav({
   onPresentMode,
   saveStatus,
   lastSavedTime,
+  mode = 'edit',
+  onModeChange,
 }: GlobalNavProps) {
   const { isOpen: isPanelOpen, toggle: togglePanel } = useSidePanel()
 
@@ -80,7 +85,7 @@ export function GlobalNav({
 
           {showTitleCluster && (
             <div className="flex flex-col gap-1 min-w-0">
-              {onTimelineTitleChange ? (
+              {onTimelineTitleChange && mode === 'edit' ? (
                 <input
                   type="text"
                   value={timelineTitle ?? ''}
@@ -119,7 +124,7 @@ export function GlobalNav({
         </div>
 
         {/* Center cluster: editor action buttons */}
-        {variant === 'timeline' && (
+        {variant === 'timeline' && mode === 'edit' && (
           <div className="hidden md:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 items-center gap-2.5">
             {onAddEventClick && (
               <Button variant="glass" size="none" onClick={onAddEventClick}>
@@ -156,6 +161,9 @@ export function GlobalNav({
               <SaveStatusIndicator status={saveStatus} lastSaved={lastSavedTime} />
             </div>
           )}
+          {variant === 'timeline' && onModeChange && (
+            <ModeToggle mode={mode} onChange={onModeChange} />
+          )}
           {variant === 'timeline' && (
             <>
               <Button
@@ -177,6 +185,49 @@ export function GlobalNav({
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+interface ModeToggleProps {
+  mode: 'edit' | 'view'
+  onChange: (mode: 'edit' | 'view') => void
+}
+
+function ModeToggle({ mode, onChange }: ModeToggleProps) {
+  // Glass-pill toggle that slides between Edit / View. Matches the height of
+  // the adjacent glass-sm buttons (Present / Share) so the cluster reads as
+  // one row.
+  return (
+    <div className="relative flex items-center h-[34px] rounded-[10px] backdrop-blur-[12px] bg-white/10 border border-white/[0.15] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4),inset_0px_1px_0px_0px_rgba(255,255,255,0.1)] p-[3px]">
+      {/* Sliding indicator */}
+      <div
+        className="absolute top-[3px] bottom-[3px] w-[60px] rounded-[7px] bg-[rgba(37,99,235,0.4)] pointer-events-none"
+        style={{
+          left: mode === 'edit' ? '3px' : '63px',
+          transition: 'left 200ms ease-out',
+        }}
+      />
+      <button
+        type="button"
+        onClick={() => onChange('edit')}
+        className={`relative w-[60px] h-full flex items-center justify-center rounded-[7px] font-['Avenir',sans-serif] font-medium text-[14px] leading-[20px] transition-colors ${
+          mode === 'edit' ? 'text-[#dadee5]' : 'text-[#c9ced4] hover:text-[#dadee5]'
+        }`}
+        aria-pressed={mode === 'edit'}
+      >
+        Edit
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange('view')}
+        className={`relative w-[60px] h-full flex items-center justify-center rounded-[7px] font-['Avenir',sans-serif] font-medium text-[14px] leading-[20px] transition-colors ${
+          mode === 'view' ? 'text-[#dadee5]' : 'text-[#c9ced4] hover:text-[#dadee5]'
+        }`}
+        aria-pressed={mode === 'view'}
+      >
+        View
+      </button>
     </div>
   )
 }

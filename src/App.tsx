@@ -11,6 +11,7 @@ import { useSidePanel } from './hooks/useSidePanel';
 import { computeDominantCategoryColor } from './utils/dominantCategory';
 import { AuthModal } from './components/Auth/AuthModal';
 import { UnsavedChangesModal } from './components/Modal/UnsavedChangesModal';
+import { EventDetailPanel } from './components/EventDetailPanel/EventDetailPanel';
 import { useLocalDraft } from './hooks/useLocalDraft';
 import { TimelineEvent, CategoryConfig } from './types/event';
 import { LimitReachedError, getCurrentLimits } from './lib/limits';
@@ -42,6 +43,8 @@ export function App() {
   const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
   const [activePanel, setActivePanel] = useState<'events' | 'settings' | null>(null);
   const [showAddEventModal, setShowAddEventModal] = useState(false);
+  const [mode, setMode] = useState<'edit' | 'view'>('edit');
+  const [detailPanelEvent, setDetailPanelEvent] = useState<TimelineEvent | null>(null);
   const [pendingScrollDate, setPendingScrollDate] = useState<string | null>(null);
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
@@ -510,6 +513,10 @@ export function App() {
     updateEvent(updatedEvent);
   };
 
+  const handleDeleteEvent = (eventId: string) => {
+    setEvents(events.filter(e => e.id !== eventId));
+  };
+
   const handleBulkEventsChange = (newEvents: TimelineEvent[]) => {
     const currentIds = new Set(events.map(e => e.id));
     const addedEvents = newEvents.filter(e => !currentIds.has(e.id));
@@ -540,6 +547,12 @@ export function App() {
         onPresentMode={handlePresentMode}
         saveStatus={saveStatus}
         lastSavedTime={lastSavedTime}
+        mode={mode}
+        onModeChange={(newMode) => {
+          setMode(newMode);
+          // Force any open editing panel closed when switching to view mode.
+          if (newMode === 'view') setActivePanel(null);
+        }}
       />
       <Header
         title={title}
@@ -563,6 +576,7 @@ export function App() {
         onAddEventClick={handleAddEventClick}
         onCloseAddEventModal={() => setShowAddEventModal(false)}
         onDeleteTimeline={handleDeleteTimeline}
+        mode={mode}
       />
       {!user && events.length > 0 && !nudgeDismissed && (
         <div className="mx-4 mt-2 px-4 py-3 bg-blue-900/40 border border-blue-800/50 rounded-lg flex items-center justify-between text-sm shrink-0">
@@ -601,12 +615,15 @@ export function App() {
           <Timeline
             events={events}
             categories={categories}
-            onAddEvent={addEvent}
-            onUpdateEvent={handleUpdateEvent}
+            onAddEvent={mode === 'edit' ? addEvent : undefined}
+            onUpdateEvent={mode === 'edit' ? handleUpdateEvent : undefined}
+            onDeleteEvent={mode === 'edit' ? handleDeleteEvent : undefined}
+            onOpenDetails={(event) => setDetailPanelEvent(event)}
             scale={currentScale}
             groupByCategory={groupByCategory}
             pendingScrollDate={pendingScrollDate}
             onScrollComplete={() => setPendingScrollDate(null)}
+            mode={mode}
           />
         </main>
       )}
@@ -622,6 +639,17 @@ export function App() {
         }}
         onDiscard={handleDiscardAndSwitch}
         onSave={handleSaveAndSwitch}
+      />
+      <EventDetailPanel
+        open={detailPanelEvent !== null}
+        event={detailPanelEvent}
+        timelineTitle={title}
+        mode={mode}
+        onClose={() => setDetailPanelEvent(null)}
+        onEventChange={(updated) => {
+          handleUpdateEvent(updated);
+          setDetailPanelEvent(updated);
+        }}
       />
     </div>
   );
