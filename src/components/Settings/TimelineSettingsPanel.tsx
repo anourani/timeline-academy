@@ -6,6 +6,7 @@ import type { AddEventsResult } from '../../hooks/useEvents';
 import { exportEventsToExcel } from '../../utils/excelExport';
 import { ConfirmationModal } from '../Modal/ConfirmationModal';
 import { ScaleSelector } from './ScaleSelector';
+import { ApiKeySection } from './ApiKeySection';
 import { SidePanelActionButton } from '../SidePanel/SidePanelActionButton';
 import { DEFAULT_TIMELINE_DESCRIPTION } from '../../constants/defaults';
 import { utils, read } from 'xlsx';
@@ -251,6 +252,9 @@ export function TimelineSettingsPanel({
                       </button>
                     </div>
                   </div>
+
+                  {/* AI Settings (BYOK) */}
+                  <ApiKeySection />
 
                   {/* Spacer */}
                   <div className="flex-1" />

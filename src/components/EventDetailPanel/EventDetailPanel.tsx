@@ -4,6 +4,7 @@ import { X } from 'lucide-react'
 import { ConfirmationModal } from '../Modal/ConfirmationModal'
 import { formatDateLong } from '@/utils/dateUtils'
 import { useAuth } from '@/hooks/useAuth'
+import { useAnthropicKey } from '@/services/userApiKey'
 import {
   enrichEvent,
   fetchEventImage,
@@ -17,11 +18,11 @@ interface EventDetailPanelProps {
   mode: 'edit' | 'view'
   onClose: () => void
   onEventChange: (updated: TimelineEvent) => void
-  /** Optional: trigger the sign-in modal from the panel's logged-out state. */
-  onRequestSignIn?: () => void
+  /** Trigger the BYOK / sign-in setup modal when neither path is available. */
+  onRequestSetup?: () => void
 }
 
-type PanelState = 'idle' | 'generating' | 'loaded' | 'error' | 'signin-required'
+type PanelState = 'idle' | 'generating' | 'loaded' | 'error' | 'setup-required'
 
 function formatDateRange(event: TimelineEvent): string {
   if (event.startDate === event.endDate) return formatDateLong(event.startDate)
@@ -39,9 +40,10 @@ export function EventDetailPanel({
   mode,
   onClose,
   onEventChange,
-  onRequestSignIn,
+  onRequestSetup,
 }: EventDetailPanelProps) {
   const { user } = useAuth()
+  const apiKey = useAnthropicKey()
   const [state, setState] = useState<PanelState>('idle')
   const [streamedDescription, setStreamedDescription] = useState('')
   const [imageUrl, setImageUrl] = useState<string | null>(null)
@@ -80,11 +82,11 @@ export function EventDetailPanel({
       return
     }
 
-    // Generation requires a signed-in user (the edge function rejects
-    // anonymous calls). Surface a friendly sign-in prompt instead of running
-    // the request just to show an auth error.
-    if (!user) {
-      setState('signin-required')
+    // Generation needs at least one of: a BYOK Anthropic key (browser-direct)
+    // or a signed-in user (server path). Without either, prompt the user to
+    // pick a path instead of running a request that's destined to fail.
+    if (!apiKey && !user) {
+      setState('setup-required')
       setStreamedDescription('')
       setImageUrl(null)
       setImageAttribution(null)
@@ -102,7 +104,7 @@ export function EventDetailPanel({
 
     runGeneration(event, false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, event?.id, user])
+  }, [open, event?.id, user, apiKey])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -311,17 +313,17 @@ export function EventDetailPanel({
                 <h2 className="header-xsmall text-[#DADEE5] m-0">{event.title}</h2>
 
                 {/* Description / state */}
-                {state === 'signin-required' ? (
+                {state === 'setup-required' ? (
                   <div className="flex flex-col gap-2">
                     <p className="body-m text-[#9B9EA3] m-0">
-                      Sign in to generate AI-powered details for this event.
+                      Generate with AI — paste your Anthropic key or sign in.
                     </p>
-                    {onRequestSignIn && (
+                    {onRequestSetup && (
                       <button
-                        onClick={onRequestSignIn}
+                        onClick={onRequestSetup}
                         className="self-start font-['Avenir',sans-serif] text-[14px] leading-[20px] text-[#DADEE5] underline hover:text-white"
                       >
-                        Sign in
+                        Set up AI
                       </button>
                     )}
                   </div>

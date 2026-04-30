@@ -1,4 +1,6 @@
 import { supabase } from '../lib/supabase'
+import { enrichEventDirect } from './anthropicDirect'
+import { getAnthropicKey } from './userApiKey'
 import type { EventSource, TimelineEvent } from '../types/event'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
@@ -38,13 +40,29 @@ export async function fetchEventImage(title: string): Promise<{
   }
 }
 
+/**
+ * Enrich an event with AI-generated description, sources, and image.
+ *
+ * Routing:
+ *   - User has BYOK key set → call Anthropic directly from the browser.
+ *     Bypasses our edge function, our rate limit, and our billing.
+ *   - Otherwise (signed-in user, no key) → use the edge function with their JWT.
+ *   - Logged-out user without a key → returns a "needs setup" error so the
+ *     panel can surface the BYOK / sign-in prompt.
+ */
 export async function enrichEvent(
   event: TimelineEvent,
   timelineTitle: string,
   handlers: EnrichmentStreamHandlers,
   signal?: AbortSignal,
 ): Promise<void> {
-  // Use the user's JWT — anonymous enrichment is rejected by the edge function.
+  const byokKey = getAnthropicKey()
+  if (byokKey) {
+    await enrichEventDirect(event, timelineTitle, handlers, byokKey, signal)
+    return
+  }
+
+  // Server path — requires a signed-in user.
   const session = await supabase.auth.getSession()
   const token = session.data.session?.access_token
   if (!token) {

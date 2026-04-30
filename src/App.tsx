@@ -11,6 +11,7 @@ import { useSidePanel } from './hooks/useSidePanel';
 import { computeDominantCategoryColor } from './utils/dominantCategory';
 import { AuthModal } from './components/Auth/AuthModal';
 import { UnsavedChangesModal } from './components/Modal/UnsavedChangesModal';
+import { ApiKeyModal } from './components/Modal/ApiKeyModal';
 import { EventDetailPanel } from './components/EventDetailPanel/EventDetailPanel';
 import { useLocalDraft } from './hooks/useLocalDraft';
 import { TimelineEvent, CategoryConfig } from './types/event';
@@ -45,6 +46,11 @@ export function App() {
   const [showAddEventModal, setShowAddEventModal] = useState(false);
   const [mode, setMode] = useState<'edit' | 'view'>('edit');
   const [detailPanelEvent, setDetailPanelEvent] = useState<TimelineEvent | null>(null);
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  // Once a key is saved or sign-in completes, we want to re-open the panel for
+  // the same event so generation kicks off automatically. This holds the
+  // event we were trying to enrich when the user landed on setup-required.
+  const pendingDetailEventRef = useRef<TimelineEvent | null>(null);
   const [pendingScrollDate, setPendingScrollDate] = useState<string | null>(null);
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
@@ -76,6 +82,15 @@ export function App() {
     () => computeDominantCategoryColor(events, categories),
     [events, categories],
   );
+
+  // After sign-in completes, re-open the detail panel for the event that
+  // landed on setup-required, so the now-available server path can run.
+  useEffect(() => {
+    if (user && pendingDetailEventRef.current) {
+      setDetailPanelEvent(pendingDetailEventRef.current);
+      pendingDetailEventRef.current = null;
+    }
+  }, [user]);
 
   // Trigger autosave when timeline data changes
   useEffect(() => {
@@ -650,8 +665,25 @@ export function App() {
           handleUpdateEvent(updated);
           setDetailPanelEvent(updated);
         }}
-        onRequestSignIn={() => {
+        onRequestSetup={() => {
+          pendingDetailEventRef.current = detailPanelEvent;
           setDetailPanelEvent(null);
+          setShowApiKeyModal(true);
+        }}
+      />
+      <ApiKeyModal
+        isOpen={showApiKeyModal}
+        onClose={() => setShowApiKeyModal(false)}
+        onKeySaved={() => {
+          setShowApiKeyModal(false);
+          // Resume the panel; the new key flips us straight into generating.
+          if (pendingDetailEventRef.current) {
+            setDetailPanelEvent(pendingDetailEventRef.current);
+            pendingDetailEventRef.current = null;
+          }
+        }}
+        onRequestSignIn={() => {
+          setShowApiKeyModal(false);
           setShowAuthModal(true);
         }}
       />
