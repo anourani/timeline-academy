@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { ConfirmationModal } from '../Modal/ConfirmationModal'
 import { formatDateLong } from '@/utils/dateUtils'
+import { useAuth } from '@/hooks/useAuth'
 import {
   enrichEvent,
   fetchEventImage,
@@ -16,9 +17,11 @@ interface EventDetailPanelProps {
   mode: 'edit' | 'view'
   onClose: () => void
   onEventChange: (updated: TimelineEvent) => void
+  /** Optional: trigger the sign-in modal from the panel's logged-out state. */
+  onRequestSignIn?: () => void
 }
 
-type PanelState = 'idle' | 'generating' | 'loaded' | 'error'
+type PanelState = 'idle' | 'generating' | 'loaded' | 'error' | 'signin-required'
 
 function formatDateRange(event: TimelineEvent): string {
   if (event.startDate === event.endDate) return formatDateLong(event.startDate)
@@ -36,7 +39,9 @@ export function EventDetailPanel({
   mode,
   onClose,
   onEventChange,
+  onRequestSignIn,
 }: EventDetailPanelProps) {
+  const { user } = useAuth()
   const [state, setState] = useState<PanelState>('idle')
   const [streamedDescription, setStreamedDescription] = useState('')
   const [imageUrl, setImageUrl] = useState<string | null>(null)
@@ -45,6 +50,7 @@ export function EventDetailPanel({
   const [errorMessage, setErrorMessage] = useState('')
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
+  const panelRef = useRef<HTMLElement | null>(null)
 
   // Reset state when the panel closes or the event changes.
   useEffect(() => {
@@ -74,6 +80,19 @@ export function EventDetailPanel({
       return
     }
 
+    // Generation requires a signed-in user (the edge function rejects
+    // anonymous calls). Surface a friendly sign-in prompt instead of running
+    // the request just to show an auth error.
+    if (!user) {
+      setState('signin-required')
+      setStreamedDescription('')
+      setImageUrl(null)
+      setImageAttribution(null)
+      setSources([])
+      setErrorMessage('')
+      return
+    }
+
     setState('generating')
     setStreamedDescription('')
     setImageUrl(null)
@@ -83,7 +102,7 @@ export function EventDetailPanel({
 
     runGeneration(event, false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, event?.id])
+  }, [open, event?.id, user])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -92,15 +111,34 @@ export function EventDetailPanel({
     }
   }, [])
 
-  // Escape closes the panel (desktop). Mobile uses the X button.
+  // Escape closes the panel. Click outside the panel also closes it (desktop
+  // has no visible backdrop so the timeline behind stays visible, but a click
+  // anywhere off-panel should still dismiss the way Cancel would). Suppress
+  // outside-click while the destructive Remove confirmation modal is open so
+  // clicking the modal's overlay doesn't also dismiss the panel.
   useEffect(() => {
     if (!open) return
-    const handler = (e: KeyboardEvent) => {
+    const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
-    document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
-  }, [open, onClose])
+    const handleMouseDown = (e: MouseEvent) => {
+      if (showRemoveConfirm) return
+      const node = panelRef.current
+      if (!node) return
+      const target = e.target as Node | null
+      if (target && !node.contains(target)) {
+        onClose()
+      }
+    }
+    document.addEventListener('keydown', handleKey)
+    // mousedown (not click) so we close before any background element starts
+    // its own interaction (e.g. dragging an event).
+    document.addEventListener('mousedown', handleMouseDown)
+    return () => {
+      document.removeEventListener('keydown', handleKey)
+      document.removeEventListener('mousedown', handleMouseDown)
+    }
+  }, [open, onClose, showRemoveConfirm])
 
   function runGeneration(currentEvent: TimelineEvent, preserveImage: boolean) {
     // Abort any prior in-flight generation
@@ -213,6 +251,7 @@ export function EventDetailPanel({
       />
 
       <aside
+        ref={panelRef}
         className={`fixed inset-0 md:inset-y-0 md:right-0 md:left-auto md:w-[326px] md:pr-[6px] md:py-[6px] z-50 transition-transform duration-300 ease-out ${
           open ? 'translate-x-0' : 'translate-x-full'
         }`}
@@ -272,7 +311,21 @@ export function EventDetailPanel({
                 <h2 className="header-xsmall text-[#DADEE5] m-0">{event.title}</h2>
 
                 {/* Description / state */}
-                {state === 'error' ? (
+                {state === 'signin-required' ? (
+                  <div className="flex flex-col gap-2">
+                    <p className="body-m text-[#9B9EA3] m-0">
+                      Sign in to generate AI-powered details for this event.
+                    </p>
+                    {onRequestSignIn && (
+                      <button
+                        onClick={onRequestSignIn}
+                        className="self-start font-['Avenir',sans-serif] text-[14px] leading-[20px] text-[#DADEE5] underline hover:text-white"
+                      >
+                        Sign in
+                      </button>
+                    )}
+                  </div>
+                ) : state === 'error' ? (
                   <div className="flex flex-col gap-2">
                     <p className="body-m text-[#9B9EA3] m-0">
                       Couldn't generate details. {errorMessage ? `(${errorMessage})` : ''}

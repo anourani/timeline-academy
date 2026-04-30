@@ -650,6 +650,10 @@ export function App() {
           handleUpdateEvent(updated);
           setDetailPanelEvent(updated);
         }}
+        onRequestSignIn={() => {
+          setDetailPanelEvent(null);
+          setShowAuthModal(true);
+        }}
       />
     </div>
   );
