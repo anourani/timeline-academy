@@ -26,7 +26,6 @@ interface GlobalNavProps {
   onEventsClick?: () => void
   onSettingsClick?: () => void
   activePanel?: 'events' | 'settings' | null
-  onPresentMode?: () => void
   /** Save status — only rendered on variant="timeline" */
   saveStatus?: SaveStatus
   lastSavedTime?: Date
@@ -46,7 +45,6 @@ export function GlobalNav({
   onEventsClick,
   onSettingsClick,
   activePanel,
-  onPresentMode,
   saveStatus,
   lastSavedTime,
   mode = 'edit',
@@ -172,23 +170,14 @@ export function GlobalNav({
             <ModeToggle mode={mode} onChange={onModeChange} />
           )}
           {variant === 'timeline' && (
-            <>
-              <Button
-                variant="glass-sm"
-                size="none"
-                onClick={onPresentMode}
-              >
-                Present
-              </Button>
-              <Button
-                variant="glass-sm"
-                size="none"
-                onClick={handleShare}
-                disabled={!timelineId}
-              >
-                Share
-              </Button>
-            </>
+            <Button
+              variant="glass-sm"
+              size="none"
+              onClick={handleShare}
+              disabled={!timelineId}
+            >
+              Share
+            </Button>
           )}
         </div>
       </div>

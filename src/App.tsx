@@ -55,7 +55,7 @@ export function App() {
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
-  const { loadAllDrafts, loadDraft, saveDraft, saveDraftImmediate, createDraft, clearAllDrafts, deleteDraft: deleteLocalDraft } = useLocalDraft();
+  const { loadAllDrafts, loadDraft, saveDraft, createDraft, clearAllDrafts, deleteDraft: deleteLocalDraft } = useLocalDraft();
   const handledRouteStateRef = useRef(false);
   const migrationDoneRef = useRef(false);
   const { setOnTimelineSelect, setOnDraftSelect, refreshTimelines, setActiveTimelineId, setActiveDraftId: setPanelActiveDraftId, setActiveTimelineTitle, setActiveEventCount, setActiveDominantCategoryColor } = useSidePanel();
@@ -472,22 +472,6 @@ export function App() {
     return () => setActiveDominantCategoryColor(null);
   }, [timelineAccentColor, setActiveDominantCategoryColor]);
 
-  const handlePresentMode = () => {
-    if (timelineId) {
-      window.open(`/view/${timelineId}`, '_blank');
-    } else if (activeDraftId) {
-      // Flush current state to localStorage synchronously so the new tab can read it
-      saveDraftImmediate({
-        id: activeDraftId,
-        title, description, events, categories,
-        scale: currentScale.value,
-        groupByCategory,
-        savedAt: new Date().toISOString()
-      });
-      window.open(`/view/local?draftId=${activeDraftId}`, '_blank');
-    }
-  };
-
   const handleClearTimeline = () => {
     clearEvents();
   };
@@ -559,7 +543,6 @@ export function App() {
         onEventsClick={() => setActivePanel(prev => prev === 'events' ? null : 'events')}
         onSettingsClick={() => setActivePanel(prev => prev === 'settings' ? null : 'settings')}
         activePanel={activePanel}
-        onPresentMode={handlePresentMode}
         saveStatus={saveStatus}
         lastSavedTime={lastSavedTime}
         mode={mode}
