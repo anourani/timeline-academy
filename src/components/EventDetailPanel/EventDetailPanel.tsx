@@ -243,10 +243,11 @@ export function EventDetailPanel({
 
   return createPortal(
     <>
-      {/* Mobile-only backdrop */}
+      {/* Backdrop — same bg-black/50 overlay used by FeedbackPanel and
+          TimelineSettingsPanel. Clicking dismisses the panel. */}
       <div
         onClick={onClose}
-        className={`md:hidden fixed inset-0 z-40 bg-black/50 transition-opacity duration-300 ease-out ${
+        className={`fixed inset-0 z-40 bg-black/50 transition-opacity duration-300 ease-out ${
           open ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
         aria-hidden="true"
