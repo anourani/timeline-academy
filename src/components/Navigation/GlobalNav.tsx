@@ -1,5 +1,12 @@
 import { type CSSProperties } from 'react'
-import { Columns3, PanelLeft, Plus, Settings as SettingsIcon } from 'lucide-react'
+import {
+  Columns3,
+  PanelLeft,
+  Plus,
+  Settings as SettingsIcon,
+  SquarePen,
+  SquarePlay,
+} from 'lucide-react'
 import { useSidePanel } from '@/hooks/useSidePanel'
 import { Button } from '@/components/ui/button'
 import { SaveStatusIndicator, type SaveStatus } from '@/components/SaveStatusIndicator/SaveStatusIndicator'
@@ -194,40 +201,74 @@ interface ModeToggleProps {
   onChange: (mode: 'edit' | 'view') => void
 }
 
+// Edit / Present segmented toggle. Each segment is fixed-width to match the
+// design spec (Edit = 72px, Present = 94px). The selected segment fills with
+// #262626; the unselected segment is transparent and dims its label/icon.
 function ModeToggle({ mode, onChange }: ModeToggleProps) {
-  // Glass-pill toggle that slides between Edit / View. Matches the height of
-  // the adjacent glass-sm buttons (Present / Share) so the cluster reads as
-  // one row.
+  const isEdit = mode === 'edit'
   return (
-    <div className="relative flex items-center h-[34px] rounded-[10px] backdrop-blur-[12px] bg-white/10 border border-white/[0.15] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4),inset_0px_1px_0px_0px_rgba(255,255,255,0.1)] p-[3px]">
-      {/* Sliding indicator */}
-      <div
-        className="absolute top-[3px] bottom-[3px] w-[60px] rounded-[7px] bg-[rgba(37,99,235,0.4)] pointer-events-none"
-        style={{
-          left: mode === 'edit' ? '3px' : '63px',
-          transition: 'left 200ms ease-out',
-        }}
-      />
-      <button
-        type="button"
+    <div className="flex items-start p-[4px] h-[40px] bg-[#171717] border border-[#262626] rounded-[10px]">
+      <ModeToggleSegment
+        active={isEdit}
+        // When this segment is unselected, the spec uses a slightly different
+        // grey (#9B9EA3) than the inverse case (#A3A3A3). Match exactly.
+        inactiveColor="#9B9EA3"
         onClick={() => onChange('edit')}
-        className={`relative w-[60px] h-full flex items-center justify-center rounded-[7px] font-['Avenir',sans-serif] font-medium text-[14px] leading-[20px] transition-colors ${
-          mode === 'edit' ? 'text-[#dadee5]' : 'text-[#c9ced4] hover:text-[#dadee5]'
-        }`}
-        aria-pressed={mode === 'edit'}
-      >
-        Edit
-      </button>
-      <button
-        type="button"
+        icon={<SquarePen size={16} strokeWidth={1} />}
+        label="Edit"
+        width={72}
+      />
+      <ModeToggleSegment
+        active={!isEdit}
+        inactiveColor="#A3A3A3"
         onClick={() => onChange('view')}
-        className={`relative w-[60px] h-full flex items-center justify-center rounded-[7px] font-['Avenir',sans-serif] font-medium text-[14px] leading-[20px] transition-colors ${
-          mode === 'view' ? 'text-[#dadee5]' : 'text-[#c9ced4] hover:text-[#dadee5]'
-        }`}
-        aria-pressed={mode === 'view'}
-      >
-        View
-      </button>
+        icon={<SquarePlay size={16} strokeWidth={1} />}
+        label="Present"
+        width={94}
+      />
     </div>
+  )
+}
+
+interface ModeToggleSegmentProps {
+  active: boolean
+  inactiveColor: string
+  onClick: () => void
+  icon: React.ReactNode
+  label: string
+  width: number
+}
+
+function ModeToggleSegment({
+  active,
+  inactiveColor,
+  onClick,
+  icon,
+  label,
+  width,
+}: ModeToggleSegmentProps) {
+  // Selected: bg #262626, label #C9CED4 / #D4D4D4 (label / icon).
+  // Unselected: no bg, label and icon both share `inactiveColor`.
+  const color = active ? '#D4D4D4' : inactiveColor
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`flex items-center justify-center gap-[6px] h-[32px] min-w-[60px] px-[12px] py-[6px] rounded-[6px] transition-colors ${
+        active ? 'bg-[#262626]' : 'bg-transparent hover:bg-white/[0.04]'
+      }`}
+      style={{ width, color }}
+    >
+      <span className="shrink-0" style={{ color }} aria-hidden>
+        {icon}
+      </span>
+      <span
+        className="font-['Avenir',sans-serif] font-normal text-[14px] leading-[20px]"
+        style={{ color: active ? '#C9CED4' : inactiveColor }}
+      >
+        {label}
+      </span>
+    </button>
   )
 }
