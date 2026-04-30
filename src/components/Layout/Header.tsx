@@ -72,17 +72,13 @@ export function Header({
 
   return (
     <>
-      {/* Mobile toolbar — desktop toolbar lives in GlobalNav.
-          Hidden in view mode (no editing affordances). */}
       {mode === 'edit' && (
-        <div className="md:hidden">
-          <FloatingToolbar
-            onAddEventClick={onAddEventClick}
-            onEventsClick={() => togglePanel('events')}
-            onSettingsClick={() => togglePanel('settings')}
-            activePanel={activePanel}
-          />
-        </div>
+        <FloatingToolbar
+          onAddEventClick={onAddEventClick}
+          onEventsClick={() => togglePanel('events')}
+          onSettingsClick={() => togglePanel('settings')}
+          activePanel={activePanel}
+        />
       )}
 
       <Dialog open={showAddEventModal} onOpenChange={(open) => { if (!open) onCloseAddEventModal(); }}>
