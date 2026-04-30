@@ -45,70 +45,80 @@ export function EventActionsMenu({
     setAdjusted({ left, top })
   }, [position.x, position.y])
 
-  // Close on outside click + Escape.
+  // Close on Escape. (Outside-click closes via the invisible overlay below
+  // — that way the click is also absorbed and doesn't fall through to the
+  // timeline grid, which would otherwise fire its month-click handler and
+  // create a new event at the click position.)
   useEffect(() => {
-    const handleDocClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onClose()
-      }
-    }
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
-    // Defer to next tick so the click that opened the menu doesn't close it.
-    const tid = window.setTimeout(() => {
-      document.addEventListener('mousedown', handleDocClick)
-    }, 0)
     document.addEventListener('keydown', handleKey)
-    return () => {
-      window.clearTimeout(tid)
-      document.removeEventListener('mousedown', handleDocClick)
-      document.removeEventListener('keydown', handleKey)
-    }
+    return () => document.removeEventListener('keydown', handleKey)
   }, [onClose])
 
   if (typeof document === 'undefined') return null
 
   return createPortal(
-    <div
-      ref={menuRef}
-      role="menu"
-      style={{
-        position: 'fixed',
-        left: adjusted.left,
-        top: adjusted.top,
-        width: MENU_WIDTH,
-        minHeight: MENU_HEIGHT,
-        zIndex: 1000,
-      }}
-      className="bg-[#171717] border border-[#404040] rounded-[6px] shadow-[0_4px_12px_rgba(0,0,0,0.4)] py-1"
-    >
-      <MenuItem
-        onClick={() => {
-          onEdit()
+    <>
+      {/* Invisible click-catcher. Sits above the timeline, below the menu.
+          mousedown closes (and stops propagation), so the underlying grid
+          never sees the click. Same trick for click + contextmenu so a
+          right-click anywhere outside also dismisses cleanly. */}
+      <div
+        onMouseDown={(e) => {
+          e.stopPropagation()
           onClose()
         }}
-      >
-        Edit event
-      </MenuItem>
-      <MenuItem
-        onClick={() => {
-          onOpenDetails()
+        onClick={(e) => e.stopPropagation()}
+        onContextMenu={(e) => {
+          e.preventDefault()
           onClose()
         }}
-      >
-        Open details
-      </MenuItem>
-      <MenuItem
-        destructive
-        onClick={() => {
-          onDelete()
-          onClose()
+        className="fixed inset-0"
+        style={{ zIndex: 999 }}
+        aria-hidden="true"
+      />
+      <div
+        ref={menuRef}
+        role="menu"
+        style={{
+          position: 'fixed',
+          left: adjusted.left,
+          top: adjusted.top,
+          width: MENU_WIDTH,
+          minHeight: MENU_HEIGHT,
+          zIndex: 1000,
         }}
+        className="bg-[#171717] border border-[#404040] rounded-[6px] shadow-[0_4px_12px_rgba(0,0,0,0.4)] py-1"
       >
-        Delete
-      </MenuItem>
-    </div>,
+        <MenuItem
+          onClick={() => {
+            onEdit()
+            onClose()
+          }}
+        >
+          Edit event
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            onOpenDetails()
+            onClose()
+          }}
+        >
+          Open details
+        </MenuItem>
+        <MenuItem
+          destructive
+          onClick={() => {
+            onDelete()
+            onClose()
+          }}
+        >
+          Delete
+        </MenuItem>
+      </div>
+    </>,
     document.body,
   )
 }
