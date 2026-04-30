@@ -1,9 +1,6 @@
 import { type CSSProperties } from 'react'
 import {
-  Columns3,
   PanelLeft,
-  Plus,
-  Settings as SettingsIcon,
   SquarePen,
   SquarePlay,
 } from 'lucide-react'
@@ -21,11 +18,6 @@ interface GlobalNavProps {
   onTimelineTitleChange?: (title: string) => void
   events?: TimelineEvent[]
   timelineAccentColor?: string
-  /** Toolbar actions — only rendered on variant="timeline" */
-  onAddEventClick?: () => void
-  onEventsClick?: () => void
-  onSettingsClick?: () => void
-  activePanel?: 'events' | 'settings' | null
   /** Save status — only rendered on variant="timeline" */
   saveStatus?: SaveStatus
   lastSavedTime?: Date
@@ -41,10 +33,6 @@ export function GlobalNav({
   onTimelineTitleChange,
   events = [],
   timelineAccentColor = '#4196E4',
-  onAddEventClick,
-  onEventsClick,
-  onSettingsClick,
-  activePanel,
   saveStatus,
   lastSavedTime,
   mode = 'edit',
@@ -127,36 +115,6 @@ export function GlobalNav({
             </div>
           )}
         </div>
-
-        {/* Center cluster: editor action buttons */}
-        {variant === 'timeline' && mode === 'edit' && (
-          <div className="hidden md:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 items-center gap-2.5">
-            {onAddEventClick && (
-              <Button variant="glass" size="none" onClick={onAddEventClick}>
-                <Plus size={18} />
-                Add Event
-              </Button>
-            )}
-            <Button
-              variant="glass"
-              size="none"
-              data-active={activePanel === 'events'}
-              onClick={onEventsClick}
-            >
-              <Columns3 size={18} />
-              Events
-            </Button>
-            <Button
-              variant="glass"
-              size="none"
-              data-active={activePanel === 'settings'}
-              onClick={onSettingsClick}
-            >
-              <SettingsIcon size={18} />
-              Settings
-            </Button>
-          </div>
-        )}
 
         {/* Right cluster: save status + action buttons */}
         <div className="ml-auto flex items-center gap-2">

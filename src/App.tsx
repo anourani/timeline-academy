@@ -539,10 +539,6 @@ export function App() {
         onTimelineTitleChange={setTitle}
         events={events}
         timelineAccentColor={timelineAccentColor}
-        onAddEventClick={handleAddEventClick}
-        onEventsClick={() => setActivePanel(prev => prev === 'events' ? null : 'events')}
-        onSettingsClick={() => setActivePanel(prev => prev === 'settings' ? null : 'settings')}
-        activePanel={activePanel}
         saveStatus={saveStatus}
         lastSavedTime={lastSavedTime}
         mode={mode}
