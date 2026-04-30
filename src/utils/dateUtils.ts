@@ -119,6 +119,14 @@ export const formatDateDisplay = (dateStr: string): string => {
   return format(date, 'MM/dd/yyyy')
 }
 
+// Long-form date for the event detail panel header. e.g. "Jun 12, 1943".
+export const formatDateLong = (dateStr: string): string => {
+  if (!dateStr) return ''
+  const date = parseDate(dateStr)
+  if (!date) return ''
+  return format(date, 'MMM d, yyyy')
+}
+
 // Dark theme classNames for Calendar component
 export const darkCalendarClassNames = {
   day_selected: "bg-[rgba(37,99,235,0.8)] text-white hover:bg-[rgba(37,99,235,0.9)] focus:bg-[rgba(37,99,235,0.9)]",

@@ -11,6 +11,8 @@ import { useSidePanel } from './hooks/useSidePanel';
 import { computeDominantCategoryColor } from './utils/dominantCategory';
 import { AuthModal } from './components/Auth/AuthModal';
 import { UnsavedChangesModal } from './components/Modal/UnsavedChangesModal';
+import { ApiKeyModal } from './components/Modal/ApiKeyModal';
+import { EventDetailPanel } from './components/EventDetailPanel/EventDetailPanel';
 import { useLocalDraft } from './hooks/useLocalDraft';
 import { TimelineEvent, CategoryConfig } from './types/event';
 import { LimitReachedError, getCurrentLimits } from './lib/limits';
@@ -42,11 +44,18 @@ export function App() {
   const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
   const [activePanel, setActivePanel] = useState<'events' | 'settings' | null>(null);
   const [showAddEventModal, setShowAddEventModal] = useState(false);
+  const [mode, setMode] = useState<'edit' | 'view'>('edit');
+  const [detailPanelEvent, setDetailPanelEvent] = useState<TimelineEvent | null>(null);
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  // Once a key is saved or sign-in completes, we want to re-open the panel for
+  // the same event so generation kicks off automatically. This holds the
+  // event we were trying to enrich when the user landed on setup-required.
+  const pendingDetailEventRef = useRef<TimelineEvent | null>(null);
   const [pendingScrollDate, setPendingScrollDate] = useState<string | null>(null);
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [nudgeDismissed, setNudgeDismissed] = useState(false);
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
-  const { loadAllDrafts, loadDraft, saveDraft, saveDraftImmediate, createDraft, clearAllDrafts, deleteDraft: deleteLocalDraft } = useLocalDraft();
+  const { loadAllDrafts, loadDraft, saveDraft, createDraft, clearAllDrafts, deleteDraft: deleteLocalDraft } = useLocalDraft();
   const handledRouteStateRef = useRef(false);
   const migrationDoneRef = useRef(false);
   const { setOnTimelineSelect, setOnDraftSelect, refreshTimelines, setActiveTimelineId, setActiveDraftId: setPanelActiveDraftId, setActiveTimelineTitle, setActiveEventCount, setActiveDominantCategoryColor } = useSidePanel();
@@ -73,6 +82,15 @@ export function App() {
     () => computeDominantCategoryColor(events, categories),
     [events, categories],
   );
+
+  // After sign-in completes, re-open the detail panel for the event that
+  // landed on setup-required, so the now-available server path can run.
+  useEffect(() => {
+    if (user && pendingDetailEventRef.current) {
+      setDetailPanelEvent(pendingDetailEventRef.current);
+      pendingDetailEventRef.current = null;
+    }
+  }, [user]);
 
   // Trigger autosave when timeline data changes
   useEffect(() => {
@@ -454,22 +472,6 @@ export function App() {
     return () => setActiveDominantCategoryColor(null);
   }, [timelineAccentColor, setActiveDominantCategoryColor]);
 
-  const handlePresentMode = () => {
-    if (timelineId) {
-      window.open(`/view/${timelineId}`, '_blank');
-    } else if (activeDraftId) {
-      // Flush current state to localStorage synchronously so the new tab can read it
-      saveDraftImmediate({
-        id: activeDraftId,
-        title, description, events, categories,
-        scale: currentScale.value,
-        groupByCategory,
-        savedAt: new Date().toISOString()
-      });
-      window.open(`/view/local?draftId=${activeDraftId}`, '_blank');
-    }
-  };
-
   const handleClearTimeline = () => {
     clearEvents();
   };
@@ -510,6 +512,10 @@ export function App() {
     updateEvent(updatedEvent);
   };
 
+  const handleDeleteEvent = (eventId: string) => {
+    setEvents(events.filter(e => e.id !== eventId));
+  };
+
   const handleBulkEventsChange = (newEvents: TimelineEvent[]) => {
     const currentIds = new Set(events.map(e => e.id));
     const addedEvents = newEvents.filter(e => !currentIds.has(e.id));
@@ -537,9 +543,14 @@ export function App() {
         onEventsClick={() => setActivePanel(prev => prev === 'events' ? null : 'events')}
         onSettingsClick={() => setActivePanel(prev => prev === 'settings' ? null : 'settings')}
         activePanel={activePanel}
-        onPresentMode={handlePresentMode}
         saveStatus={saveStatus}
         lastSavedTime={lastSavedTime}
+        mode={mode}
+        onModeChange={(newMode) => {
+          setMode(newMode);
+          // Force any open editing panel closed when switching to view mode.
+          if (newMode === 'view') setActivePanel(null);
+        }}
       />
       <Header
         title={title}
@@ -563,6 +574,7 @@ export function App() {
         onAddEventClick={handleAddEventClick}
         onCloseAddEventModal={() => setShowAddEventModal(false)}
         onDeleteTimeline={handleDeleteTimeline}
+        mode={mode}
       />
       {!user && events.length > 0 && !nudgeDismissed && (
         <div className="mx-4 mt-2 px-4 py-3 bg-blue-900/40 border border-blue-800/50 rounded-lg flex items-center justify-between text-sm shrink-0">
@@ -601,12 +613,15 @@ export function App() {
           <Timeline
             events={events}
             categories={categories}
-            onAddEvent={addEvent}
-            onUpdateEvent={handleUpdateEvent}
+            onAddEvent={mode === 'edit' ? addEvent : undefined}
+            onUpdateEvent={mode === 'edit' ? handleUpdateEvent : undefined}
+            onDeleteEvent={mode === 'edit' ? handleDeleteEvent : undefined}
+            onOpenDetails={(event) => setDetailPanelEvent(event)}
             scale={currentScale}
             groupByCategory={groupByCategory}
             pendingScrollDate={pendingScrollDate}
             onScrollComplete={() => setPendingScrollDate(null)}
+            mode={mode}
           />
         </main>
       )}
@@ -622,6 +637,38 @@ export function App() {
         }}
         onDiscard={handleDiscardAndSwitch}
         onSave={handleSaveAndSwitch}
+      />
+      <EventDetailPanel
+        open={detailPanelEvent !== null}
+        event={detailPanelEvent}
+        timelineTitle={title}
+        mode={mode}
+        onClose={() => setDetailPanelEvent(null)}
+        onEventChange={(updated) => {
+          handleUpdateEvent(updated);
+          setDetailPanelEvent(updated);
+        }}
+        onRequestSetup={() => {
+          pendingDetailEventRef.current = detailPanelEvent;
+          setDetailPanelEvent(null);
+          setShowApiKeyModal(true);
+        }}
+      />
+      <ApiKeyModal
+        isOpen={showApiKeyModal}
+        onClose={() => setShowApiKeyModal(false)}
+        onKeySaved={() => {
+          setShowApiKeyModal(false);
+          // Resume the panel; the new key flips us straight into generating.
+          if (pendingDetailEventRef.current) {
+            setDetailPanelEvent(pendingDetailEventRef.current);
+            pendingDetailEventRef.current = null;
+          }
+        }}
+        onRequestSignIn={() => {
+          setShowApiKeyModal(false);
+          setShowAuthModal(true);
+        }}
       />
     </div>
   );

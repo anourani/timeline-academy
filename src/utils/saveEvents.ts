@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import type { TimelineEvent } from '../types/event';
+import type { TimelineEvent, EventSource } from '../types/event';
 
 interface DbEvent {
   id: string;
@@ -7,6 +7,22 @@ interface DbEvent {
   start_date: string;
   end_date: string;
   category: string;
+  description: string | null;
+  image_url: string | null;
+  image_attribution: string | null;
+  sources: EventSource[] | null;
+}
+
+function sourcesEqual(a: EventSource[] | null | undefined, b: EventSource[] | null | undefined): boolean {
+  const aArr = a ?? null;
+  const bArr = b ?? null;
+  if (aArr === null && bArr === null) return true;
+  if (aArr === null || bArr === null) return false;
+  if (aArr.length !== bArr.length) return false;
+  for (let i = 0; i < aArr.length; i++) {
+    if (aArr[i].title !== bArr[i].title || aArr[i].url !== bArr[i].url) return false;
+  }
+  return true;
 }
 
 /**
@@ -20,7 +36,7 @@ export async function saveTimelineEvents(
   // 1. Fetch current server events for this timeline
   const { data: serverRows, error: fetchError } = await supabase
     .from('events')
-    .select('id, title, start_date, end_date, category')
+    .select('id, title, start_date, end_date, category, description, image_url, image_attribution, sources')
     .eq('timeline_id', timelineId);
 
   if (fetchError) throw fetchError;
@@ -41,7 +57,11 @@ export async function saveTimelineEvents(
       existing.title !== event.title ||
       existing.start_date !== event.startDate ||
       existing.end_date !== event.endDate ||
-      existing.category !== event.category
+      existing.category !== event.category ||
+      (existing.description ?? null) !== (event.description ?? null) ||
+      (existing.image_url ?? null) !== (event.imageUrl ?? null) ||
+      (existing.image_attribution ?? null) !== (event.imageAttribution ?? null) ||
+      !sourcesEqual(existing.sources, event.sources)
     ) {
       toUpdate.push(event);
     }
@@ -63,6 +83,10 @@ export async function saveTimelineEvents(
         start_date: event.startDate,
         end_date: event.endDate,
         category: event.category,
+        description: event.description ?? null,
+        image_url: event.imageUrl ?? null,
+        image_attribution: event.imageAttribution ?? null,
+        sources: event.sources ?? null,
       })
       .eq('id', event.id)
       .eq('timeline_id', timelineId);
@@ -93,6 +117,10 @@ export async function saveTimelineEvents(
           start_date: event.startDate,
           end_date: event.endDate,
           category: event.category,
+          description: event.description ?? null,
+          image_url: event.imageUrl ?? null,
+          image_attribution: event.imageAttribution ?? null,
+          sources: event.sources ?? null,
         }))
       );
 

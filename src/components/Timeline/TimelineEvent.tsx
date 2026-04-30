@@ -8,7 +8,7 @@ interface TimelineEventProps {
   months: Month[];
   categoryOffset: number;
   categoryColor?: string;
-  onEventClick?: (event: ITimelineEvent) => void;
+  onEventClick?: (event: ITimelineEvent, position: { x: number; y: number }) => void;
   scale?: TimelineScale;
   isDragging?: boolean;
   dragDeltaPixels?: number;
@@ -105,13 +105,13 @@ export const TimelineEvent = memo(function TimelineEvent({
   const isSingleDay = event.startDate === event.endDate;
   const isDraggable = !!onPointerDown;
 
-  const handleClick = () => {
+  const handleClick = (e: React.MouseEvent) => {
     if (wasDraggingRef.current) {
       wasDraggingRef.current = false;
       return;
     }
     if (onEventClick) {
-      onEventClick(event);
+      onEventClick(event, { x: e.clientX, y: e.clientY });
     }
   };
 

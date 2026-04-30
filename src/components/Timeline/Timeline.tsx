@@ -4,6 +4,7 @@ import { TimelineGrid } from './TimelineGrid';
 import { TimelineCategoryLabels } from './TimelineCategoryLabels';
 import { TimelineEvent } from './TimelineEvent';
 import { TimelineScrollIndicator } from './TimelineScrollIndicator';
+import { EventActionsMenu } from '../EventActionsMenu/EventActionsMenu';
 import { TimelineEvent as ITimelineEvent, CategoryConfig } from '../../types/event';
 import { TimelineScale } from '../../types/timeline';
 import { getTimelineRange, shiftEventDates } from '../../utils/dateUtils';
@@ -25,10 +26,19 @@ interface TimelineProps {
   isFullScreen?: boolean;
   onAddEvent?: (event: Omit<ITimelineEvent, 'id'>) => ITimelineEvent | void;
   onUpdateEvent?: (event: ITimelineEvent) => void;
+  /** Called when "Delete" is selected from the event actions menu. */
+  onDeleteEvent?: (eventId: string) => void;
+  /** Called when "Open details" is selected (edit mode) or an enriched event is clicked (view mode). */
+  onOpenDetails?: (event: ITimelineEvent) => void;
   scale: TimelineScale;
   groupByCategory?: boolean;
   pendingScrollDate?: string | null;
   onScrollComplete?: () => void;
+  /**
+   * Edit/View mode. In view mode, edit affordances (drag-to-reschedule,
+   * hover-to-add cursor, click-to-edit) are suppressed.
+   */
+  mode?: 'edit' | 'view';
 }
 
 interface CategoryBand {
@@ -49,11 +59,15 @@ export function Timeline({
   isFullScreen,
   onAddEvent,
   onUpdateEvent,
+  onDeleteEvent,
+  onOpenDetails,
   scale,
   groupByCategory = false,
   pendingScrollDate,
-  onScrollComplete
+  onScrollComplete,
+  mode = 'edit',
 }: TimelineProps) {
+  const isEditing = mode === 'edit';
   // Filter visible categories and their events
   const visibleCategories = categories.filter(cat => cat.visible);
   const visibleEvents = events.filter(event =>
@@ -67,6 +81,7 @@ export function Timeline({
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [editingEvent, setEditingEvent] = useState<ITimelineEvent | null>(null);
   const [pendingScrollEventId, setPendingScrollEventId] = useState<string | null>(null);
+  const [menuState, setMenuState] = useState<{ event: ITimelineEvent; x: number; y: number } | null>(null);
 
   const { visibleRange } = useTimelineScroll(scrollContainerRef, months.length * 4);
 
@@ -200,7 +215,7 @@ export function Timeline({
   }, [groupByCategory, visibleEvents, visibleCategories, months, scale.monthWidth]);
 
   const handleMonthClick = useCallback((monthIndex: number) => {
-    if (!onAddEvent || justDraggedRef.current) return;
+    if (!isEditing || !onAddEvent || justDraggedRef.current) return;
 
     const clickedMonth = months[monthIndex];
     if (clickedMonth) {
@@ -209,14 +224,24 @@ export function Timeline({
       setEditingEvent(null);
       setShowEventModal(true);
     }
-  }, [months, onAddEvent, justDraggedRef]);
+  }, [months, onAddEvent, justDraggedRef, isEditing]);
 
-  const handleEventClick = useCallback((event: ITimelineEvent) => {
-    if (!onUpdateEvent || justDraggedRef.current) return;
-    setEditingEvent(event);
-    setSelectedDate(null);
-    setShowEventModal(true);
-  }, [onUpdateEvent, justDraggedRef]);
+  const handleEventClick = useCallback(
+    (event: ITimelineEvent, position: { x: number; y: number }) => {
+      if (justDraggedRef.current) return;
+      if (isEditing) {
+        if (!onUpdateEvent) return;
+        setMenuState({ event, x: position.x, y: position.y });
+        return;
+      }
+      // View / present mode: open the detail panel for any event. The panel
+      // itself handles cached content vs. fresh generation vs. setup-required.
+      if (onOpenDetails) {
+        onOpenDetails(event);
+      }
+    },
+    [onUpdateEvent, justDraggedRef, isEditing, onOpenDetails],
+  );
 
   const handleSubmit = useCallback((eventData: Omit<ITimelineEvent, 'id'>) => {
     let newEventId: string | null = null;
@@ -284,7 +309,7 @@ export function Timeline({
             style={{
               minWidth: `${months.length * scale.monthWidth}px`,
               minHeight: '100%',
-              cursor: onAddEvent ? 'pointer' : 'default'
+              cursor: isEditing && onAddEvent ? 'pointer' : 'default'
             }}
           >
             <TimelineHeader months={months} scale={scale} />
@@ -307,22 +332,27 @@ export function Timeline({
                   onMonthClick={handleMonthClick}
                   scale={scale}
                 />
-                {band.events.map((event) => (
-                  <TimelineEvent
-                    key={event.id}
-                    event={event}
-                    months={months}
-                    categoryOffset={band.offset}
-                    categoryColor={visibleCategories.find(c => c.id === event.category)?.color}
-                    onEventClick={onUpdateEvent ? handleEventClick : undefined}
-                    scale={scale}
-                    isDragging={dragState.isDragging && dragState.draggedEventId === event.id}
-                    dragDeltaPixels={dragState.draggedEventId === event.id ? dragState.deltaPixels : 0}
-                    onPointerDown={onUpdateEvent ? handlePointerDown : undefined}
-                    rowHeight={rowHeight}
-                    onMounted={handleEventMounted}
-                  />
-                ))}
+                {band.events.map((event) => {
+                  const canHandleClick =
+                    (isEditing && !!onUpdateEvent) ||
+                    (!isEditing && !!onOpenDetails);
+                  return (
+                    <TimelineEvent
+                      key={event.id}
+                      event={event}
+                      months={months}
+                      categoryOffset={band.offset}
+                      categoryColor={visibleCategories.find(c => c.id === event.category)?.color}
+                      onEventClick={canHandleClick ? handleEventClick : undefined}
+                      scale={scale}
+                      isDragging={dragState.isDragging && dragState.draggedEventId === event.id}
+                      dragDeltaPixels={dragState.draggedEventId === event.id ? dragState.deltaPixels : 0}
+                      onPointerDown={isEditing && onUpdateEvent ? handlePointerDown : undefined}
+                      rowHeight={rowHeight}
+                      onMounted={handleEventMounted}
+                    />
+                  );
+                })}
               </div>
             ))}
 
@@ -338,8 +368,8 @@ export function Timeline({
               />
             </div>
 
-            {/* Add Event Cursor — hidden during drag */}
-            {hoveredMonth !== null && onAddEvent && !dragState.isDragging && (
+            {/* Add Event Cursor — hidden during drag and in view mode */}
+            {hoveredMonth !== null && isEditing && onAddEvent && !dragState.isDragging && (
               <div
                 className="absolute top-[64px] bottom-0 bg-[#FBFBFB]/25 pointer-events-none transition-transform duration-75 ease-out"
                 style={{
@@ -351,6 +381,26 @@ export function Timeline({
           </div>
         </div>
       </div>
+
+      {/* Event Actions Menu (edit mode click on event) */}
+      {menuState && (
+        <EventActionsMenu
+          event={menuState.event}
+          position={{ x: menuState.x, y: menuState.y }}
+          onClose={() => setMenuState(null)}
+          onEdit={() => {
+            setEditingEvent(menuState.event);
+            setSelectedDate(null);
+            setShowEventModal(true);
+          }}
+          onOpenDetails={() => {
+            if (onOpenDetails) onOpenDetails(menuState.event);
+          }}
+          onDelete={() => {
+            if (onDeleteEvent) onDeleteEvent(menuState.event.id);
+          }}
+        />
+      )}
 
       {/* Event Dialog */}
       <Dialog

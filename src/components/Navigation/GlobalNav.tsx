@@ -1,5 +1,12 @@
 import { type CSSProperties } from 'react'
-import { Columns3, PanelLeft, Plus, Settings as SettingsIcon } from 'lucide-react'
+import {
+  Columns3,
+  PanelLeft,
+  Plus,
+  Settings as SettingsIcon,
+  SquarePen,
+  SquarePlay,
+} from 'lucide-react'
 import { useSidePanel } from '@/hooks/useSidePanel'
 import { Button } from '@/components/ui/button'
 import { SaveStatusIndicator, type SaveStatus } from '@/components/SaveStatusIndicator/SaveStatusIndicator'
@@ -19,10 +26,12 @@ interface GlobalNavProps {
   onEventsClick?: () => void
   onSettingsClick?: () => void
   activePanel?: 'events' | 'settings' | null
-  onPresentMode?: () => void
   /** Save status — only rendered on variant="timeline" */
   saveStatus?: SaveStatus
   lastSavedTime?: Date
+  /** Edit/View mode toggle — only rendered on variant="timeline" */
+  mode?: 'edit' | 'view'
+  onModeChange?: (mode: 'edit' | 'view') => void
 }
 
 export function GlobalNav({
@@ -36,9 +45,10 @@ export function GlobalNav({
   onEventsClick,
   onSettingsClick,
   activePanel,
-  onPresentMode,
   saveStatus,
   lastSavedTime,
+  mode = 'edit',
+  onModeChange,
 }: GlobalNavProps) {
   const { isOpen: isPanelOpen, toggle: togglePanel } = useSidePanel()
 
@@ -80,7 +90,7 @@ export function GlobalNav({
 
           {showTitleCluster && (
             <div className="flex flex-col gap-1 min-w-0">
-              {onTimelineTitleChange ? (
+              {onTimelineTitleChange && mode === 'edit' ? (
                 <input
                   type="text"
                   value={timelineTitle ?? ''}
@@ -119,7 +129,7 @@ export function GlobalNav({
         </div>
 
         {/* Center cluster: editor action buttons */}
-        {variant === 'timeline' && (
+        {variant === 'timeline' && mode === 'edit' && (
           <div className="hidden md:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 items-center gap-2.5">
             {onAddEventClick && (
               <Button variant="glass" size="none" onClick={onAddEventClick}>
@@ -156,27 +166,98 @@ export function GlobalNav({
               <SaveStatusIndicator status={saveStatus} lastSaved={lastSavedTime} />
             </div>
           )}
+          {variant === 'timeline' && onModeChange && (
+            <ModeToggle mode={mode} onChange={onModeChange} />
+          )}
           {variant === 'timeline' && (
-            <>
-              <Button
-                variant="glass-sm"
-                size="none"
-                onClick={onPresentMode}
-              >
-                Present
-              </Button>
-              <Button
-                variant="glass-sm"
-                size="none"
-                onClick={handleShare}
-                disabled={!timelineId}
-              >
-                Share
-              </Button>
-            </>
+            <Button
+              variant="glass-sm"
+              size="none"
+              onClick={handleShare}
+              disabled={!timelineId}
+            >
+              Share
+            </Button>
           )}
         </div>
       </div>
     </div>
+  )
+}
+
+interface ModeToggleProps {
+  mode: 'edit' | 'view'
+  onChange: (mode: 'edit' | 'view') => void
+}
+
+// Edit / Present segmented toggle. Each segment is fixed-width to match the
+// design spec (Edit = 72px, Present = 94px). The selected segment fills with
+// #262626; the unselected segment is transparent and dims its label/icon.
+function ModeToggle({ mode, onChange }: ModeToggleProps) {
+  const isEdit = mode === 'edit'
+  return (
+    <div className="flex items-start p-[4px] h-[40px] bg-[#171717] border border-[#262626] rounded-[10px]">
+      <ModeToggleSegment
+        active={isEdit}
+        // When this segment is unselected, the spec uses a slightly different
+        // grey (#9B9EA3) than the inverse case (#A3A3A3). Match exactly.
+        inactiveColor="#9B9EA3"
+        onClick={() => onChange('edit')}
+        icon={<SquarePen size={16} strokeWidth={1} />}
+        label="Edit"
+        width={72}
+      />
+      <ModeToggleSegment
+        active={!isEdit}
+        inactiveColor="#A3A3A3"
+        onClick={() => onChange('view')}
+        icon={<SquarePlay size={16} strokeWidth={1} />}
+        label="Present"
+        width={94}
+      />
+    </div>
+  )
+}
+
+interface ModeToggleSegmentProps {
+  active: boolean
+  inactiveColor: string
+  onClick: () => void
+  icon: React.ReactNode
+  label: string
+  width: number
+}
+
+function ModeToggleSegment({
+  active,
+  inactiveColor,
+  onClick,
+  icon,
+  label,
+  width,
+}: ModeToggleSegmentProps) {
+  // Selected: bg #262626, label #C9CED4 / #D4D4D4 (label / icon).
+  // Unselected: no bg, label and icon both share `inactiveColor`.
+  const color = active ? '#D4D4D4' : inactiveColor
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`flex items-center justify-center gap-[6px] h-[32px] min-w-[60px] px-[12px] py-[6px] rounded-[6px] transition-colors ${
+        active ? 'bg-[#262626]' : 'bg-transparent hover:bg-white/[0.04]'
+      }`}
+      style={{ width, color }}
+    >
+      <span className="shrink-0" style={{ color }} aria-hidden>
+        {icon}
+      </span>
+      <span
+        className="font-['Avenir',sans-serif] font-normal text-[14px] leading-[20px]"
+        style={{ color: active ? '#C9CED4' : inactiveColor }}
+      >
+        {label}
+      </span>
+    </button>
   )
 }
