@@ -75,13 +75,10 @@ export function EventDetailPanel({
       return
     }
 
-    // Fresh event — only auto-generate in edit mode (view-mode click on an
-    // empty event is supposed to be a no-op upstream, but guard anyway).
-    if (mode !== 'edit') {
-      setState('idle')
-      return
-    }
-
+    // Fresh event — auto-generation runs in either edit or view/present mode
+    // as long as a path is available. Public viewers' generations get
+    // persisted client-side by their TimelineViewer's onEventChange handler.
+    //
     // Generation needs at least one of: a BYOK Anthropic key (browser-direct)
     // or a signed-in user (server path). Without either, prompt the user to
     // pick a path instead of running a request that's destined to fail.

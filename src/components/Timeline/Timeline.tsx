@@ -234,8 +234,9 @@ export function Timeline({
         setMenuState({ event, x: position.x, y: position.y });
         return;
       }
-      // View mode: open the detail panel directly if the event has details.
-      if (event.description && onOpenDetails) {
+      // View / present mode: open the detail panel for any event. The panel
+      // itself handles cached content vs. fresh generation vs. setup-required.
+      if (onOpenDetails) {
         onOpenDetails(event);
       }
     },
@@ -334,7 +335,7 @@ export function Timeline({
                 {band.events.map((event) => {
                   const canHandleClick =
                     (isEditing && !!onUpdateEvent) ||
-                    (!isEditing && !!event.description && !!onOpenDetails);
+                    (!isEditing && !!onOpenDetails);
                   return (
                     <TimelineEvent
                       key={event.id}

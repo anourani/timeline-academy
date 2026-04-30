@@ -8,6 +8,10 @@ import { SCALES } from '../../constants/scales';
 import { DEFAULT_CATEGORIES } from '../../constants/categories';
 import { TimelineEvent, CategoryConfig } from '../../types/event';
 import { getDraft } from '../../utils/draftStorage';
+import {
+  getCachedEvent,
+  setCachedEvent,
+} from '../../services/viewerEventCache';
 
 interface TimelineData {
   title: string;
@@ -88,18 +92,33 @@ export function TimelineViewer() {
           throw eventsError;
         }
 
-        // Format events to match our TimelineEvent type
-        const formattedEvents: TimelineEvent[] = eventsData.map(event => ({
-          id: event.id,
-          title: event.title,
-          startDate: event.start_date,
-          endDate: event.end_date || event.start_date,
-          category: event.category,
-          description: event.description ?? null,
-          imageUrl: event.image_url ?? null,
-          imageAttribution: event.image_attribution ?? null,
-          sources: event.sources ?? null,
-        }));
+        // Format events to match our TimelineEvent type. Owner content from
+        // the DB wins; if the row has no description we fall back to the
+        // viewer's own localStorage cache (populated by past in-session
+        // generations on the same browser).
+        const formattedEvents: TimelineEvent[] = eventsData.map(event => {
+          const base: TimelineEvent = {
+            id: event.id,
+            title: event.title,
+            startDate: event.start_date,
+            endDate: event.end_date || event.start_date,
+            category: event.category,
+            description: event.description ?? null,
+            imageUrl: event.image_url ?? null,
+            imageAttribution: event.image_attribution ?? null,
+            sources: event.sources ?? null,
+          };
+          if (base.description) return base;
+          const cached = getCachedEvent(timelineId, event.id);
+          if (!cached) return base;
+          return {
+            ...base,
+            description: cached.description ?? null,
+            imageUrl: cached.imageUrl ?? null,
+            imageAttribution: cached.imageAttribution ?? null,
+            sources: cached.sources ?? null,
+          };
+        });
 
         // Ensure all categories have the visible property
         const categories = (timelineData.categories || DEFAULT_CATEGORIES).map(cat => ({
@@ -187,9 +206,30 @@ export function TimelineViewer() {
         timelineTitle={timeline.title}
         mode="view"
         onClose={() => setDetailPanelEvent(null)}
-        onEventChange={() => {
-          // Public viewers cannot mutate event details — view mode hides the
-          // footer buttons, so this should never fire. No-op for safety.
+        onEventChange={(updated) => {
+          // Public viewers don't own the timeline row, so generations
+          // they trigger get persisted to their own browser's localStorage
+          // instead of the DB. Owner content from the DB will still take
+          // precedence on subsequent loads (see hydration above).
+          if (timelineId && timelineId !== 'local') {
+            setCachedEvent(timelineId, updated.id, {
+              description: updated.description,
+              imageUrl: updated.imageUrl,
+              imageAttribution: updated.imageAttribution,
+              sources: updated.sources,
+            });
+          }
+          setTimeline((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  events: prev.events.map((e) =>
+                    e.id === updated.id ? updated : e,
+                  ),
+                }
+              : prev,
+          );
+          setDetailPanelEvent(updated);
         }}
       />
     </div>
