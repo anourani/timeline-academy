@@ -1,6 +1,7 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { TimelineHeader } from './TimelineHeader';
 import { TimelineGrid } from './TimelineGrid';
+import { TimelineVerticalLines } from './TimelineVerticalLines';
 import { TimelineCategoryLabels } from './TimelineCategoryLabels';
 import { TimelineEvent } from './TimelineEvent';
 import { TimelineScrollIndicator } from './TimelineScrollIndicator';
@@ -313,59 +314,66 @@ export function Timeline({
             }}
           >
             <TimelineHeader months={months} scale={scale} />
-            {layout.bands.map((band) => (
-              <div
-                key={`band-${band.id}`}
-                className="relative border-l border-[#171717] shrink-0"
-                style={{
-                  height: band.height,
-                  display: 'grid',
-                  gridTemplateColumns: `repeat(${months.length * 4}, ${scale.quarterWidth}px)`,
-                  gridAutoRows: `${rowHeight}px`,
-                  gap: 0,
-                }}
-              >
+            <div className="relative flex-1 min-h-0 flex flex-col">
+              <TimelineVerticalLines
+                months={months}
+                scale={scale}
+                scrollContainerRef={scrollContainerRef}
+              />
+              {layout.bands.map((band) => (
+                <div
+                  key={`band-${band.id}`}
+                  className="relative shrink-0"
+                  style={{
+                    height: band.height,
+                    display: 'grid',
+                    gridTemplateColumns: `repeat(${months.length * 4}, ${scale.quarterWidth}px)`,
+                    gridAutoRows: `${rowHeight}px`,
+                    gap: 0,
+                  }}
+                >
+                  <TimelineGrid
+                    months={months}
+                    height={band.height}
+                    onMonthHover={setHoveredMonth}
+                    onMonthClick={handleMonthClick}
+                    scale={scale}
+                  />
+                  {band.events.map((event) => {
+                    const canHandleClick =
+                      (isEditing && !!onUpdateEvent) ||
+                      (!isEditing && !!onOpenDetails);
+                    return (
+                      <TimelineEvent
+                        key={event.id}
+                        event={event}
+                        months={months}
+                        categoryOffset={band.offset}
+                        categoryColor={visibleCategories.find(c => c.id === event.category)?.color}
+                        onEventClick={canHandleClick ? handleEventClick : undefined}
+                        scale={scale}
+                        isDragging={dragState.isDragging && dragState.draggedEventId === event.id}
+                        dragDeltaPixels={dragState.draggedEventId === event.id ? dragState.deltaPixels : 0}
+                        onPointerDown={isEditing && onUpdateEvent ? handlePointerDown : undefined}
+                        rowHeight={rowHeight}
+                        onMounted={handleEventMounted}
+                      />
+                    );
+                  })}
+                </div>
+              ))}
+
+              {/* Filler: extends the body through remaining vertical space.
+                  flex-1 lets it fill the scroll container when events are short,
+                  and the whole grid scrolls vertically when they aren't. */}
+              <div className="relative flex-1 min-h-0">
                 <TimelineGrid
                   months={months}
-                  height={band.height}
                   onMonthHover={setHoveredMonth}
                   onMonthClick={handleMonthClick}
                   scale={scale}
                 />
-                {band.events.map((event) => {
-                  const canHandleClick =
-                    (isEditing && !!onUpdateEvent) ||
-                    (!isEditing && !!onOpenDetails);
-                  return (
-                    <TimelineEvent
-                      key={event.id}
-                      event={event}
-                      months={months}
-                      categoryOffset={band.offset}
-                      categoryColor={visibleCategories.find(c => c.id === event.category)?.color}
-                      onEventClick={canHandleClick ? handleEventClick : undefined}
-                      scale={scale}
-                      isDragging={dragState.isDragging && dragState.draggedEventId === event.id}
-                      dragDeltaPixels={dragState.draggedEventId === event.id ? dragState.deltaPixels : 0}
-                      onPointerDown={isEditing && onUpdateEvent ? handlePointerDown : undefined}
-                      rowHeight={rowHeight}
-                      onMounted={handleEventMounted}
-                    />
-                  );
-                })}
               </div>
-            ))}
-
-            {/* Filler: extends vertical grid lines through remaining space.
-                flex-1 lets it fill the scroll container when events are short,
-                and the whole grid scrolls vertically when they aren't. */}
-            <div className="relative border-l border-[#171717] flex-1 min-h-0">
-              <TimelineGrid
-                months={months}
-                onMonthHover={setHoveredMonth}
-                onMonthClick={handleMonthClick}
-                scale={scale}
-              />
             </div>
 
             {/* Add Event Cursor — hidden during drag and in view mode */}

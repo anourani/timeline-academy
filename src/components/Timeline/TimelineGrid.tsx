@@ -1,6 +1,5 @@
 import React from 'react';
 import { Month, TimelineScale } from '../../types/timeline';
-import { getMonthBorderClass } from '../../utils/timelineUtils';
 
 interface TimelineGridProps {
   months: Month[];
@@ -10,15 +9,15 @@ interface TimelineGridProps {
   scale: TimelineScale;
 }
 
-export function TimelineGrid({ 
-  months, 
-  height, 
-  onMonthHover, 
+export function TimelineGrid({
+  months,
+  height,
+  onMonthHover,
   onMonthClick,
   scale
 }: TimelineGridProps) {
   return (
-    <div 
+    <div
       className="absolute inset-0 pointer-events-none grid transition-all duration-200 ease-in-out"
       style={{
         ...(height !== undefined && { height }),
@@ -28,7 +27,7 @@ export function TimelineGrid({
       {months.map((month, index) => (
         <div
           key={`${month.year}-${month.month}`}
-          className={`relative border-r ${getMonthBorderClass(month)}`}
+          className="relative"
           onMouseEnter={() => onMonthHover?.(index)}
           onMouseLeave={() => onMonthHover?.(null)}
           onClick={() => onMonthClick?.(index)}

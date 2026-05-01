@@ -62,6 +62,10 @@
     --surface-color-primary: #0A0A0A;
     --surface-color-secondary: #171717;
     --surface-color-tertiary: #151617;
+
+    /* Semantic line colors */
+    --line-color-default: #171717;
+    --line-color-year-boundary: #262626;
   }
 
   @font-face {
@@ -223,5 +227,17 @@
 
   .animate-blink-caret {
     animation: blink-caret 1s step-end infinite;
+  }
+
+  .timeline-vertical-line {
+    position: absolute;
+    top: 0;
+    width: 1px;
+    height: 0;
+    transition: left 200ms ease-in-out, height 400ms ease-out 200ms;
+  }
+
+  .timeline-vertical-line[data-revealed="true"] {
+    height: 100%;
   }
 }

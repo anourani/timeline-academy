@@ -11,7 +11,7 @@ interface TimelineMonthLabelsProps {
 export function TimelineMonthLabels({ months, scale }: TimelineMonthLabelsProps) {
   return (
     <div 
-      className="border-l border-[#171717] transition-[grid-template-columns] duration-200 ease-in-out"
+      className="border-l border-line-default transition-[grid-template-columns] duration-200 ease-in-out"
       style={{ 
         gridColumn: `1 / span ${months.length}`,
         display: 'grid',
