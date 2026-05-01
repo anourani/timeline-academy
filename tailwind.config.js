@@ -54,6 +54,8 @@ export default {
         'surface-primary': 'var(--surface-color-primary)',
         'surface-secondary': 'var(--surface-color-secondary)',
         'surface-tertiary': 'var(--surface-color-tertiary)',
+        'line-default': 'var(--line-color-default)',
+        'line-year-boundary': 'var(--line-color-year-boundary)',
       },
       borderRadius: {
         lg: "var(--radius)",

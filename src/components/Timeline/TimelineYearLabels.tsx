@@ -12,7 +12,7 @@ export function TimelineYearLabels({ months, scale }: TimelineYearLabelsProps) {
   
   return (
     <div 
-      className="border-l border-[#171717] relative h-8 transition-[width] duration-200 ease-in-out"
+      className="border-l border-line-default relative h-8 transition-[width] duration-200 ease-in-out"
       style={{ 
         gridColumn: `1 / span ${months.length}`,
         display: 'flex'
@@ -24,7 +24,7 @@ export function TimelineYearLabels({ months, scale }: TimelineYearLabelsProps) {
         return (
           <div
             key={year}
-            className="border-r border-[#262626] relative transition-[width] duration-200 ease-in-out"
+            className="border-r border-line-year-boundary relative transition-[width] duration-200 ease-in-out"
             style={{ 
               width: `${monthsInYear * scale.monthWidth}px`,
             }}
