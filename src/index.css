@@ -234,7 +234,7 @@
     top: 0;
     width: 1px;
     height: 50px;
-    transition: left 200ms ease-in-out, height 400ms ease-out;
+    transition: left 200ms ease-in-out, height 400ms ease-out 200ms;
   }
 
   .timeline-vertical-line[data-revealed="true"] {

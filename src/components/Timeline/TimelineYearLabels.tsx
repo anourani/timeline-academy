@@ -24,7 +24,7 @@ export function TimelineYearLabels({ months, scale }: TimelineYearLabelsProps) {
         return (
           <div
             key={year}
-            className="border-r border-line-year-boundary relative transition-[width] duration-200 ease-in-out"
+            className="shrink-0 border-r border-line-year-boundary relative transition-[width] duration-200 ease-in-out"
             style={{ 
               width: `${monthsInYear * scale.monthWidth}px`,
             }}
