@@ -93,7 +93,12 @@ export function TimelineVerticalLines({
     >
       {months.map((month, i) => {
         const key = monthKey(month);
-        const isYearBoundary = month.month === 11;
+        // Each span is the boundary line at left = i * monthWidth, with
+        // months[i-1] on its left side. A year boundary sits between Dec
+        // and Jan, so the span is a year boundary when its left-side
+        // neighbor is December.
+        const prev = i > 0 ? months[i - 1] : null;
+        const isYearBoundary = prev?.month === 11;
         return (
           <span
             key={key}
@@ -106,13 +111,21 @@ export function TimelineVerticalLines({
           />
         );
       })}
-      <span
-        key={TRAILING_EDGE_KEY}
-        ref={setSpanRef(TRAILING_EDGE_KEY)}
-        data-line-key={TRAILING_EDGE_KEY}
-        className="timeline-vertical-line bg-line-default"
-        style={{ left: `${months.length * scale.monthWidth}px` }}
-      />
+      {(() => {
+        const last = months[months.length - 1];
+        const trailingIsYearBoundary = last?.month === 11;
+        return (
+          <span
+            key={TRAILING_EDGE_KEY}
+            ref={setSpanRef(TRAILING_EDGE_KEY)}
+            data-line-key={TRAILING_EDGE_KEY}
+            className={`timeline-vertical-line ${
+              trailingIsYearBoundary ? 'bg-line-year-boundary' : 'bg-line-default'
+            }`}
+            style={{ left: `${months.length * scale.monthWidth}px` }}
+          />
+        );
+      })()}
     </div>
   );
 }
