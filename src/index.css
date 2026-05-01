@@ -233,7 +233,7 @@
     position: absolute;
     top: 0;
     width: 1px;
-    height: 50px;
+    height: 0;
     transition: left 200ms ease-in-out, height 400ms ease-out 200ms;
   }
 
