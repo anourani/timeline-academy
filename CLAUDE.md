@@ -28,8 +28,8 @@ src/
 ├── types/            # TypeScript type definitions (event.ts, timeline.ts)
 ├── constants/        # App constants (categories, defaults, scales)
 ├── lib/              # Supabase client setup and shared utilities
-├── App.tsx           # Root component
-├── Router.tsx        # Client-side routing (React Router DOM)
+├── App.tsx           # Timeline editor page (/editor)
+├── Router.tsx        # Routes: / → AIModePage, /editor → App, /view/:id → TimelineViewer
 └── main.tsx          # Entry point
 supabase/
 ├── functions/        # Edge Functions
@@ -42,7 +42,7 @@ supabase/
 - **Path alias**: `@/` maps to `src/` — use for all imports.
 - **Tailwind CSS** for styling. Dark mode via `class` strategy. Custom fonts: Avenir, IBM Plex Mono.
 - **shadcn/ui** — Custom preset, Base UI library, Vega style, Neutral base/theme color, Lucide icons, Inter font, Medium radius, Default menu color, Subtle menu accent.
-- **Component organization**: Feature folders under `src/components/` (e.g., `Auth/`, `Timeline/`, `Header/`).
+- **Component organization**: Feature folders under `src/components/` (e.g., `Auth/`, `Timeline/`, `Navigation/`, `AIMode/`).
 - **State management**: Custom hooks for feature logic; React Context for global state (auth).
 - **ESLint** flat config with TypeScript ESLint and React Hooks plugins. No Prettier.
 - **No semicolons or formatting tool** — follow existing code style in each file.
