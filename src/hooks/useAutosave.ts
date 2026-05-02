@@ -11,7 +11,7 @@ interface TimelineData {
   description: string;
   events: TimelineEvent[];
   categories: CategoryConfig[];
-  scale: 'large' | 'small';
+  scale: 'large' | 'medium' | 'small';
   groupByCategory: boolean;
 }
 

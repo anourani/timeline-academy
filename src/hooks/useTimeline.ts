@@ -40,7 +40,7 @@ interface TimelineData {
   description?: string;
   events: TimelineEvent[];
   categories?: CategoryConfig[];
-  scale?: 'large' | 'small';
+  scale?: 'large' | 'medium' | 'small';
   groupByCategory?: boolean;
 }
 
@@ -117,7 +117,7 @@ export function useTimeline() {
           description: '',
           events: [],
           categories: undefined, // Will use default categories
-          scale: 'small',
+          scale: 'medium',
           groupByCategory: false
         };
       }
@@ -162,7 +162,7 @@ export function useTimeline() {
           sources: event.sources ?? null,
         })),
         categories: categories || undefined,
-        scale: timeline.scale || 'small',
+        scale: timeline.scale || 'medium',
         groupByCategory: timeline.group_by_category ?? false
       };
     } catch (error) {
@@ -172,7 +172,7 @@ export function useTimeline() {
     }
   }, [user, timelineId]);
 
-  const saveTimeline = useCallback(async (title: string, events: TimelineEvent[], scale: 'large' | 'small' = 'small') => {
+  const saveTimeline = useCallback(async (title: string, events: TimelineEvent[], scale: 'large' | 'medium' | 'small' = 'medium') => {
     if (!user) throw new Error('Must be signed in to save');
 
     try {

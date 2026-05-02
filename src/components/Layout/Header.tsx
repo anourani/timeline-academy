@@ -23,8 +23,8 @@ interface HeaderProps {
   categories: CategoryConfig[];
   onCategoriesChange: (categories: CategoryConfig[]) => void;
   onEventsChange: (events: TimelineEvent[]) => void;
-  scale: 'large' | 'small';
-  onScaleChange: (scale: 'large' | 'small') => void;
+  scale: 'large' | 'medium' | 'small';
+  onScaleChange: (scale: 'large' | 'medium' | 'small') => void;
   groupByCategory: boolean;
   onGroupByCategoryChange: (value: boolean) => void;
   activePanel: 'events' | 'settings' | null;

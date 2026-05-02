@@ -84,11 +84,11 @@ interface Timeline {
   title: string
   updated_at: string | null
   user_id: string
-  scale: 'large' | 'small'
+  scale: 'large' | 'medium' | 'small'
 }
 
 interface TimelineScale {
-  value: 'large' | 'small'
+  value: 'large' | 'medium' | 'small'
   monthWidth: number
   quarterWidth: number
 }
@@ -528,14 +528,15 @@ A translucent vertical band that follows the user's hovered month while the time
 
 ## Scale / Zoom System
 
-Two scales live in `src/constants/scales.ts`:
+Three scales live in `src/constants/scales.ts`:
 
 | `value` | `monthWidth` | `quarterWidth` |
 |---|---|---|
 | `large` | `28` | `7` |
-| `small` | `20` | `5` |
+| `medium` | `20` | `5` |
+| `small` | `12` | `3` |
 
-`useTimelineScale(initialScale = 'small')` holds the active scale and exposes `currentScale` (the full `TimelineScale` object). The selected scale is persisted to `timelines.scale` (`'large' | 'small'`) by `useAutosave`.
+`useTimelineScale(initialScale = 'medium')` holds the active scale and exposes `currentScale` (the full `TimelineScale` object). The selected scale is persisted to `timelines.scale` (`'large' | 'medium' | 'small'`) by `useAutosave`.
 
 Switching scale recalculates all event positions: the grid math (§21) is unchanged but the pixel widths differ. CSS transitions on `min-width`, `grid-template-columns`, and span positions animate the change. Month abbreviations only render at `large` scale (see §7).
 
@@ -604,7 +605,7 @@ useTimelineState
   ├── useEvents             ─ events array, addEvent / addEvents / updateEvent / setEvents / clearEvents
   ├── useTimelineTitle      ─ title, description
   ├── useCategories         ─ category configs (defaults to DEFAULT_CATEGORIES)
-  ├── useTimelineScale      ─ scale toggle ('large' | 'small') and the current TimelineScale object
+  ├── useTimelineScale      ─ scale toggle ('large' | 'medium' | 'small') and the current TimelineScale object
   └── useGroupByCategory    ─ boolean toggle
 ```
 
@@ -665,7 +666,8 @@ useEventDrag          ─ drag interaction state machine (consumed by Timeline.t
 | `value` | `monthWidth` | `quarterWidth` |
 |---|---|---|
 | `large` | `28` | `7` |
-| `small` | `20` | `5` |
+| `medium` | `20` | `5` |
+| `small` | `12` | `3` |
 
 **`src/constants/categories.ts`** — `DEFAULT_CATEGORIES`:
 
@@ -703,7 +705,7 @@ Hooks consumed (directly or via composition) by the timeline page.
 | `useTimeline` | `hooks/useTimeline.ts` | Loads / creates / saves the timeline record from Supabase; enforces plan limits before creation |
 | `useEvents` | `hooks/useEvents.ts` | Local event CRUD (add, update, batch-add with dedup, clear) |
 | `useAutosave` | `hooks/useAutosave.ts` | Debounced persistence (2000 ms), beforeunload guard, online retry |
-| `useTimelineScale` | `hooks/useTimelineScale.ts` | Scale toggle (`large` / `small`) + current `TimelineScale` |
+| `useTimelineScale` | `hooks/useTimelineScale.ts` | Scale toggle (`large` / `medium` / `small`) + current `TimelineScale` |
 | `useTimelineTitle` | `hooks/useTimelineTitle.ts` | Title and description state |
 | `useCategories` | `hooks/useCategories.ts` | Category config state with `DEFAULT_CATEGORIES` fallback |
 | `useGroupByCategory` | `hooks/useGroupByCategory.ts` | `groupByCategory` boolean toggle |
