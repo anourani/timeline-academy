@@ -18,7 +18,7 @@ interface TimelineData {
   description: string;
   events: TimelineEvent[];
   categories: CategoryConfig[];
-  scale: 'large' | 'small';
+  scale: 'large' | 'medium' | 'small';
   groupByCategory: boolean;
 }
 
@@ -57,7 +57,7 @@ export function TimelineViewer() {
             description: draft.description || '',
             events: draft.events || [],
             categories,
-            scale: draft.scale || 'small',
+            scale: draft.scale || 'medium',
             groupByCategory: draft.groupByCategory ?? false
           });
         } catch {
@@ -131,7 +131,7 @@ export function TimelineViewer() {
           description: timelineData.description || '',
           events: formattedEvents,
           categories: categories,
-          scale: timelineData.scale || 'small',
+          scale: timelineData.scale || 'medium',
           groupByCategory: timelineData.group_by_category ?? false
         });
       } catch (err) {

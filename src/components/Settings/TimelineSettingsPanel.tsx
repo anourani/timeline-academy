@@ -28,8 +28,8 @@ interface TimelineSettingsPanelProps {
   onClearTimeline: () => void;
   onTitleChange: (title: string) => void;
   onDescriptionChange: (description: string) => void;
-  scale: 'large' | 'small';
-  onScaleChange: (scale: 'large' | 'small') => void;
+  scale: 'large' | 'medium' | 'small';
+  onScaleChange: (scale: 'large' | 'medium' | 'small') => void;
   groupByCategory: boolean;
   onGroupByCategoryChange: (value: boolean) => void;
   categories: CategoryConfig[];

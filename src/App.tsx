@@ -290,7 +290,7 @@ export function App() {
       } else {
         resetCategories();
       }
-      handleScaleChange(newScale || 'small');
+      handleScaleChange(newScale || 'medium');
       handleGroupByCategoryChange(newGroupByCategory ?? false);
     } catch (error) {
       console.error('Error switching timeline:', error);

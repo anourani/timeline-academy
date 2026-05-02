@@ -8,11 +8,11 @@ export interface Timeline {
   title: string;
   updated_at: string | null;
   user_id: string;
-  scale: 'large' | 'small';
+  scale: 'large' | 'medium' | 'small';
 }
 
 export interface TimelineScale {
-  value: 'large' | 'small';
+  value: 'large' | 'medium' | 'small';
   monthWidth: number;
   quarterWidth: number;
 }

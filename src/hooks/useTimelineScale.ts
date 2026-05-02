@@ -2,10 +2,10 @@ import { useState, useCallback } from 'react';
 import { SCALES } from '../constants/scales';
 import { TimelineScale } from '../types/timeline';
 
-export function useTimelineScale(initialScale: 'large' | 'small' = 'small') {
-  const [scale, setScale] = useState<'large' | 'small'>(initialScale);
+export function useTimelineScale(initialScale: 'large' | 'medium' | 'small' = 'medium') {
+  const [scale, setScale] = useState<'large' | 'medium' | 'small'>(initialScale);
 
-  const handleScaleChange = useCallback((newScale: 'large' | 'small') => {
+  const handleScaleChange = useCallback((newScale: 'large' | 'medium' | 'small') => {
     setScale(newScale);
   }, []);
 
