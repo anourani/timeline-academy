@@ -456,8 +456,33 @@ It centers the requested month within the viewport.
 
 ### Entry points
 
-1. **`pendingScrollDate` prop.** Used by `EventTableEditor` after a bulk add. A `useEffect` runs `scrollToDate(pendingScrollDate)` inside `requestAnimationFrame` and then calls `onScrollComplete?.()` so the parent can clear its pending state.
+1. **`pendingScrollDate` prop.** A `useEffect` runs `scrollToDate(pendingScrollDate)` inside `requestAnimationFrame` and then calls `onScrollComplete?.()` so the parent can clear its pending state. `App.tsx` sets `pendingScrollDate` to the earliest event's `startDate` in five places — see "Auto-scroll on initial load" below.
 2. **`handleSubmit` after add/edit.** After dismissing the dialog, `scrollToDate(eventData.startDate)` runs in a rAF. For a newly-created event, the event's `id` is stashed in `pendingScrollEventId` so that when its DOM node mounts, `handleEventMounted` can call `node.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' })`. `scrollIntoView` handles vertical alignment; horizontal alignment is handled by `scrollToDate`.
+
+### Auto-scroll on initial load
+
+When a timeline is first populated with events, `App.tsx` always centers the viewport on the **earliest event** by setting `pendingScrollDate = earliest.startDate`. This is a deliberate UX choice but it has an important visual consequence: the leading 3-year padding (see §22) is rendered, but the user lands centered on the first event rather than at `scrollLeft = 0`. The padding is **off-screen on the left until the user scrolls back into it**.
+
+Five call sites in `App.tsx` set `pendingScrollDate` from the earliest event:
+
+| App.tsx location | Trigger |
+|---|---|
+| ~line 143 | New draft created from imported events (CSV/Excel import → "Build from Imported") |
+| ~line 164 | New draft created from AI-generated events |
+| ~line 332 | Imported events route-state handoff (post-auth re-entry into `/editor`) |
+| ~line 349 | AI-generated events route-state handoff (post-auth re-entry into `/editor`) |
+| ~line 527 | Bulk add via `EventTableEditor` (`handleBulkEventsChange`) |
+
+Loading an existing saved timeline via `switchTimeline(timelineId)` does **not** set `pendingScrollDate`, so on revisit the viewport opens at `scrollLeft = 0` (the very start of the leading padding) — which exposes a different perceived behavior than first-load.
+
+**Discoverability note.** The scroll container has `scrollbar-hide` (see §3), so there is no visible scrollbar to indicate that more content exists to the left. Users discover the leading padding via:
+
+- mouse wheel up (translated to scroll-left by the wheel handler in §15),
+- trackpad swipe right-to-left,
+- horizontal trackpad gesture, or
+- pressing the `Home` key while the scroll container is focused.
+
+If you change the auto-scroll behavior here, also revisit the `TimelineScrollIndicator` (§8), which derives its displayed year from `visibleRange.start` and will follow the new initial position automatically.
 
 ---
 
@@ -493,8 +518,8 @@ A translucent vertical band that follows the user's hovered month while the time
   1. **Edit event** → calls `onEdit`, which sets `editingEvent` and opens the `EventForm` Dialog.
   2. **Open details** → calls `onOpenDetails(event)` (handed up to the page, which opens the side panel).
   3. **Delete** → calls `onDeleteEvent(event.id)`. Styled `destructive`.
-- An invisible full-viewport click-catcher (`fixed inset-0 z-[999]`) sits behind the menu and absorbs `mousedown` to close, preventing the underlying timeline grid from receiving a click that would otherwise create a new event.
-- Closes on `Escape` (via a window `keydown` listener) and on outside `mousedown`/`contextmenu`.
+- An invisible full-viewport click-catcher (`fixed inset-0` with inline `zIndex: 999`) sits behind the menu (`zIndex: 1000`) and absorbs `mousedown` to close, preventing the underlying timeline grid from receiving a click that would otherwise create a new event. The catcher also handles `contextmenu` (right-click) for clean dismissal.
+- Closes on `Escape` (via a `document` `keydown` listener) and on outside `mousedown`/`contextmenu`.
 
 ---
 
@@ -593,6 +618,17 @@ Each quarter represents ~7 days. The mapping is approximate but visually consist
 ```
 
 Constants: `MIN_YEAR = 1900`, `MAX_YEAR = 2100`, `DEFAULT_START_YEAR = 2014`, `DEFAULT_END_YEAR = 2024`.
+
+### Visibility caveat
+
+The 3-year padding is **always rendered** — every consumer of `months` (TimelineHeader, TimelineYearLabels, TimelineMonthLabels, TimelineGrid, TimelineVerticalLines, the band grid template) iterates the full `months` array, and the scroll-container's `min-width` is `months.length × scale.monthWidth`, so the leading and trailing padding years always exist as scrollable space.
+
+What changes is **whether the user sees the padding on initial load**:
+
+- **Newly-imported / AI-generated / bulk-added events** → `App.tsx` sets `pendingScrollDate = earliest.startDate`, which centers the viewport on the first event. Leading padding is off-screen until the user scrolls left. See §16 ("Auto-scroll on initial load").
+- **Loading an existing saved timeline** (revisit via `switchTimeline(timelineId)`) → no `pendingScrollDate` is set, so `scrollLeft` stays at `0`; the leading padding is fully visible at the left edge.
+
+If the perceived behavior is "the timeline starts at the first event," the cause is the auto-scroll in `App.tsx`, not the range calculation here.
 
 ---
 
