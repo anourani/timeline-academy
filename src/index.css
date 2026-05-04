@@ -4,6 +4,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Registered so transitions can interpolate the row height as a length and
+   smoothly relayout `gridAutoRows` + each event's `height` together. */
+@property --event-row-height {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 38px;
+}
+
 @layer base {
   :root {
     --background: 0 0% 0%;

@@ -330,9 +330,10 @@ export function Timeline({
                     height: band.height,
                     display: 'grid',
                     gridTemplateColumns: `repeat(${months.length * 4}, ${scale.quarterWidth}px)`,
-                    gridAutoRows: `${rowHeight}px`,
+                    ['--event-row-height' as string]: `${rowHeight}px`,
+                    gridAutoRows: 'var(--event-row-height)',
                     gap: 0,
-                    transition: 'height 220ms ease',
+                    transition: 'height 220ms ease, --event-row-height 220ms ease',
                   }}
                 >
                   <TimelineGrid
