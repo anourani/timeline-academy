@@ -289,7 +289,7 @@ export function Timeline({
       {showCategoryLabels && (
         <div
           className="absolute left-0 z-10 pointer-events-none"
-          style={{ top: SCROLL_INDICATOR_HEIGHT + HEADER_HEIGHT, height: layout.totalHeight }}
+          style={{ top: SCROLL_INDICATOR_HEIGHT + HEADER_HEIGHT, height: layout.totalHeight, transition: 'height 220ms ease' }}
         >
           <TimelineCategoryLabels
             categories={layout.bands.map(b => ({ id: b.id, height: b.height }))}
@@ -332,6 +332,7 @@ export function Timeline({
                     gridTemplateColumns: `repeat(${months.length * 4}, ${scale.quarterWidth}px)`,
                     gridAutoRows: `${rowHeight}px`,
                     gap: 0,
+                    transition: 'height 220ms ease',
                   }}
                 >
                   <TimelineGrid
