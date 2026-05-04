@@ -153,20 +153,20 @@ export const TimelineEvent = memo(function TimelineEvent({
 
   // Build the transform/transition for the main element. Drag takes priority
   // over the stack-reflow transition (the dragged event animates separately).
-  // The default `height ...` transition smooths vertical-scale changes; the
-  // 'jumping' phase explicitly clears it for one frame so the FLIP layout
-  // snap can happen without interpolation.
+  // Height interpolation is handled by the parent band's animated
+  // `--event-row-height` custom property — declaring `height` here too would
+  // start a competing transition and visibly desync the event from the grid.
   let transform: string | undefined;
-  let transition: string | undefined = `height ${STACK_TRANSITION_MS}ms ease`;
+  let transition: string | undefined;
   if (isDragging) {
     transform = `translateX(${dragDeltaPixels}px) scale(1.04)`;
-    transition = `box-shadow 150ms ease, opacity 150ms ease, height ${STACK_TRANSITION_MS}ms ease`;
+    transition = 'box-shadow 150ms ease, opacity 150ms ease';
   } else if (animPhase === 'jumping') {
     transform = `translateY(${animOffset}px)`;
     transition = 'none';
   } else if (animPhase === 'animating') {
     transform = 'translateY(0px)';
-    transition = `transform ${STACK_TRANSITION_MS}ms ease, height ${STACK_TRANSITION_MS}ms ease`;
+    transition = `transform ${STACK_TRANSITION_MS}ms ease`;
   }
 
   return (
