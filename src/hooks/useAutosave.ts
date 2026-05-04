@@ -12,6 +12,7 @@ interface TimelineData {
   events: TimelineEvent[];
   categories: CategoryConfig[];
   scale: 'large' | 'medium' | 'small';
+  verticalScale: 'small' | 'medium';
   groupByCategory: boolean;
 }
 
@@ -33,6 +34,7 @@ export function useAutosave(timelineData: TimelineData) {
           title: data.title,
           description: data.description,
           scale: data.scale,
+          vertical_scale: data.verticalScale,
           group_by_category: data.groupByCategory,
           updated_at: new Date().toISOString()
         })

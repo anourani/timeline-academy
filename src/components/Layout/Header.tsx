@@ -25,6 +25,8 @@ interface HeaderProps {
   onEventsChange: (events: TimelineEvent[]) => void;
   scale: 'large' | 'medium' | 'small';
   onScaleChange: (scale: 'large' | 'medium' | 'small') => void;
+  verticalScale: 'small' | 'medium';
+  onVerticalScaleChange: (scale: 'small' | 'medium') => void;
   groupByCategory: boolean;
   onGroupByCategoryChange: (value: boolean) => void;
   activePanel: 'events' | 'settings' | null;
@@ -50,6 +52,8 @@ export function Header({
   onEventsChange,
   scale,
   onScaleChange,
+  verticalScale,
+  onVerticalScaleChange,
   groupByCategory,
   onGroupByCategoryChange,
   activePanel,
@@ -109,6 +113,8 @@ export function Header({
         onCategoriesChange={onCategoriesChange}
         scale={scale}
         onScaleChange={onScaleChange}
+        verticalScale={verticalScale}
+        onVerticalScaleChange={onVerticalScaleChange}
         groupByCategory={groupByCategory}
         onGroupByCategoryChange={onGroupByCategoryChange}
         onDeleteTimeline={onDeleteTimeline}

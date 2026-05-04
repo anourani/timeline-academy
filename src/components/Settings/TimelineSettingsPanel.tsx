@@ -6,6 +6,7 @@ import type { AddEventsResult } from '../../hooks/useEvents';
 import { exportEventsToExcel } from '../../utils/excelExport';
 import { ConfirmationModal } from '../Modal/ConfirmationModal';
 import { ScaleSelector } from './ScaleSelector';
+import { VerticalScaleSelector } from './VerticalScaleSelector';
 import { ApiKeySection } from './ApiKeySection';
 import { SidePanelActionButton } from '../SidePanel/SidePanelActionButton';
 import { DEFAULT_TIMELINE_DESCRIPTION } from '../../constants/defaults';
@@ -30,6 +31,8 @@ interface TimelineSettingsPanelProps {
   onDescriptionChange: (description: string) => void;
   scale: 'large' | 'medium' | 'small';
   onScaleChange: (scale: 'large' | 'medium' | 'small') => void;
+  verticalScale: 'small' | 'medium';
+  onVerticalScaleChange: (scale: 'small' | 'medium') => void;
   groupByCategory: boolean;
   onGroupByCategoryChange: (value: boolean) => void;
   categories: CategoryConfig[];
@@ -48,6 +51,8 @@ export function TimelineSettingsPanel({
   onDescriptionChange,
   scale,
   onScaleChange,
+  verticalScale,
+  onVerticalScaleChange,
   groupByCategory,
   onGroupByCategoryChange,
   categories,
@@ -229,6 +234,14 @@ export function TimelineSettingsPanel({
                     <div className="flex flex-row items-center justify-between h-10">
                       <span className="label-m-type2 text-[#9B9EA3]">Timeline scale</span>
                       <ScaleSelector value={scale} onChange={onScaleChange} />
+                    </div>
+
+                    <div className="h-px bg-[#262626] w-full" />
+
+                    {/* Event height row */}
+                    <div className="flex flex-row items-center justify-between h-10">
+                      <span className="label-m-type2 text-[#9B9EA3]">Event height</span>
+                      <VerticalScaleSelector value={verticalScale} onChange={onVerticalScaleChange} />
                     </div>
 
                     <div className="h-px bg-[#262626] w-full" />

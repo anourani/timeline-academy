@@ -33,6 +33,7 @@ export function App() {
     title, description, setTitle, setDescription,
     categories, updateCategories, resetCategories,
     scale, currentScale, handleScaleChange,
+    verticalScale, currentVerticalScale, handleVerticalScaleChange,
     groupByCategory, handleGroupByCategoryChange,
   } = useTimelineState();
   const { user } = useAuth();
@@ -67,6 +68,7 @@ export function App() {
     events,
     categories,
     scale: currentScale.value,
+    verticalScale: currentVerticalScale.value,
     groupByCategory,
   };
 
@@ -102,10 +104,11 @@ export function App() {
         events,
         categories,
         scale: currentScale.value,
+        verticalScale: currentVerticalScale.value,
         groupByCategory,
       });
     }
-  }, [timelineId, title, description, events, categories, currentScale.value, groupByCategory, handleChange]);
+  }, [timelineId, title, description, events, categories, currentScale.value, currentVerticalScale.value, groupByCategory, handleChange]);
 
   // Hydrate from localStorage draft if logged out
   useEffect(() => {
@@ -139,6 +142,7 @@ export function App() {
         setEvents(imported);
         updateCategories(newDraft.categories);
         handleScaleChange(newDraft.scale);
+        handleVerticalScaleChange(newDraft.verticalScale ?? 'small');
         if (imported.length > 0) {
           const earliest = imported.reduce((a, b) => a.startDate < b.startDate ? a : b);
           setPendingScrollDate(earliest.startDate);
@@ -160,6 +164,7 @@ export function App() {
         setEvents(aiEvents);
         updateCategories(aiCategories);
         handleScaleChange(newDraft.scale);
+        handleVerticalScaleChange(newDraft.verticalScale ?? 'small');
         if (aiEvents.length > 0) {
           const earliest = aiEvents.reduce((a, b) => a.startDate < b.startDate ? a : b);
           setPendingScrollDate(earliest.startDate);
@@ -179,6 +184,7 @@ export function App() {
         setEvents(newDraft.events);
         updateCategories(newDraft.categories);
         handleScaleChange(newDraft.scale);
+        handleVerticalScaleChange(newDraft.verticalScale ?? 'small');
       } else if (routeState?.draftId) {
         // Resuming a local draft (e.g. from the side panel)
         const draft = loadDraft(routeState.draftId);
@@ -189,6 +195,7 @@ export function App() {
           setEvents(draft.events);
           updateCategories(draft.categories);
           handleScaleChange(draft.scale);
+          handleVerticalScaleChange(draft.verticalScale ?? 'small');
           handleGroupByCategoryChange(draft.groupByCategory ?? false);
         } else {
           routerNavigate('/', { replace: true });
@@ -206,6 +213,7 @@ export function App() {
           setEvents(mostRecent.events);
           updateCategories(mostRecent.categories);
           handleScaleChange(mostRecent.scale);
+          handleVerticalScaleChange(mostRecent.verticalScale ?? 'small');
           handleGroupByCategoryChange(mostRecent.groupByCategory ?? false);
         } else {
           routerNavigate('/', { replace: true });
@@ -218,7 +226,7 @@ export function App() {
       // Clear the route state so refreshing doesn't re-trigger
       routerNavigate('/editor', { replace: true, state: {} });
     }
-  }, [user, draftHydrated, createDraft, handleScaleChange, handleGroupByCategoryChange, loadAllDrafts, loadDraft, location.state, routerNavigate, setDescription, setEvents, setTitle, updateCategories]);
+  }, [user, draftHydrated, createDraft, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange, loadAllDrafts, loadDraft, location.state, routerNavigate, setDescription, setEvents, setTitle, updateCategories]);
 
   // Save to localStorage when logged out
   useEffect(() => {
@@ -230,11 +238,12 @@ export function App() {
         events,
         categories,
         scale: currentScale.value,
+        verticalScale: currentVerticalScale.value,
         groupByCategory,
         savedAt: new Date().toISOString()
       });
     }
-  }, [user, draftHydrated, activeDraftId, title, description, events, categories, currentScale.value, groupByCategory, saveDraft]);
+  }, [user, draftHydrated, activeDraftId, title, description, events, categories, currentScale.value, currentVerticalScale.value, groupByCategory, saveDraft]);
 
   // Migrate localStorage drafts to Supabase on login
   useEffect(() => {
@@ -248,7 +257,7 @@ export function App() {
       (async () => {
         for (const draft of draftsWithEvents) {
           try {
-            await saveTimeline(draft.title, draft.events, draft.scale);
+            await saveTimeline(draft.title, draft.events, draft.scale, draft.verticalScale ?? 'small');
           } catch (err: unknown) {
             if (err instanceof LimitReachedError) {
               alert(
@@ -278,6 +287,7 @@ export function App() {
         events: newEvents,
         categories: newCategories,
         scale: newScale,
+        verticalScale: newVerticalScale,
         groupByCategory: newGroupByCategory,
       } = await loadTimeline(newTimelineId);
 
@@ -291,6 +301,7 @@ export function App() {
         resetCategories();
       }
       handleScaleChange(newScale || 'medium');
+      handleVerticalScaleChange(newVerticalScale ?? 'small');
       handleGroupByCategoryChange(newGroupByCategory ?? false);
     } catch (error) {
       console.error('Error switching timeline:', error);
@@ -305,7 +316,7 @@ export function App() {
       }
       alert('Failed to load timeline. Please try again.');
     }
-  }, [loadTimeline, setTitle, setDescription, setEvents, updateCategories, resetCategories, handleScaleChange, handleGroupByCategoryChange, routerNavigate, setActiveTimelineId]);
+  }, [loadTimeline, setTitle, setDescription, setEvents, updateCategories, resetCategories, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange, routerNavigate, setActiveTimelineId]);
 
   // Handle navigation from AI mode or the side panel with a specific timeline to load
   useEffect(() => {
@@ -399,6 +410,7 @@ export function App() {
     setEvents(draft.events);
     updateCategories(draft.categories);
     handleScaleChange(draft.scale);
+    handleVerticalScaleChange(draft.verticalScale ?? 'small');
     handleGroupByCategoryChange(draft.groupByCategory ?? false);
   };
 
@@ -562,6 +574,8 @@ export function App() {
         onEventsChange={handleBulkEventsChange}
         scale={scale}
         onScaleChange={handleScaleChange}
+        verticalScale={verticalScale}
+        onVerticalScaleChange={handleVerticalScaleChange}
         groupByCategory={groupByCategory}
         onGroupByCategoryChange={handleGroupByCategoryChange}
         activePanel={activePanel}
@@ -614,6 +628,7 @@ export function App() {
             onDeleteEvent={mode === 'edit' ? handleDeleteEvent : undefined}
             onOpenDetails={(event) => setDetailPanelEvent(event)}
             scale={currentScale}
+            verticalScale={currentVerticalScale}
             groupByCategory={groupByCategory}
             pendingScrollDate={pendingScrollDate}
             onScrollComplete={() => setPendingScrollDate(null)}

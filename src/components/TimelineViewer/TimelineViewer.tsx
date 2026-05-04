@@ -5,6 +5,7 @@ import { Timeline } from '../Timeline/Timeline';
 import { TimelineTitle } from '../TimelineTitle/TimelineTitle';
 import { EventDetailPanel } from '../EventDetailPanel/EventDetailPanel';
 import { SCALES } from '../../constants/scales';
+import { VERTICAL_SCALES } from '../../constants/verticalScales';
 import { DEFAULT_CATEGORIES } from '../../constants/categories';
 import { TimelineEvent, CategoryConfig } from '../../types/event';
 import { getDraft } from '../../utils/draftStorage';
@@ -19,6 +20,7 @@ interface TimelineData {
   events: TimelineEvent[];
   categories: CategoryConfig[];
   scale: 'large' | 'medium' | 'small';
+  verticalScale: 'small' | 'medium';
   groupByCategory: boolean;
 }
 
@@ -58,6 +60,7 @@ export function TimelineViewer() {
             events: draft.events || [],
             categories,
             scale: draft.scale || 'medium',
+            verticalScale: draft.verticalScale ?? 'small',
             groupByCategory: draft.groupByCategory ?? false
           });
         } catch {
@@ -132,6 +135,7 @@ export function TimelineViewer() {
           events: formattedEvents,
           categories: categories,
           scale: timelineData.scale || 'medium',
+          verticalScale: timelineData.vertical_scale ?? 'small',
           groupByCategory: timelineData.group_by_category ?? false
         });
       } catch (err) {
@@ -194,6 +198,7 @@ export function TimelineViewer() {
           events={timeline.events}
           categories={timeline.categories}
           scale={SCALES[timeline.scale]}
+          verticalScale={VERTICAL_SCALES[timeline.verticalScale]}
           groupByCategory={timeline.groupByCategory}
           mode="view"
           onOpenDetails={(event) => setDetailPanelEvent(event)}

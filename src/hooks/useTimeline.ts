@@ -41,6 +41,7 @@ interface TimelineData {
   events: TimelineEvent[];
   categories?: CategoryConfig[];
   scale?: 'large' | 'medium' | 'small';
+  verticalScale?: 'small' | 'medium';
   groupByCategory?: boolean;
 }
 
@@ -118,6 +119,7 @@ export function useTimeline() {
           events: [],
           categories: undefined, // Will use default categories
           scale: 'medium',
+          verticalScale: 'small',
           groupByCategory: false
         };
       }
@@ -163,6 +165,7 @@ export function useTimeline() {
         })),
         categories: categories || undefined,
         scale: timeline.scale || 'medium',
+        verticalScale: timeline.vertical_scale || 'small',
         groupByCategory: timeline.group_by_category ?? false
       };
     } catch (error) {
@@ -172,7 +175,12 @@ export function useTimeline() {
     }
   }, [user, timelineId]);
 
-  const saveTimeline = useCallback(async (title: string, events: TimelineEvent[], scale: 'large' | 'medium' | 'small' = 'medium') => {
+  const saveTimeline = useCallback(async (
+    title: string,
+    events: TimelineEvent[],
+    scale: 'large' | 'medium' | 'small' = 'medium',
+    verticalScale: 'small' | 'medium' = 'small',
+  ) => {
     if (!user) throw new Error('Must be signed in to save');
 
     try {
@@ -182,7 +190,7 @@ export function useTimeline() {
         // Create new timeline
         const { data: timeline, error: timelineError } = await supabase
           .from('timelines')
-          .insert({ title, user_id: user.id, scale })
+          .insert({ title, user_id: user.id, scale, vertical_scale: verticalScale })
           .select('id')
           .single();
 
@@ -210,10 +218,11 @@ export function useTimeline() {
         // Update existing timeline
         const { error: timelineError } = await supabase
           .from('timelines')
-          .update({ 
-            title, 
+          .update({
+            title,
             updated_at: new Date().toISOString(),
-            scale 
+            scale,
+            vertical_scale: verticalScale
           })
           .eq('id', timelineId);
 
