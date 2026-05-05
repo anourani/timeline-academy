@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { lockScroll, unlockScroll } from '../../utils/scrollLock';
 
@@ -19,13 +20,17 @@ export function Modal({ isOpen, onClose, children, title, size = 'default' }: Mo
   }, [isOpen]);
 
   if (!isOpen) return null;
+  if (typeof document === 'undefined') return null;
 
   const sizeClasses = {
     default: 'w-[550px] max-w-[90vw]',
     large: 'w-[960px] max-w-[95vw] min-h-[600px]'
   };
 
-  return (
+  // Portal to body so we escape any ancestor with a `transform` (e.g. the
+  // sliding side panel), which would otherwise become the containing block
+  // for `position: fixed` and trap us inside the panel.
+  return createPortal(
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className={`bg-gray-800 rounded-lg shadow-xl ${sizeClasses[size]}`}>
         <div className="flex justify-between items-center p-4 border-b border-gray-700">
@@ -42,6 +47,7 @@ export function Modal({ isOpen, onClose, children, title, size = 'default' }: Mo
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
