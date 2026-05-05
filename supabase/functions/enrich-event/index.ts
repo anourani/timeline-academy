@@ -70,20 +70,28 @@ Deno.serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  // Auth — no anonymous enrichment.
+  // Auth — accept either a signed-in user (Authorization header) or an
+  // anonymous browser session (x-session-token). Mirrors the pattern in
+  // generate-timeline so anon and authed share a unified rate-limit budget.
   const userId = await authenticateUser(req);
-  if (!userId) {
-    return new Response(
-      JSON.stringify({ error: "Authentication required." }),
-      {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+  let sessionKey: string;
+  if (userId) {
+    sessionKey = `enrich:user:${userId}`;
+  } else {
+    const sessionToken = req.headers.get("x-session-token");
+    if (!sessionToken) {
+      return new Response(
+        JSON.stringify({ error: "Authentication required." }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+    sessionKey = `enrich:${sessionToken}`;
   }
 
-  // Rate limit (5 enrichments per user per 24h).
-  const sessionKey = `enrich:${userId}`;
+  // Rate limit (5 enrichments per identity per 24h).
   const { allowed } = await checkRateLimit(sessionKey);
   if (!allowed) {
     return new Response(

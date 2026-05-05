@@ -238,7 +238,7 @@ export function Timeline({
         return;
       }
       // View / present mode: open the detail panel for any event. The panel
-      // itself handles cached content vs. fresh generation vs. setup-required.
+      // itself handles cached content vs. fresh generation.
       if (onOpenDetails) {
         onOpenDetails(event);
       }
