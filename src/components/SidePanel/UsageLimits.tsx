@@ -94,7 +94,7 @@ export function UsageLimits() {
   return (
     <>
       <div className="px-3 pb-2.5">
-        <div className="bg-[#0A0A0A] rounded-md pt-4 pb-3 px-2 flex flex-col gap-4">
+        <div className="bg-[#0A0A0A] rounded-[8px] pt-4 pb-3 px-2 flex flex-col gap-4">
           {/* Header row */}
           <div className="flex flex-row items-center justify-between px-2">
             <h3 className="m-0 font-['Aleo',serif] text-[14px] leading-[140%] font-normal text-[#9B9EA3]">
