@@ -96,12 +96,10 @@ export function UsageLimits() {
       <div className="px-3 pb-2.5">
         <div className="bg-[#0A0A0A] rounded-md pt-4 pb-3 px-2 flex flex-col gap-4">
           {/* Header row */}
-          <div className="flex flex-row items-center justify-between">
-            <div className="flex flex-row items-start gap-1 px-2">
-              <h3 className="m-0 font-['Aleo',serif] text-[14px] leading-[140%] font-normal text-[#9B9EA3]">
-                Usage Limits
-              </h3>
-            </div>
+          <div className="flex flex-row items-center justify-between px-2">
+            <h3 className="m-0 font-['Aleo',serif] text-[14px] leading-[140%] font-normal text-[#9B9EA3]">
+              Usage Limits
+            </h3>
             {headerCta}
           </div>
 
@@ -209,35 +207,23 @@ function renderHeaderCta({
   onManageKey: () => void
 }) {
   const baseClass =
-    "font-['Avenir',sans-serif] text-[12px] leading-[18px] font-normal underline transition-colors"
+    "font-['Avenir',sans-serif] text-[12px] leading-[18px] font-normal underline text-text-secondary hover:text-text-primary transition-colors"
   if (tierState === 'guest') {
     return (
-      <button
-        type="button"
-        onClick={onLogIn}
-        className={`${baseClass} text-[#2563EB] hover:text-[#3B82F6]`}
-      >
-        Log In for more usage
+      <button type="button" onClick={onLogIn} className={baseClass}>
+        Log In
       </button>
     )
   }
   if (tierState === 'free') {
     return (
-      <button
-        type="button"
-        onClick={onAddKey}
-        className={`${baseClass} text-[#2563EB] hover:text-[#3B82F6]`}
-      >
+      <button type="button" onClick={onAddKey} className={baseClass}>
         Add API Key
       </button>
     )
   }
   return (
-    <button
-      type="button"
-      onClick={onManageKey}
-      className={`${baseClass} text-[#C9CED4] hover:text-[#dadee5]`}
-    >
+    <button type="button" onClick={onManageKey} className={baseClass}>
       API Key Connected
     </button>
   )
