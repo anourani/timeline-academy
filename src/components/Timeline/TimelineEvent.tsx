@@ -153,6 +153,9 @@ export const TimelineEvent = memo(function TimelineEvent({
 
   // Build the transform/transition for the main element. Drag takes priority
   // over the stack-reflow transition (the dragged event animates separately).
+  // Height interpolation is handled by the parent band's animated
+  // `--event-row-height` custom property — declaring `height` here too would
+  // start a competing transition and visibly desync the event from the grid.
   let transform: string | undefined;
   let transition: string | undefined;
   if (isDragging) {
@@ -177,7 +180,7 @@ export const TimelineEvent = memo(function TimelineEvent({
             gridRow: event.stackIndex + 1,
             backgroundColor: 'transparent',
             minWidth: `${EVENT_MIN_WIDTH}px`,
-            height: `${EVENT_ROW_HEIGHT}px`,
+            height: 'var(--event-row-height)',
             zIndex: event.stackIndex,
             opacity: 0.3,
           }}
@@ -197,7 +200,7 @@ export const TimelineEvent = memo(function TimelineEvent({
           gridRow: event.stackIndex + 1,
           backgroundColor: 'transparent',
           minWidth: `${EVENT_MIN_WIDTH}px`,
-          height: `${EVENT_ROW_HEIGHT}px`,
+          height: 'var(--event-row-height)',
           zIndex: isDragging ? 1000 : event.stackIndex + 1,
           transform,
           boxShadow: isDragging

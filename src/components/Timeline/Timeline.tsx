@@ -7,12 +7,12 @@ import { TimelineEvent } from './TimelineEvent';
 import { TimelineScrollIndicator } from './TimelineScrollIndicator';
 import { EventActionsMenu } from '../EventActionsMenu/EventActionsMenu';
 import { TimelineEvent as ITimelineEvent, CategoryConfig } from '../../types/event';
-import { TimelineScale } from '../../types/timeline';
+import { TimelineScale, TimelineVerticalScale } from '../../types/timeline';
 import { getTimelineRange, shiftEventDates } from '../../utils/dateUtils';
 import { calculateEventStacks, StackedEvent } from '../../utils/eventStacking';
 import { useTimelineScroll } from '../../hooks/useTimelineScroll';
 import { useEventDrag } from '../../hooks/useEventDrag';
-import { EVENT_HEIGHT, EVENT_ROW_HEIGHT, CATEGORY_PADDING, CATEGORY_MIN_HEIGHT, SCROLL_INDICATOR_HEIGHT, HEADER_HEIGHT } from '../../constants/timeline';
+import { CATEGORY_PADDING, CATEGORY_MIN_HEIGHT, SCROLL_INDICATOR_HEIGHT, HEADER_HEIGHT } from '../../constants/timeline';
 import { EventForm } from '../EventForm/EventForm';
 import {
   Dialog,
@@ -32,6 +32,7 @@ interface TimelineProps {
   /** Called when "Open details" is selected (edit mode) or an enriched event is clicked (view mode). */
   onOpenDetails?: (event: ITimelineEvent) => void;
   scale: TimelineScale;
+  verticalScale: TimelineVerticalScale;
   groupByCategory?: boolean;
   pendingScrollDate?: string | null;
   onScrollComplete?: () => void;
@@ -63,6 +64,7 @@ export function Timeline({
   onDeleteEvent,
   onOpenDetails,
   scale,
+  verticalScale,
   groupByCategory = false,
   pendingScrollDate,
   onScrollComplete,
@@ -183,7 +185,7 @@ export function Timeline({
         const stackedEvents = calculateEventStacks(categoryEvents, months, scale.monthWidth);
         const maxStack = Math.max(...stackedEvents.map(event => event.stackIndex), 0);
 
-        const height = (maxStack + 1) * EVENT_HEIGHT + CATEGORY_PADDING;
+        const height = (maxStack + 1) * verticalScale.eventHeight + CATEGORY_PADDING;
 
         const band: CategoryBand = {
           id: category.id,
@@ -206,14 +208,14 @@ export function Timeline({
     const stackedEvents = calculateEventStacks(visibleEvents, months, scale.monthWidth);
     const maxStack = Math.max(...stackedEvents.map(event => event.stackIndex), 0);
     const height = stackedEvents.length === 0
-      ? EVENT_ROW_HEIGHT
-      : (maxStack + 1) * EVENT_ROW_HEIGHT + CATEGORY_PADDING;
+      ? verticalScale.eventRowHeight
+      : (maxStack + 1) * verticalScale.eventRowHeight + CATEGORY_PADDING;
 
     return {
       bands: [{ id: 'all', height, offset: 0, events: stackedEvents }],
       totalHeight: height,
     };
-  }, [groupByCategory, visibleEvents, visibleCategories, months, scale.monthWidth]);
+  }, [groupByCategory, visibleEvents, visibleCategories, months, scale.monthWidth, verticalScale.eventHeight, verticalScale.eventRowHeight]);
 
   const handleMonthClick = useCallback((monthIndex: number) => {
     if (!isEditing || !onAddEvent || justDraggedRef.current) return;
@@ -280,14 +282,14 @@ export function Timeline({
   }, [pendingScrollEventId]);
 
   const showCategoryLabels = groupByCategory;
-  const rowHeight = groupByCategory ? EVENT_HEIGHT : EVENT_ROW_HEIGHT;
+  const rowHeight = groupByCategory ? verticalScale.eventHeight : verticalScale.eventRowHeight;
 
   return (
     <div className={isFullScreen ? 'h-[calc(100vh-6rem)] relative' : 'flex-1 min-h-0 flex flex-col relative'}>
       {showCategoryLabels && (
         <div
           className="absolute left-0 z-10 pointer-events-none"
-          style={{ top: SCROLL_INDICATOR_HEIGHT + HEADER_HEIGHT, height: layout.totalHeight }}
+          style={{ top: SCROLL_INDICATOR_HEIGHT + HEADER_HEIGHT, height: layout.totalHeight, transition: 'height 220ms ease' }}
         >
           <TimelineCategoryLabels
             categories={layout.bands.map(b => ({ id: b.id, height: b.height }))}
@@ -328,8 +330,10 @@ export function Timeline({
                     height: band.height,
                     display: 'grid',
                     gridTemplateColumns: `repeat(${months.length * 4}, ${scale.quarterWidth}px)`,
-                    gridAutoRows: `${rowHeight}px`,
+                    ['--event-row-height' as string]: `${rowHeight}px`,
+                    gridAutoRows: 'var(--event-row-height)',
                     gap: 0,
+                    transition: 'height 220ms ease, --event-row-height 220ms ease',
                   }}
                 >
                   <TimelineGrid
