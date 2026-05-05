@@ -18,11 +18,19 @@ export function ApiKeySection({ defaultExpanded = false }: ApiKeySectionProps) {
   const [draft, setDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  const status: 'byok' | 'server' | 'unconfigured' = key
-    ? 'byok'
-    : user
-      ? 'server'
-      : 'unconfigured'
+  if (!user) {
+    return (
+      <div className="flex flex-col gap-2.5">
+        <span className="label-m-type2 text-[#9B9EA3]">AI Settings</span>
+        <div className="h-px bg-[#262626] w-full" />
+        <p className="body-m text-[#c9ced4] m-0">
+          Log in to add an Anthropic API key for unlimited AI generation.
+        </p>
+      </div>
+    )
+  }
+
+  const status: 'byok' | 'server' = key ? 'byok' : 'server'
 
   const startEdit = () => {
     setDraft('')
@@ -136,7 +144,7 @@ export function ApiKeySection({ defaultExpanded = false }: ApiKeySectionProps) {
 function StatusPill({
   status,
 }: {
-  status: 'byok' | 'server' | 'unconfigured'
+  status: 'byok' | 'server'
 }) {
   const config = {
     byok: {
@@ -148,11 +156,6 @@ function StatusPill({
       label: "Using Timeline Academy's server (5/day)",
       dot: '#9B9EA3',
       text: '#9B9EA3',
-    },
-    unconfigured: {
-      label: 'Not configured — sign in or add a key',
-      dot: '#FF7D05',
-      text: '#c9ced4',
     },
   }[status]
 

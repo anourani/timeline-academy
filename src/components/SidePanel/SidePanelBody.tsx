@@ -42,7 +42,7 @@ import {
 } from '@/utils/draftStorage'
 import { exportEventsToExcel } from '@/utils/excelExport'
 import type { TimelineEvent } from '@/types/event'
-import { EventCounter } from './EventCounter'
+import { UsageLimits } from './UsageLimits'
 import { SidePanelActionButton } from './SidePanelActionButton'
 
 interface TileRow {
@@ -554,9 +554,9 @@ export function SidePanelBody() {
         <SidePanelActionButton label="Feedback" onClick={() => setIsFeedbackOpen(true)} />
       </div>
 
-      {/* Event Counter */}
-      <div className="px-3 pb-3 shrink-0">
-        <EventCounter />
+      {/* Usage Limits */}
+      <div className="shrink-0">
+        <UsageLimits />
       </div>
 
       {/* Footer */}

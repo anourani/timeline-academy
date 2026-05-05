@@ -53,7 +53,7 @@ export function App() {
   const { loadAllDrafts, loadDraft, saveDraft, createDraft, clearAllDrafts, deleteDraft: deleteLocalDraft } = useLocalDraft();
   const handledRouteStateRef = useRef(false);
   const migrationDoneRef = useRef(false);
-  const { setOnTimelineSelect, setOnDraftSelect, refreshTimelines, setActiveTimelineId, setActiveDraftId: setPanelActiveDraftId, setActiveTimelineTitle, setActiveEventCount, setActiveDominantCategoryColor } = useSidePanel();
+  const { setOnTimelineSelect, setOnDraftSelect, refreshTimelines, setOnOpenSettings, setActiveTimelineId, setActiveDraftId: setPanelActiveDraftId, setActiveTimelineTitle, setActiveEventCount, setActiveDominantCategoryColor } = useSidePanel();
 
   const timelineData = {
     id: timelineId,
@@ -430,11 +430,13 @@ export function App() {
   useEffect(() => {
     setOnTimelineSelect((id: string) => timelineSwitchRef.current(id));
     setOnDraftSelect((id: string) => draftSwitchRef.current(id));
+    setOnOpenSettings(() => setActivePanel('settings'));
     return () => {
       setOnTimelineSelect(null);
       setOnDraftSelect(null);
+      setOnOpenSettings(null);
     };
-  }, [setOnTimelineSelect, setOnDraftSelect]);
+  }, [setOnTimelineSelect, setOnDraftSelect, setOnOpenSettings]);
 
   // Keep the side panel informed of which timeline/draft is active so it can
   // highlight it. useLayoutEffect ensures the context update commits

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 type TimelineSelectHandler = (timelineId: string) => void
 type DraftSelectHandler = (draftId: string) => void
 type TimelinesRefreshHandler = () => void
+type OpenSettingsHandler = () => void
 
 interface SidePanelContextValue {
   isOpen: boolean
@@ -17,6 +18,9 @@ interface SidePanelContextValue {
   /** Force the timelines list to refetch (e.g. after deleting from the editor). No-op if nothing is registered. */
   refreshTimelines: () => void
   setRefreshTimelines: (handler: TimelinesRefreshHandler | null) => void
+  /** Open the Settings panel. Registered by the editor route; no-op elsewhere. */
+  onOpenSettings: OpenSettingsHandler
+  setOnOpenSettings: (handler: OpenSettingsHandler | null) => void
   activeTimelineId: string | null
   setActiveTimelineId: (id: string | null) => void
   activeDraftId: string | null
@@ -57,6 +61,7 @@ export function SidePanelProvider({ children }: { children: ReactNode }) {
   const customHandlerRef = useRef<TimelineSelectHandler | null>(null)
   const customDraftHandlerRef = useRef<DraftSelectHandler | null>(null)
   const customRefreshRef = useRef<TimelinesRefreshHandler | null>(null)
+  const customOpenSettingsRef = useRef<OpenSettingsHandler | null>(null)
 
   useEffect(() => {
     try {
@@ -102,6 +107,14 @@ export function SidePanelProvider({ children }: { children: ReactNode }) {
     customRefreshRef.current = handler
   }, [])
 
+  const onOpenSettings = useCallback<OpenSettingsHandler>(() => {
+    customOpenSettingsRef.current?.()
+  }, [])
+
+  const setOnOpenSettings = useCallback((handler: OpenSettingsHandler | null) => {
+    customOpenSettingsRef.current = handler
+  }, [])
+
   const value = useMemo<SidePanelContextValue>(() => ({
     isOpen,
     open,
@@ -113,6 +126,8 @@ export function SidePanelProvider({ children }: { children: ReactNode }) {
     setOnDraftSelect,
     refreshTimelines,
     setRefreshTimelines,
+    onOpenSettings,
+    setOnOpenSettings,
     activeTimelineId,
     setActiveTimelineId,
     activeDraftId,
@@ -123,7 +138,7 @@ export function SidePanelProvider({ children }: { children: ReactNode }) {
     setActiveEventCount,
     activeDominantCategoryColor,
     setActiveDominantCategoryColor,
-  }), [isOpen, open, close, toggle, onTimelineSelect, setOnTimelineSelect, onDraftSelect, setOnDraftSelect, refreshTimelines, setRefreshTimelines, activeTimelineId, activeDraftId, activeTimelineTitle, activeEventCount, activeDominantCategoryColor])
+  }), [isOpen, open, close, toggle, onTimelineSelect, setOnTimelineSelect, onDraftSelect, setOnDraftSelect, refreshTimelines, setRefreshTimelines, onOpenSettings, setOnOpenSettings, activeTimelineId, activeDraftId, activeTimelineTitle, activeEventCount, activeDominantCategoryColor])
 
   return (
     <SidePanelContext.Provider value={value}>
