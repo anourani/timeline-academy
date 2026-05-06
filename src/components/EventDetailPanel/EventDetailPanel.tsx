@@ -3,8 +3,6 @@ import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { ConfirmationModal } from '../Modal/ConfirmationModal'
 import { formatDateLong } from '@/utils/dateUtils'
-import { useAuth } from '@/hooks/useAuth'
-import { useAnthropicKey } from '@/services/userApiKey'
 import {
   enrichEvent,
   fetchEventImage,
@@ -18,11 +16,9 @@ interface EventDetailPanelProps {
   mode: 'edit' | 'view'
   onClose: () => void
   onEventChange: (updated: TimelineEvent) => void
-  /** Trigger the BYOK / sign-in setup modal when neither path is available. */
-  onRequestSetup?: () => void
 }
 
-type PanelState = 'idle' | 'generating' | 'loaded' | 'error' | 'setup-required'
+type PanelState = 'idle' | 'generating' | 'loaded' | 'error'
 
 function formatDateRange(event: TimelineEvent): string {
   if (event.startDate === event.endDate) return formatDateLong(event.startDate)
@@ -40,10 +36,7 @@ export function EventDetailPanel({
   mode,
   onClose,
   onEventChange,
-  onRequestSetup,
 }: EventDetailPanelProps) {
-  const { user } = useAuth()
-  const apiKey = useAnthropicKey()
   const [state, setState] = useState<PanelState>('idle')
   const [streamedDescription, setStreamedDescription] = useState('')
   const [imageUrl, setImageUrl] = useState<string | null>(null)
@@ -75,23 +68,9 @@ export function EventDetailPanel({
       return
     }
 
-    // Fresh event — auto-generation runs in either edit or view/present mode
-    // as long as a path is available. Public viewers' generations get
-    // persisted client-side by their TimelineViewer's onEventChange handler.
-    //
-    // Generation needs at least one of: a BYOK Anthropic key (browser-direct)
-    // or a signed-in user (server path). Without either, prompt the user to
-    // pick a path instead of running a request that's destined to fail.
-    if (!apiKey && !user) {
-      setState('setup-required')
-      setStreamedDescription('')
-      setImageUrl(null)
-      setImageAttribution(null)
-      setSources([])
-      setErrorMessage('')
-      return
-    }
-
+    // Fresh event — auto-generation runs in either edit or view/present mode.
+    // Routing (BYOK key vs session token vs JWT) is handled inside enrichEvent;
+    // the panel just kicks off generation.
     setState('generating')
     setStreamedDescription('')
     setImageUrl(null)
@@ -101,7 +80,7 @@ export function EventDetailPanel({
 
     runGeneration(event, false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, event?.id, user, apiKey])
+  }, [open, event?.id])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -311,21 +290,7 @@ export function EventDetailPanel({
                 <h2 className="header-xsmall text-[#DADEE5] m-0">{event.title}</h2>
 
                 {/* Description / state */}
-                {state === 'setup-required' ? (
-                  <div className="flex flex-col gap-2">
-                    <p className="body-m text-[#9B9EA3] m-0">
-                      Generate with AI — paste your Anthropic key or sign in.
-                    </p>
-                    {onRequestSetup && (
-                      <button
-                        onClick={onRequestSetup}
-                        className="self-start font-['Avenir',sans-serif] text-[14px] leading-[20px] text-[#DADEE5] underline hover:text-white"
-                      >
-                        Set up AI
-                      </button>
-                    )}
-                  </div>
-                ) : state === 'error' ? (
+                {state === 'error' ? (
                   <div className="flex flex-col gap-2">
                     <p className="body-m text-[#9B9EA3] m-0">
                       Couldn't generate details. {errorMessage ? `(${errorMessage})` : ''}

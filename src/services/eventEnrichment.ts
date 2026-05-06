@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase'
 import { enrichEventDirect } from './anthropicDirect'
+import { getSessionToken } from './sessionToken'
 import { getAnthropicKey } from './userApiKey'
 import type { EventSource, TimelineEvent } from '../types/event'
 
@@ -46,9 +47,9 @@ export async function fetchEventImage(title: string): Promise<{
  * Routing:
  *   - User has BYOK key set → call Anthropic directly from the browser.
  *     Bypasses our edge function, our rate limit, and our billing.
- *   - Otherwise (signed-in user, no key) → use the edge function with their JWT.
- *   - Logged-out user without a key → returns a "needs setup" error so the
- *     panel can surface the BYOK / sign-in prompt.
+ *   - Signed-in user, no key → edge function authenticated via JWT.
+ *   - Logged-out user, no key → edge function authenticated via the
+ *     anonymous session token. Subject to the same 5/24h rate limit.
  */
 export async function enrichEvent(
   event: TimelineEvent,
@@ -62,23 +63,24 @@ export async function enrichEvent(
     return
   }
 
-  // Server path — requires a signed-in user.
   const session = await supabase.auth.getSession()
   const token = session.data.session?.access_token
-  if (!token) {
-    handlers.onError('You must be signed in to generate event details.')
-    return
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    apikey: SUPABASE_ANON_KEY,
+  }
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  } else {
+    headers['x-session-token'] = getSessionToken()
   }
 
   let res: Response
   try {
     res = await fetch(`${SUPABASE_URL}/functions/v1/enrich-event`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        apikey: SUPABASE_ANON_KEY,
-      },
+      headers,
       body: JSON.stringify({
         eventTitle: event.title,
         startDate: event.startDate,

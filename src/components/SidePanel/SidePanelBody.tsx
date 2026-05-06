@@ -12,7 +12,6 @@ import {
   PanelLeft,
   Share2,
   Trash2,
-  Video,
 } from 'lucide-react'
 import { utils, writeFile } from 'xlsx'
 import { useAuth } from '@/hooks/useAuth'
@@ -22,13 +21,6 @@ import { useTimelineMetadata } from '@/hooks/useTimelineMetadata'
 import { computeDominantCategoryColor, DEFAULT_DOT_COLOR } from '@/utils/dominantCategory'
 import { supabase } from '@/lib/supabase'
 import { ConfirmationModal } from '@/components/Modal/ConfirmationModal'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { FeedbackPanel } from '@/components/FeedbackPanel/FeedbackPanel'
 import { ImportCSVModal } from '@/components/AIMode/ImportCSVModal'
 import { AuthModal } from '@/components/Auth/AuthModal'
 import { DEFAULT_TIMELINE_TITLE } from '@/constants/defaults'
@@ -42,7 +34,7 @@ import {
 } from '@/utils/draftStorage'
 import { exportEventsToExcel } from '@/utils/excelExport'
 import type { TimelineEvent } from '@/types/event'
-import { EventCounter } from './EventCounter'
+import { UsageLimits } from './UsageLimits'
 import { SidePanelActionButton } from './SidePanelActionButton'
 
 interface TileRow {
@@ -153,8 +145,6 @@ export function SidePanelBody() {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const [pendingDeleteKind, setPendingDeleteKind] = useState<'timeline' | 'draft' | null>(null)
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false)
-  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false)
-  const [isVideoTutorialOpen, setIsVideoTutorialOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
 
@@ -548,15 +538,9 @@ export function SidePanelBody() {
         </div>
       </div>
 
-      {/* Action links: How it works / Feedback */}
-      <div className="flex flex-col items-start p-3 shrink-0">
-        <SidePanelActionButton label="How it works" onClick={() => setIsVideoTutorialOpen(true)} />
-        <SidePanelActionButton label="Feedback" onClick={() => setIsFeedbackOpen(true)} />
-      </div>
-
-      {/* Event Counter */}
-      <div className="px-3 pb-3 shrink-0">
-        <EventCounter />
+      {/* Usage Limits */}
+      <div className="shrink-0">
+        <UsageLimits />
       </div>
 
       {/* Footer */}
@@ -608,35 +592,6 @@ export function SidePanelBody() {
       />
 
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
-
-      <FeedbackPanel open={isFeedbackOpen} onOpenChange={setIsFeedbackOpen} />
-
-      <Dialog open={isVideoTutorialOpen} onOpenChange={setIsVideoTutorialOpen}>
-        <DialogContent className="max-w-[550px]">
-          <DialogHeader>
-            <DialogTitle>Quick Tutorial to Get Started</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-muted-foreground">
-              This video tutorial walks through how to start building your timeline by adding events, editing categories, customizing timeline settings, and importing or exporting data to build faster.
-            </p>
-            <div className="aspect-video">
-              <a
-                href="https://www.loom.com/share/f19575818a9341d4a266c482af981ba2"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block w-full h-full bg-secondary rounded-lg flex items-center justify-center hover:bg-secondary/80 transition-colors"
-              >
-                <div className="text-center p-6">
-                  <Video size={48} className="mx-auto mb-4" />
-                  <p>Click to watch the tutorial video on Loom</p>
-                  <p className="text-sm text-muted-foreground mt-2">The video will open in a new tab</p>
-                </div>
-              </a>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   )
 }

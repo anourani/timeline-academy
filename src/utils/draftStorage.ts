@@ -1,7 +1,7 @@
 import type { TimelineEvent, CategoryConfig } from '../types/event'
 import { DEFAULT_CATEGORIES } from '../constants/categories'
 import { DEFAULT_TIMELINE_TITLE } from '../constants/defaults'
-import { getCurrentLimits } from '../lib/limits'
+import { PLAN_LIMITS } from '../constants/plans'
 
 export interface LocalDraft {
   id: string
@@ -16,7 +16,9 @@ export interface LocalDraft {
 }
 
 const STORAGE_KEY = 'timeline_drafts'
-export const MAX_DRAFTS = getCurrentLimits().timelineLimit ?? Number.POSITIVE_INFINITY
+// Drafts are guest-tier only by definition — they live in localStorage, not
+// the database. Decoupled from the signed-in user timeline cap.
+export const MAX_DRAFTS = PLAN_LIMITS.guest.timelineLimit ?? 3
 
 function generateId(): string {
   return crypto.randomUUID()
