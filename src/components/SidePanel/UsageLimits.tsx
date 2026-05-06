@@ -17,9 +17,9 @@ const STAT_TILE_VALUE_CLASS =
 const TIER_ROW_LABEL_CLASS =
   "font-['Avenir',sans-serif] text-[12px] leading-[18px] font-normal text-[#C9CED4]"
 const TIER_ROW_NUM_CLASS =
-  "font-['JetBrains_Mono',monospace] text-[10px] leading-[140%] font-normal text-[#C9CED4] text-center"
+  "font-['JetBrains_Mono',monospace] text-[12px] leading-[140%] font-normal text-[#C9CED4] text-center"
 const COL_HEADER_CLASS =
-  "font-['Avenir',sans-serif] text-[10px] leading-[140%] font-medium text-[#9B9EA3]"
+  "font-['Avenir',sans-serif] text-[12px] leading-[140%] font-medium text-[#9B9EA3]"
 
 export function UsageLimits() {
   const { user } = useAuth()
@@ -126,11 +126,11 @@ export function UsageLimits() {
               {/* Column header */}
               <div className="flex flex-row justify-between items-center px-2 py-1 gap-1 w-full">
                 <span className={COL_HEADER_CLASS}>Tier</span>
-                <div className="flex flex-row items-center gap-2.5 w-[120px]">
-                  <span className={`${COL_HEADER_CLASS} w-[50px] text-center`}>
+                <div className="flex flex-row items-center gap-2.5 w-[140px]">
+                  <span className={`${COL_HEADER_CLASS} w-[65px] text-center`}>
                     Timelines
                   </span>
-                  <span className={`${COL_HEADER_CLASS} w-[60px] text-center`}>
+                  <span className={`${COL_HEADER_CLASS} w-[65px] text-center`}>
                     Events
                   </span>
                 </div>
@@ -154,7 +154,7 @@ export function UsageLimits() {
                   <TierRow
                     label="Add API Key"
                     timelineCap={byokCaps.timelineLimit}
-                    eventCap={byokCaps.eventLimit}
+                    eventCap="Unlimited"
                     variant="link"
                     onClick={handleAddApiKeyAsGuest}
                   />
@@ -170,7 +170,7 @@ export function UsageLimits() {
                   <TierRow
                     label="Add API Key"
                     timelineCap={byokCaps.timelineLimit}
-                    eventCap={byokCaps.eventLimit}
+                    eventCap="Unlimited"
                     variant="link"
                     onClick={handleAddApiKeyAsUser}
                   />
@@ -258,8 +258,8 @@ function TierRow({
   onClick,
 }: {
   label: string
-  timelineCap: number | null
-  eventCap: number | null
+  timelineCap: number | string | null
+  eventCap: number | string | null
   variant: 'highlighted' | 'subtle' | 'link'
   onClick?: () => void
 }) {
@@ -278,12 +278,12 @@ function TierRow({
   const content = (
     <div className="flex flex-row justify-between items-center w-full">
       <span className={labelClass}>{label}</span>
-      <div className="flex flex-row items-center gap-2.5 w-[120px]">
-        <span className={`${TIER_ROW_NUM_CLASS} w-[50px]`}>
-          {timelineCap ?? '♾️'}
+      <div className="flex flex-row items-center gap-2.5 w-[140px]">
+        <span className={`${TIER_ROW_NUM_CLASS} w-[65px]`}>
+          {timelineCap ?? 'Unlimited'}
         </span>
-        <span className={`${TIER_ROW_NUM_CLASS} w-[60px]`}>
-          {eventCap ?? '♾️'}
+        <span className={`${TIER_ROW_NUM_CLASS} w-[65px]`}>
+          {eventCap ?? 'Unlimited'}
         </span>
       </div>
     </div>
