@@ -9,7 +9,6 @@ import { useAuth } from './hooks/useAuth';
 import { useAutosave } from './hooks/useAutosave';
 import { useSidePanel } from './hooks/useSidePanel';
 import { computeDominantCategoryColor } from './utils/dominantCategory';
-import { AuthModal } from './components/Auth/AuthModal';
 import { UnsavedChangesModal } from './components/Modal/UnsavedChangesModal';
 import { EventDetailPanel } from './components/EventDetailPanel/EventDetailPanel';
 import { useLocalDraft } from './hooks/useLocalDraft';
@@ -39,7 +38,6 @@ export function App() {
   const { saveTimeline, timelineId, loadTimeline, error: timelineError, retryInitialLoad } = useTimeline();
   const location = useLocation();
   const routerNavigate = useNavigate();
-  const [showAuthModal, setShowAuthModal] = useState(false);
   const [pendingSwitchTimelineId, setPendingSwitchTimelineId] = useState<string | null>(null);
   const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
   const [activePanel, setActivePanel] = useState<'events' | 'settings' | null>(null);
@@ -48,7 +46,6 @@ export function App() {
   const [detailPanelEvent, setDetailPanelEvent] = useState<TimelineEvent | null>(null);
   const [pendingScrollDate, setPendingScrollDate] = useState<string | null>(null);
   const [draftHydrated, setDraftHydrated] = useState(false);
-  const [nudgeDismissed, setNudgeDismissed] = useState(false);
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   const { loadAllDrafts, loadDraft, saveDraft, createDraft, clearAllDrafts, deleteDraft: deleteLocalDraft } = useLocalDraft();
   const handledRouteStateRef = useRef(false);
@@ -573,26 +570,6 @@ export function App() {
         onDeleteTimeline={handleDeleteTimeline}
         mode={mode}
       />
-      {!user && events.length > 0 && !nudgeDismissed && (
-        <div className="mx-4 mt-2 px-4 py-3 bg-blue-900/40 border border-blue-800/50 rounded-lg flex items-center justify-between text-sm shrink-0">
-          <span className="text-blue-200">
-            Your work isn't saved to the cloud yet.{' '}
-            <button
-              onClick={() => setShowAuthModal(true)}
-              className="text-blue-400 underline hover:text-blue-300"
-            >
-              Sign in
-            </button>
-            {' '}to save your timeline and access it from any device.
-          </span>
-          <button
-            onClick={() => setNudgeDismissed(true)}
-            className="text-gray-400 hover:text-white ml-4 shrink-0"
-          >
-            &#10005;
-          </button>
-        </div>
-      )}
       {timelineError ? (
         <div className="flex-1 flex items-center justify-center py-20">
           <div className="bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full text-center">
@@ -623,10 +600,6 @@ export function App() {
           />
         </main>
       )}
-      <AuthModal
-        isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
-      />
       <UnsavedChangesModal
         isOpen={showUnsavedChangesModal}
         onClose={() => {
