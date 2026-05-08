@@ -1,16 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Balloon,
+  CirclePlus,
   Copy,
   Download,
   FileDown,
   FileSpreadsheet,
-  Flower,
   LogOut,
   MoreVertical,
   PanelLeft,
   Share2,
+  Telescope,
   Trash2,
 } from 'lucide-react'
 import { utils, writeFile } from 'xlsx'
@@ -435,8 +435,8 @@ export function SidePanelBody() {
 
       {/* Creation actions */}
       <div className="flex flex-col p-3 shrink-0">
-        <SidePanelActionButton icon={Flower} label="Build with AI" onClick={handleBuildWithAI} />
-        <SidePanelActionButton icon={Balloon} label="Build from Scratch" onClick={handleBuildFromScratch} />
+        <SidePanelActionButton icon={Telescope} label="Discover a Timeline" onClick={handleBuildWithAI} />
+        <SidePanelActionButton icon={CirclePlus} label="Create a Timeline" onClick={handleBuildFromScratch} />
         <SidePanelActionButton icon={FileSpreadsheet} label="Import Data" onClick={handleImportData} />
         <SidePanelActionButton icon={Download} label="Download Template" onClick={handleDownloadTemplate} />
       </div>

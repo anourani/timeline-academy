@@ -152,7 +152,7 @@ export function App() {
           setPendingScrollDate(earliest.startDate);
         }
       } else if (routeState?.newTimeline && routeState.skipCreationScreen) {
-        // "Build from Scratch" — create draft immediately
+        // "Create a Timeline" — create draft immediately
         const newDraft = createDraft();
         if (!newDraft) {
           alert(limitReachedMessage('timeline'));
