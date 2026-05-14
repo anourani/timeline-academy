@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { VERTICAL_SCALES } from '../constants/verticalScales';
 import { TimelineVerticalScale } from '../types/timeline';
 
-export function useTimelineVerticalScale(initialScale: 'small' | 'medium' = 'small') {
+export function useTimelineVerticalScale(initialScale: 'small' | 'medium' = 'medium') {
   const [verticalScale, setVerticalScale] = useState<'small' | 'medium'>(initialScale);
 
   const handleVerticalScaleChange = useCallback((newScale: 'small' | 'medium') => {
