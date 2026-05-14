@@ -14,7 +14,6 @@ import type { AddEventsResult } from '../../hooks/useEvents';
 interface HeaderProps {
   title: string;
   description: string;
-  onTitleChange: (title: string) => void;
   onDescriptionChange: (description: string) => void;
   onAddEvent: (event: Omit<TimelineEvent, 'id'>) => void;
   onImportEvents: (events: Omit<TimelineEvent, 'id'>[]) => AddEventsResult;
@@ -41,7 +40,6 @@ interface HeaderProps {
 export function Header({
   title,
   description,
-  onTitleChange,
   onDescriptionChange,
   onAddEvent,
   onImportEvents,
@@ -107,7 +105,6 @@ export function Header({
         timelineDescription={description}
         onImportEvents={onImportEvents}
         onClearTimeline={onClearTimeline}
-        onTitleChange={onTitleChange}
         onDescriptionChange={onDescriptionChange}
         categories={categories}
         onCategoriesChange={onCategoriesChange}

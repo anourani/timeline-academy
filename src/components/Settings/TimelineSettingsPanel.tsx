@@ -27,7 +27,6 @@ interface TimelineSettingsPanelProps {
   timelineDescription: string;
   onImportEvents: (events: Omit<TimelineEvent, 'id'>[]) => AddEventsResult;
   onClearTimeline: () => void;
-  onTitleChange: (title: string) => void;
   onDescriptionChange: (description: string) => void;
   scale: 'large' | 'medium' | 'small';
   onScaleChange: (scale: 'large' | 'medium' | 'small') => void;
@@ -47,7 +46,6 @@ export function TimelineSettingsPanel({
   timelineTitle,
   timelineDescription,
   onImportEvents,
-  onTitleChange,
   onDescriptionChange,
   scale,
   onScaleChange,
@@ -76,10 +74,6 @@ export function TimelineSettingsPanel({
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [isOpen, onClose]);
-
-  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onTitleChange(e.target.value);
-  };
 
   const handleDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newDescription = e.target.value;
@@ -197,20 +191,6 @@ export function TimelineSettingsPanel({
               {/* Body */}
               <div className="flex-1 min-h-0 overflow-y-auto">
                 <div className="flex flex-col px-5 pt-6 pb-2 gap-8 min-h-full">
-                  {/* Title */}
-                  <div>
-                    <label htmlFor="timelineTitle" className="label-m-type2 text-[#9B9EA3] mb-1 block">
-                      Title
-                    </label>
-                    <input
-                      type="text"
-                      id="timelineTitle"
-                      value={timelineTitle}
-                      onChange={handleTitleChange}
-                      className="w-full h-9 bg-[#242526] border border-[#262626] rounded-[8px] px-3 py-[7.5px] body-m text-[#DADEE5] outline-none focus:border-[#404040]"
-                    />
-                  </div>
-
                   {/* Description */}
                   <div>
                     <label htmlFor="timelineDescription" className="label-m-type2 text-[#9B9EA3] mb-1 block">
@@ -232,7 +212,7 @@ export function TimelineSettingsPanel({
 
                     {/* Timeline scale row */}
                     <div className="flex flex-row items-center justify-between h-10">
-                      <span className="label-m-type2 text-[#9B9EA3]">Timeline scale</span>
+                      <span className="label-m-type2 text-[#9B9EA3]">Scale</span>
                       <ScaleSelector value={scale} onChange={onScaleChange} />
                     </div>
 
@@ -240,7 +220,7 @@ export function TimelineSettingsPanel({
 
                     {/* Event height row */}
                     <div className="flex flex-row items-center justify-between h-10">
-                      <span className="label-m-type2 text-[#9B9EA3]">Event height</span>
+                      <span className="label-m-type2 text-[#9B9EA3]">Row height</span>
                       <VerticalScaleSelector value={verticalScale} onChange={onVerticalScaleChange} />
                     </div>
 

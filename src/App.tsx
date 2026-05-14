@@ -124,7 +124,7 @@ export function App() {
         setEvents(imported);
         updateCategories(newDraft.categories);
         handleScaleChange(newDraft.scale);
-        handleVerticalScaleChange(newDraft.verticalScale ?? 'small');
+        handleVerticalScaleChange(newDraft.verticalScale ?? 'medium');
         if (imported.length > 0) {
           const earliest = imported.reduce((a, b) => a.startDate < b.startDate ? a : b);
           setPendingScrollDate(earliest.startDate);
@@ -146,7 +146,7 @@ export function App() {
         setEvents(aiEvents);
         updateCategories(aiCategories);
         handleScaleChange(newDraft.scale);
-        handleVerticalScaleChange(newDraft.verticalScale ?? 'small');
+        handleVerticalScaleChange(newDraft.verticalScale ?? 'medium');
         if (aiEvents.length > 0) {
           const earliest = aiEvents.reduce((a, b) => a.startDate < b.startDate ? a : b);
           setPendingScrollDate(earliest.startDate);
@@ -166,7 +166,7 @@ export function App() {
         setEvents(newDraft.events);
         updateCategories(newDraft.categories);
         handleScaleChange(newDraft.scale);
-        handleVerticalScaleChange(newDraft.verticalScale ?? 'small');
+        handleVerticalScaleChange(newDraft.verticalScale ?? 'medium');
       } else if (routeState?.draftId) {
         // Resuming a local draft (e.g. from the side panel)
         const draft = loadDraft(routeState.draftId);
@@ -177,7 +177,7 @@ export function App() {
           setEvents(draft.events);
           updateCategories(draft.categories);
           handleScaleChange(draft.scale);
-          handleVerticalScaleChange(draft.verticalScale ?? 'small');
+          handleVerticalScaleChange(draft.verticalScale ?? 'medium');
           handleGroupByCategoryChange(draft.groupByCategory ?? false);
         } else {
           routerNavigate('/', { replace: true });
@@ -195,7 +195,7 @@ export function App() {
           setEvents(mostRecent.events);
           updateCategories(mostRecent.categories);
           handleScaleChange(mostRecent.scale);
-          handleVerticalScaleChange(mostRecent.verticalScale ?? 'small');
+          handleVerticalScaleChange(mostRecent.verticalScale ?? 'medium');
           handleGroupByCategoryChange(mostRecent.groupByCategory ?? false);
         } else {
           routerNavigate('/', { replace: true });
@@ -239,7 +239,7 @@ export function App() {
       (async () => {
         for (const draft of draftsWithEvents) {
           try {
-            await saveTimeline(draft.title, draft.events, draft.scale, draft.verticalScale ?? 'small');
+            await saveTimeline(draft.title, draft.events, draft.scale, draft.verticalScale ?? 'medium');
           } catch (err: unknown) {
             if (err instanceof LimitReachedError) {
               alert(
@@ -392,7 +392,7 @@ export function App() {
     setEvents(draft.events);
     updateCategories(draft.categories);
     handleScaleChange(draft.scale);
-    handleVerticalScaleChange(draft.verticalScale ?? 'small');
+    handleVerticalScaleChange(draft.verticalScale ?? 'medium');
     handleGroupByCategoryChange(draft.groupByCategory ?? false);
   };
 
@@ -547,7 +547,6 @@ export function App() {
       <Header
         title={title}
         description={description}
-        onTitleChange={setTitle}
         onDescriptionChange={setDescription}
         onAddEvent={addEvent}
         onImportEvents={addEvents}
