@@ -11,7 +11,7 @@ export function VerticalScaleSelector({ value, onChange }: VerticalScaleSelector
   };
 
   const tabClass = (active: boolean) =>
-    `flex items-center justify-center w-[60px] min-w-[60px] h-8 px-3 py-1.5 rounded-[6px] transition-colors body-m ${
+    `flex items-center justify-center w-[64px] min-w-[64px] h-8 px-3 py-1.5 rounded-[6px] transition-colors body-m ${
       active
         ? 'bg-[#262626] text-text-secondary'
         : 'bg-transparent text-text-tertiary hover:text-text-secondary'
@@ -24,14 +24,14 @@ export function VerticalScaleSelector({ value, onChange }: VerticalScaleSelector
         onClick={() => handleChange('small')}
         className={tabClass(value === 'small')}
       >
-        Small
+        S
       </button>
       <button
         type="button"
         onClick={() => handleChange('medium')}
         className={tabClass(value === 'medium')}
       >
-        Medium
+        M
       </button>
     </div>
   );
