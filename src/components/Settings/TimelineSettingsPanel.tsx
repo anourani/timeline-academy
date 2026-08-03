@@ -10,13 +10,17 @@ import { VerticalScaleSelector } from './VerticalScaleSelector';
 import { ApiKeySection } from './ApiKeySection';
 import { SidePanelActionButton } from '../SidePanel/SidePanelActionButton';
 import { DEFAULT_TIMELINE_DESCRIPTION } from '../../constants/defaults';
-import { utils, read } from 'xlsx';
+import {
+  isInstructionRow,
+  parseSheetRows,
+  type SheetCellValue,
+} from '../../utils/excelSheet';
 
-interface ExcelRow {
-  'Event Title'?: string;
-  'Start Date'?: string | number | Date;
-  'End Date'?: string | number | Date;
-  'Category'?: string;
+function toDateString(value: SheetCellValue | undefined): string {
+  if (value == null || String(value).trim() === '') return '';
+  const date = value instanceof Date ? value : new Date(String(value));
+  if (isNaN(date.getTime())) return '';
+  return date.toISOString().split('T')[0];
 }
 
 interface TimelineSettingsPanelProps {
@@ -92,30 +96,16 @@ export function TimelineSettingsPanel({
 
     try {
       if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-        const data = await file.arrayBuffer();
-        const workbook = read(data, { cellDates: true });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const rows = utils.sheet_to_json<ExcelRow>(worksheet);
-        const imported = rows.slice(2).map(row => {
-          let startDate = '';
-          let endDate = '';
-          if (row['Start Date']) {
-            const startDateObj = new Date(row['Start Date']);
-            startDate = startDateObj.toISOString().split('T')[0];
-          }
-          if (row['End Date']) {
-            const endDateObj = new Date(row['End Date']);
-            endDate = endDateObj.toISOString().split('T')[0];
-          } else {
-            endDate = startDate;
-          }
-          const categoryLabel = row['Category'];
+        const rows = (await parseSheetRows(file)).filter(row => !isInstructionRow(row));
+        const imported = rows.map(row => {
+          const startDate = toDateString(row['Start Date']);
+          const endDate = toDateString(row['End Date']) || startDate;
+          const categoryLabel = String(row['Category'] ?? '');
           const category = categories.find(c =>
-            c.label.toLowerCase() === categoryLabel?.toLowerCase()
+            c.label.toLowerCase() === categoryLabel.toLowerCase()
           );
           return {
-            title: row['Event Title'] || '',
+            title: String(row['Event Title'] ?? '').trim(),
             startDate,
             endDate,
             category: category?.id || categories[0]?.id

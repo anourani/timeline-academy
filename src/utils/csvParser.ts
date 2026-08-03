@@ -65,17 +65,24 @@ export function parseCSVEvents(csvContent: string, existingCategories: CategoryC
     existingCategories.map(cat => normalizeCategory(cat.id))
   );
   
-  // Skip header rows and filter out empty lines
+  // Skip the header row (line 1) plus any instruction row, wherever it sits.
+  // Plain CSVs with only a header row keep every data row — only rows that
+  // look like the template's instructions are dropped.
+  const isInstructionLine = (line: string): boolean => {
+    const lower = line.toLowerCase();
+    return lower.includes('character limit') || lower.includes('char limit') ||
+      lower.includes('format: mm/dd/yyyy');
+  };
   const dataLines = lines
-    .slice(2) // Skip first two header rows
-    .filter(line => {
+    .map((line, lineIndex) => ({ line, rowNumber: lineIndex + 1 }))
+    .slice(1) // Skip the header row
+    .filter(({ line }) => {
       const trimmed = line.trim();
-      return trimmed && !trimmed.toLowerCase().includes('character limit');
+      return trimmed && !isInstructionLine(trimmed);
     });
-  
+
   // Process each data line
-  dataLines.forEach((line, index) => {
-    const rowNumber = index + 3; // Account for header rows
+  dataLines.forEach(({ line, rowNumber }) => {
     
     try {
       // Parse the line

@@ -4,6 +4,7 @@ import { parseCSVEvents } from '../../utils/csvParser';
 import { TimelineEvent, CategoryConfig } from '../../types/event';
 import { supabase } from '../../lib/supabase';
 import { getCurrentLimits, isOverEventLimit } from '../../lib/limits';
+import { MAX_IMPORT_FILE_BYTES } from '../../utils/excelSheet';
 
 async function isAlreadyAtEventLimit(): Promise<{ limited: boolean; message: string }> {
   const { data: { user } } = await supabase.auth.getUser();
@@ -38,6 +39,14 @@ export function ImportCSVButton({ onImport, categories }: ImportCSVButtonProps) 
     // Validate file type
     if (!file.name.toLowerCase().endsWith('.csv')) {
       alert('Please select a CSV file');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    if (file.size > MAX_IMPORT_FILE_BYTES) {
+      alert(`File is too large (max ${Math.round(MAX_IMPORT_FILE_BYTES / (1024 * 1024))} MB).`);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
