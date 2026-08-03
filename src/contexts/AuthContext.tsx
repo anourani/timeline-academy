@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useEffect, useState } from 'react';
 import { User, AuthError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { clearAllCachedEvents } from '../services/viewerEventCache';
 
 interface AuthContextType {
   user: User | null;
@@ -23,6 +24,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('Error signing out:', error);
       // Force clear the session even if the API call fails
       setUser(null);
+    } finally {
+      // Don't leave a browsing record of viewed shared timelines behind
+      // after the account signs out.
+      clearAllCachedEvents();
     }
   }, []);
 

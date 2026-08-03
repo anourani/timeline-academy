@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { Modal } from '../Modal/Modal';
 import { useAuth } from '../../hooks/useAuth';
 import { isNetworkError, testConnection, getConnectionStatus } from '../../lib/supabase';
@@ -295,6 +296,18 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
             >
               {isLoading ? <><Spinner /> Sending Code...</> : 'Send Code'}
             </button>
+
+            <p className="text-xs text-gray-500 text-center">
+              By continuing you agree to our{' '}
+              <Link to="/terms" target="_blank" className="underline hover:text-gray-400">
+                Terms
+              </Link>{' '}
+              and{' '}
+              <Link to="/privacy" target="_blank" className="underline hover:text-gray-400">
+                Privacy Policy
+              </Link>
+              .
+            </p>
           </form>
         )}
 

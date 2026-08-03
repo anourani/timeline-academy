@@ -15,10 +15,51 @@ export interface CachedEnrichment {
   imageUrl?: string | null
   imageAttribution?: string | null
   sources?: EventSource[] | null
+  /** Written on save; used to evict the oldest entries when the cache grows. */
+  savedAt?: number
 }
+
+// Without a cap this cache becomes a permanent local record of every shared
+// timeline the user has ever opened. Oldest entries are evicted past this.
+const MAX_ENTRIES = 200
 
 function key(timelineId: string, eventId: string): string {
   return `${PREFIX}${timelineId}:${eventId}`
+}
+
+function allCacheKeys(): string[] {
+  const keys: string[] = []
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)
+      if (k && k.startsWith(PREFIX)) keys.push(k)
+    }
+  } catch {
+    // ignore
+  }
+  return keys
+}
+
+function evictOldest(): void {
+  try {
+    const keys = allCacheKeys()
+    if (keys.length <= MAX_ENTRIES) return
+    const withAge = keys.map((k) => {
+      let savedAt = 0
+      try {
+        savedAt = (JSON.parse(localStorage.getItem(k) ?? '{}') as CachedEnrichment).savedAt ?? 0
+      } catch {
+        // unparseable entries sort oldest and get evicted first
+      }
+      return { k, savedAt }
+    })
+    withAge.sort((a, b) => a.savedAt - b.savedAt)
+    for (const { k } of withAge.slice(0, keys.length - MAX_ENTRIES)) {
+      localStorage.removeItem(k)
+    }
+  } catch {
+    // ignore
+  }
 }
 
 export function getCachedEvent(
@@ -40,7 +81,11 @@ export function setCachedEvent(
   value: CachedEnrichment,
 ): void {
   try {
-    localStorage.setItem(key(timelineId, eventId), JSON.stringify(value))
+    localStorage.setItem(
+      key(timelineId, eventId),
+      JSON.stringify({ ...value, savedAt: Date.now() }),
+    )
+    evictOldest()
   } catch {
     // ignore — quota / disabled storage
   }
@@ -52,6 +97,16 @@ export function clearCachedEvent(
 ): void {
   try {
     localStorage.removeItem(key(timelineId, eventId))
+  } catch {
+    // ignore
+  }
+}
+
+export function clearAllCachedEvents(): void {
+  try {
+    for (const k of allCacheKeys()) {
+      localStorage.removeItem(k)
+    }
   } catch {
     // ignore
   }
