@@ -3,17 +3,22 @@ import { supabase } from '@/lib/supabase'
 
 const STORAGE_KEY = 'timeline_byok_anthropic_key'
 
-// Brings auth.users.raw_user_meta_data.byok_enabled in sync with whether a
-// BYOK key exists in localStorage. Idempotent and best-effort: no-op when
-// already in sync, no-op when logged out, errors are logged not thrown.
+// Brings the server-side byok_enabled flag in sync with whether a BYOK key
+// exists in localStorage. The flag lives in app_metadata (which the client
+// cannot write directly — plan limits are derived from it server-side), so
+// the sync goes through the set-byok-flag edge function. Idempotent and
+// best-effort: no-op when already in sync, no-op when logged out, errors are
+// logged not thrown.
 async function reconcileBYOKMetadata(): Promise<void> {
   try {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     const hasKey = !!getAnthropicKey()
-    const currentFlag = !!user.user_metadata?.byok_enabled
+    const currentFlag = !!user.app_metadata?.byok_enabled
     if (hasKey === currentFlag) return
-    await supabase.auth.updateUser({ data: { byok_enabled: hasKey } })
+    await supabase.functions.invoke('set-byok-flag', {
+      body: { enabled: hasKey },
+    })
   } catch (err) {
     console.warn('BYOK metadata sync failed:', err)
   }

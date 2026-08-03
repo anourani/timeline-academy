@@ -6,7 +6,7 @@
 // only — never from inline citations the model invents.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { corsHeaders } from "../_shared/cors.ts";
+import { corsHeadersFor } from "../_shared/cors.ts";
 import { checkRateLimit, recordUsage } from "../_shared/rate-limiter.ts";
 
 interface EnrichRequest {
@@ -14,6 +14,18 @@ interface EnrichRequest {
   startDate?: string;
   endDate?: string;
   timelineTitle?: string;
+}
+
+// Everything interpolated into the prompt gets a hard length cap; the app
+// itself caps titles at 55 chars, so these are generous.
+const MAX_TITLE_LENGTH = 200;
+const MAX_DATE_LENGTH = 40;
+
+function capped(value: string | undefined, max: number): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return trimmed.slice(0, max);
 }
 
 interface SourceItem {
@@ -66,30 +78,25 @@ async function authenticateUser(req: Request): Promise<string | null> {
 }
 
 Deno.serve(async (req: Request) => {
+  const corsHeaders = corsHeadersFor(req);
+
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  // Auth — accept either a signed-in user (Authorization header) or an
-  // anonymous browser session (x-session-token). Mirrors the pattern in
-  // generate-timeline so anon and authed share a unified rate-limit budget.
+  // Every server-funded AI call requires a signed-in user. Anonymous visitors
+  // enrich with their own Anthropic key browser-direct instead.
   const userId = await authenticateUser(req);
-  let sessionKey: string;
-  if (userId) {
-    sessionKey = `enrich:user:${userId}`;
-  } else {
-    const sessionToken = req.headers.get("x-session-token");
-    if (!sessionToken) {
-      return new Response(
-        JSON.stringify({ error: "Authentication required." }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-    sessionKey = `enrich:${sessionToken}`;
+  if (!userId) {
+    return new Response(
+      JSON.stringify({ error: "Sign in to generate event descriptions." }),
+      {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
   }
+  const sessionKey = `enrich:user:${userId}`;
 
   // Rate limit (5 enrichments per identity per 24h).
   const { allowed } = await checkRateLimit(sessionKey);
@@ -116,7 +123,14 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  if (!body.eventTitle || !body.eventTitle.trim()) {
+  const sanitized: EnrichRequest = {
+    eventTitle: capped(body.eventTitle, MAX_TITLE_LENGTH),
+    startDate: capped(body.startDate, MAX_DATE_LENGTH),
+    endDate: capped(body.endDate, MAX_DATE_LENGTH),
+    timelineTitle: capped(body.timelineTitle, MAX_TITLE_LENGTH),
+  };
+
+  if (!sanitized.eventTitle) {
     return new Response(
       JSON.stringify({ error: "Missing eventTitle." }),
       {
@@ -128,8 +142,9 @@ Deno.serve(async (req: Request) => {
 
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) {
+    console.error("ANTHROPIC_API_KEY not configured.");
     return new Response(
-      JSON.stringify({ error: "ANTHROPIC_API_KEY not configured." }),
+      JSON.stringify({ error: "Event enrichment is temporarily unavailable." }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -165,7 +180,7 @@ Deno.serve(async (req: Request) => {
                 },
               ],
               messages: [
-                { role: "user", content: buildUserPrompt(body) },
+                { role: "user", content: buildUserPrompt(sanitized) },
               ],
               stream: true,
             }),
@@ -173,9 +188,14 @@ Deno.serve(async (req: Request) => {
         );
 
         if (!anthropicRes.ok || !anthropicRes.body) {
+          // Provider error bodies can carry account details — log server-side,
+          // send only a generic message to the caller.
           const errText = await anthropicRes.text().catch(() => "");
+          console.error(
+            `Anthropic API error (${anthropicRes.status}): ${errText.slice(0, 500)}`
+          );
           send("error", {
-            message: `Anthropic API error (${anthropicRes.status}): ${errText.slice(0, 200)}`,
+            message: "Event enrichment failed. Please try again.",
           });
           controller.close();
           return;
@@ -265,9 +285,9 @@ Deno.serve(async (req: Request) => {
         // Record usage after a successful run (not blocking the response).
         recordUsage(sessionKey).catch(() => {});
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Unknown error";
+        console.error("enrich-event stream error:", err);
         try {
-          send("error", { message });
+          send("error", { message: "Event enrichment failed. Please try again." });
         } catch {
           // controller may already be closed
         }

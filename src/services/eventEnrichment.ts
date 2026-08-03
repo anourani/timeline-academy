@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase'
 import { enrichEventDirect } from './anthropicDirect'
-import { getSessionToken } from './sessionToken'
 import { getAnthropicKey } from './userApiKey'
+import { fetchWikipediaImage } from './wikipediaImage'
 import type { EventSource, TimelineEvent } from '../types/event'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
@@ -18,27 +18,8 @@ export async function fetchEventImage(title: string): Promise<{
   imageUrl: string | null
   attribution: string | null
 }> {
-  try {
-    const res = await fetch(
-      `${SUPABASE_URL}/functions/v1/fetch-event-image`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({ title }),
-      },
-    )
-    if (!res.ok) return { imageUrl: null, attribution: null }
-    const json = await res.json()
-    return {
-      imageUrl: json?.imageUrl ?? null,
-      attribution: json?.attribution ?? null,
-    }
-  } catch {
-    return { imageUrl: null, attribution: null }
-  }
+  // Browser-direct Wikipedia lookup — no server round-trip.
+  return fetchWikipediaImage(title)
 }
 
 /**
@@ -48,8 +29,8 @@ export async function fetchEventImage(title: string): Promise<{
  *   - User has BYOK key set → call Anthropic directly from the browser.
  *     Bypasses our edge function, our rate limit, and our billing.
  *   - Signed-in user, no key → edge function authenticated via JWT.
- *   - Logged-out user, no key → edge function authenticated via the
- *     anonymous session token. Subject to the same 5/24h rate limit.
+ *   - Logged out with no key → server-funded enrichment is not available;
+ *     the UI gates this path behind sign-in-or-BYOK before it gets here.
  */
 export async function enrichEvent(
   event: TimelineEvent,
@@ -65,15 +46,15 @@ export async function enrichEvent(
 
   const session = await supabase.auth.getSession()
   const token = session.data.session?.access_token
+  if (!token) {
+    handlers.onError('Sign in or add your own API key to generate event descriptions.')
+    return
+  }
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     apikey: SUPABASE_ANON_KEY,
-  }
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
-  } else {
-    headers['x-session-token'] = getSessionToken()
+    Authorization: `Bearer ${token}`,
   }
 
   let res: Response
