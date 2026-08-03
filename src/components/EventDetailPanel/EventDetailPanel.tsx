@@ -265,6 +265,9 @@ export function EventDetailPanel({
                     <img
                       src={displayImageUrl}
                       alt={event.title}
+                      // Never send the page URL (a /view share link is the
+                      // access capability itself) to the image host.
+                      referrerPolicy="no-referrer"
                       className="w-full h-full object-cover rounded-[8px]"
                     />
                   )}

@@ -2,3 +2,20 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    # No third-party scripts run on this site, so the CSP can stay strict.
+    # connect-src covers Supabase (REST + realtime websocket), browser-direct
+    # BYOK calls to Anthropic, and browser-direct Wikipedia lookups; img-src
+    # covers Wikimedia event thumbnails. 'unsafe-inline' in style-src is for
+    # React inline style attributes only — script-src stays 'self'.
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://upload.wikimedia.org; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com https://en.wikipedia.org; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+    # Keep /view/<uuid> share URLs (the access capability) out of Referer
+    # headers sent to external hosts.
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
