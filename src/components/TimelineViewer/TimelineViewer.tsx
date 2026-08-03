@@ -72,28 +72,36 @@ export function TimelineViewer() {
       }
 
       try {
-        // First load the timeline
-        const { data: timelineData, error: timelineError } = await supabase
-          .from('timelines')
-          .select('*')
-          .eq('id', timelineId)
-          .single();
+        // Public reads go through get_public_timeline, which only returns
+        // timelines whose owner has shared them (is_public) and never exposes
+        // non-display columns like user_id.
+        const { data, error: rpcError } = await supabase.rpc('get_public_timeline', {
+          p_timeline_id: timelineId,
+        });
 
-        if (timelineError) {
-          console.error('Error loading timeline:', timelineError);
-          throw timelineError;
+        if (rpcError) {
+          console.error('Error loading timeline:', rpcError);
+          throw rpcError;
         }
 
-        // Then load the events
-        const { data: eventsData, error: eventsError } = await supabase
-          .from('events')
-          .select('*')
-          .eq('timeline_id', timelineId);
-
-        if (eventsError) {
-          console.error('Error loading events:', eventsError);
-          throw eventsError;
+        if (!data) {
+          setError('This timeline is not available. It may be private or deleted.');
+          setLoading(false);
+          return;
         }
+
+        const timelineData = data.timeline;
+        const eventsData: Array<{
+          id: string;
+          title: string;
+          start_date: string;
+          end_date: string | null;
+          category: string;
+          description: string | null;
+          image_url: string | null;
+          image_attribution: string | null;
+          sources: TimelineEvent['sources'] | null;
+        }> = data.events || [];
 
         // Format events to match our TimelineEvent type. Owner content from
         // the DB wins; if the row has no description we fall back to the

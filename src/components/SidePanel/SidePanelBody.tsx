@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   CirclePlus,
   Copy,
@@ -13,7 +13,6 @@ import {
   Telescope,
   Trash2,
 } from 'lucide-react'
-import { utils, writeFile } from 'xlsx'
 import { useAuth } from '@/hooks/useAuth'
 import { useSidePanel } from '@/hooks/useSidePanel'
 import { useTimelines } from '@/hooks/useTimelines'
@@ -33,6 +32,7 @@ import {
   type LocalDraft,
 } from '@/utils/draftStorage'
 import { exportEventsToExcel } from '@/utils/excelExport'
+import { downloadTemplate } from '@/utils/excelSheet'
 import type { TimelineEvent } from '@/types/event'
 import { UsageLimits } from './UsageLimits'
 import { SidePanelActionButton } from './SidePanelActionButton'
@@ -45,11 +45,13 @@ interface TileRow {
 
 function TileMenuButton({
   onShare,
+  onUnshare,
   onDuplicate,
   onExport,
   onDelete,
 }: {
   onShare?: () => void
+  onUnshare?: () => void
   onDuplicate?: () => void
   onExport: () => void
   onDelete: () => void
@@ -93,6 +95,19 @@ function TileMenuButton({
             >
               <Share2 size={14} />
               Share
+            </button>
+          )}
+          {onUnshare && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setOpen(false)
+                onUnshare()
+              }}
+              className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-[#c9ced4] hover:bg-white/5"
+            >
+              <Share2 size={14} />
+              Unshare
             </button>
           )}
           {onDuplicate && (
@@ -145,6 +160,8 @@ export function SidePanelBody() {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const [pendingDeleteKind, setPendingDeleteKind] = useState<'timeline' | 'draft' | null>(null)
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false)
+  const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false)
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
 
@@ -294,6 +311,28 @@ export function SidePanelBody() {
     }
   }
 
+  const handleDeleteAccount = async () => {
+    if (isDeletingAccount) return
+    setIsDeletingAccount(true)
+    try {
+      const { data, error: deleteError } = await supabase.functions.invoke('delete-account')
+      if (deleteError || data?.error) {
+        throw new Error(data?.error || deleteError?.message || 'Deletion failed')
+      }
+      // The auth record is gone server-side; clear the local session too.
+      await supabase.auth.signOut()
+      close()
+      navigate('/')
+      alert('Your account and all its data have been deleted.')
+    } catch (err) {
+      console.error('Failed to delete account:', err)
+      alert('Failed to delete your account. Please try again or contact alex@timeline.academy.')
+    } finally {
+      setIsDeletingAccount(false)
+      setShowDeleteAccountConfirm(false)
+    }
+  }
+
   const handleBuildWithAI = () => {
     navigate('/')
   }
@@ -311,23 +350,7 @@ export function SidePanelBody() {
   }
 
   const handleDownloadTemplate = () => {
-    const wb = utils.book_new()
-    const headers = ['Event Title', 'Start Date', 'End Date', 'Category']
-    const instructions = [
-      '55 char limit',
-      'Format: MM/DD/YYYY',
-      'Format: MM/DD/YYYY',
-      'Must match a timeline category',
-    ]
-    const data = [
-      headers,
-      instructions,
-      ['Sample Event 1', '1/15/2024', '1/20/2024', 'Personal Life'],
-      ['Sample Event 2', '10/14/2024', '10/16/2024', 'Career'],
-    ]
-    const ws = utils.aoa_to_sheet(data)
-    utils.book_append_sheet(wb, ws, 'Timeline Events')
-    writeFile(wb, 'timeline-template.xlsx')
+    void downloadTemplate(55, ['Personal Life', 'Career'])
   }
 
   const handleImportEvents = (events: TimelineEvent[]) => {
@@ -335,14 +358,38 @@ export function SidePanelBody() {
     navigate('/editor', { state: { importedEvents: events } })
   }
 
-  const handleShare = (row: TileRow) => {
+  const handleShare = async (row: TileRow) => {
     if (row.kind === 'draft') {
       setIsAuthModalOpen(true)
       return
     }
+    // Copy synchronously so the clipboard write stays inside the user gesture,
+    // then mark the timeline public so the link actually resolves for viewers.
     const shareUrl = `${window.location.origin}/view/${row.id}`
     navigator.clipboard.writeText(shareUrl)
-    alert('Share link copied to clipboard!')
+    const { error: shareError } = await supabase
+      .from('timelines')
+      .update({ is_public: true })
+      .eq('id', row.id)
+    if (shareError) {
+      console.error('Failed to make timeline public:', shareError)
+      alert('Could not enable sharing for this timeline. Please try again.')
+      return
+    }
+    alert('Share link copied to clipboard! Anyone with the link can view this timeline.')
+  }
+
+  const handleUnshare = async (row: TileRow) => {
+    const { error: unshareError } = await supabase
+      .from('timelines')
+      .update({ is_public: false })
+      .eq('id', row.id)
+    if (unshareError) {
+      console.error('Failed to unshare timeline:', unshareError)
+      alert('Could not stop sharing this timeline. Please try again.')
+      return
+    }
+    alert('Sharing disabled. Previously copied links no longer work.')
   }
 
   const handleDuplicate = async (row: TileRow) => {
@@ -526,6 +573,7 @@ export function SidePanelBody() {
                   >
                     <TileMenuButton
                       onShare={() => handleShare(row)}
+                      onUnshare={row.kind === 'timeline' ? () => handleUnshare(row) : undefined}
                       onDuplicate={() => handleDuplicate(row)}
                       onExport={() => handleExport(row)}
                       onDelete={() => confirmDelete(row)}
@@ -544,8 +592,8 @@ export function SidePanelBody() {
       </div>
 
       {/* Footer */}
-      {user && (
-        <div className="border-t border-[#404040] px-5 pt-3 pb-4 shrink-0">
+      <div className="border-t border-[#404040] px-5 pt-3 pb-4 shrink-0">
+        {user && (
           <div className="flex items-center justify-between gap-2 py-1.5">
             <p className="flex-1 min-w-0 font-['Avenir',sans-serif] text-[16px] leading-[24px] text-[#9b9ea3] truncate">
               {user.email}
@@ -559,8 +607,24 @@ export function SidePanelBody() {
               <LogOut size={16} />
             </button>
           </div>
+        )}
+        <div className="flex items-center gap-3 pt-1 text-[12px] text-[#6b6e73]">
+          <Link to="/privacy" className="hover:text-[#9b9ea3] transition-colors">
+            Privacy
+          </Link>
+          <Link to="/terms" className="hover:text-[#9b9ea3] transition-colors">
+            Terms
+          </Link>
+          {user && (
+            <button
+              onClick={() => setShowDeleteAccountConfirm(true)}
+              className="ml-auto hover:text-destructive transition-colors"
+            >
+              Delete account
+            </button>
+          )}
         </div>
-      )}
+      </div>
 
       <ConfirmationModal
         isOpen={pendingDeleteId !== null}
@@ -582,6 +646,16 @@ export function SidePanelBody() {
         title="Sign Out"
         message="Are you sure you want to sign out?"
         confirmLabel="Sign Out"
+        cancelLabel="Cancel"
+      />
+
+      <ConfirmationModal
+        isOpen={showDeleteAccountConfirm}
+        onClose={() => setShowDeleteAccountConfirm(false)}
+        onConfirm={handleDeleteAccount}
+        title="Delete Account"
+        message="This permanently deletes your account, your email, and every timeline you've saved. This cannot be undone. Consider exporting your timelines first."
+        confirmLabel={isDeletingAccount ? 'Deleting…' : 'Delete Account'}
         cancelLabel="Cancel"
       />
 

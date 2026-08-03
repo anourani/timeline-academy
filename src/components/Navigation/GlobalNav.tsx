@@ -5,6 +5,7 @@ import {
   SquarePlay,
 } from 'lucide-react'
 import { useSidePanel } from '@/hooks/useSidePanel'
+import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { SaveStatusIndicator, type SaveStatus } from '@/components/SaveStatusIndicator/SaveStatusIndicator'
 import { getTimelineYearRange } from '@/utils/timelineUtils'
@@ -40,12 +41,22 @@ export function GlobalNav({
 }: GlobalNavProps) {
   const { isOpen: isPanelOpen, toggle: togglePanel } = useSidePanel()
 
-  const handleShare = () => {
-    if (timelineId) {
-      const shareUrl = `${window.location.origin}/view/${timelineId}`
-      navigator.clipboard.writeText(shareUrl)
-      alert('Share link copied to clipboard!')
+  const handleShare = async () => {
+    if (!timelineId) return
+    // Copy synchronously so the clipboard write stays inside the user gesture,
+    // then mark the timeline public so the link actually resolves for viewers.
+    const shareUrl = `${window.location.origin}/view/${timelineId}`
+    navigator.clipboard.writeText(shareUrl)
+    const { error } = await supabase
+      .from('timelines')
+      .update({ is_public: true })
+      .eq('id', timelineId)
+    if (error) {
+      console.error('Failed to make timeline public:', error)
+      alert('Could not enable sharing for this timeline. Please try again.')
+      return
     }
+    alert('Share link copied to clipboard! Anyone with the link can view this timeline.')
   }
 
   // SaveStatusIndicator is hidden for now — flip to true to re-enable.
