@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { Modal } from '../Modal/Modal';
 import { useAuth } from '../../hooks/useAuth';
 import { isNetworkError, testConnection, getConnectionStatus } from '../../lib/supabase';
@@ -93,6 +94,10 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const [email, setEmail] = useState('');
   const [otpStep, setOtpStep] = useState<OtpStep>('email_entry');
   const [resendCooldown, setResendCooldown] = useState(0);
+  // Bumped whenever the entered code is no longer usable (failed attempt, new
+  // code sent). Used as OtpInput's key so it remounts with empty boxes —
+  // otherwise stale digits linger and get submitted alongside the new ones.
+  const [otpAttempt, setOtpAttempt] = useState(0);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const { signInWithEmail, verifyEmailOtp } = useAuth();
@@ -113,6 +118,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
       setEmail('');
       setOtpStep('email_entry');
       setResendCooldown(0);
+      setOtpAttempt(0);
       if (cooldownRef.current) {
         clearInterval(cooldownRef.current);
         cooldownRef.current = null;
@@ -208,6 +214,8 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     } catch (err) {
       console.error('Email OTP verification error:', err);
       setError(mapErrorMessage(err));
+      // Clear the boxes so the next code is typed into an empty field.
+      setOtpAttempt((n) => n + 1);
     } finally {
       setIsLoading(false);
     }
@@ -221,6 +229,8 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     try {
       await signInWithEmail(email);
       setMessage('A new code has been sent.');
+      // The previous code is now dead — don't leave its digits on screen.
+      setOtpAttempt((n) => n + 1);
       startCooldown();
     } catch (err) {
       console.error('Resend email OTP error:', err);
@@ -295,6 +305,18 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
             >
               {isLoading ? <><Spinner /> Sending Code...</> : 'Send Code'}
             </button>
+
+            <p className="text-xs text-gray-500 text-center">
+              By continuing you agree to our{' '}
+              <Link to="/terms" target="_blank" className="underline hover:text-gray-400">
+                Terms
+              </Link>{' '}
+              and{' '}
+              <Link to="/privacy" target="_blank" className="underline hover:text-gray-400">
+                Privacy Policy
+              </Link>
+              .
+            </p>
           </form>
         )}
 
@@ -305,7 +327,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
               We sent a 6-digit code to <span className="text-white font-medium">{email}</span>
             </p>
 
-            <OtpInput onComplete={handleVerifyEmailOtp} disabled={isLoading} />
+            <OtpInput key={otpAttempt} onComplete={handleVerifyEmailOtp} disabled={isLoading} />
 
             {isLoading && (
               <div className="flex items-center justify-center text-sm text-gray-400">

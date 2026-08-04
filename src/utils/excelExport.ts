@@ -1,45 +1,25 @@
-import { utils, writeFile } from 'xlsx';
 import { TimelineEvent } from '../types/event';
 import { formatDateForCSV } from './dateUtils';
+import { downloadWorkbook, TEMPLATE_HEADERS, templateInstructions } from './excelSheet';
+
+const MAX_TITLE_LENGTH = 55;
 
 export function exportEventsToExcel(events: TimelineEvent[], timelineTitle: string): void {
-  // Create workbook
-  const wb = utils.book_new();
-  
-  // Create headers and instructions (first two rows)
-  const headers = ['Event Title', 'Start Date', 'End Date', 'Category'];
-  const instructions = [
-    '55 char limit',
-    'Format: MM/DD/YYYY',
-    'Format: MM/DD/YYYY',
-    'Must match a timeline category'
-  ];
-  
-  // Convert events to rows
   const eventRows = events.map(event => [
     event.title,
     formatDateForCSV(event.startDate),
     formatDateForCSV(event.endDate),
     event.category
   ]);
-  
-  // Combine all rows
+
   const data = [
-    headers,
-    instructions,
+    TEMPLATE_HEADERS,
+    templateInstructions(MAX_TITLE_LENGTH),
     ...eventRows
   ];
-  
-  // Create worksheet
-  const ws = utils.aoa_to_sheet(data);
-  
-  // Add worksheet to workbook
-  utils.book_append_sheet(wb, ws, 'Timeline Events');
-  
-  // Generate filename with date
+
   const date = new Date().toISOString().split('T')[0];
   const filename = `${timelineTitle.toLowerCase().replace(/\s+/g, '-')}-${date}.xlsx`;
-  
-  // Save file
-  writeFile(wb, filename);
+
+  void downloadWorkbook(data, filename);
 }

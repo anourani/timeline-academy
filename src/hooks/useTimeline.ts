@@ -164,7 +164,7 @@ export function useTimeline() {
           sources: event.sources ?? null,
         })),
         categories: categories || undefined,
-        scale: timeline.scale || 'small',
+        scale: timeline.scale || 'large',
         verticalScale: timeline.vertical_scale || 'medium',
         groupByCategory: timeline.group_by_category ?? false
       };

@@ -67,6 +67,10 @@ export function useEventUsage(): EventUsage {
       return () => clearInterval(interval)
     }
 
+    // No user_id column exists on events to filter on server-side; Supabase
+    // Realtime enforces RLS on postgres_changes, so this subscription only
+    // ever delivers rows belonging to the signed-in user's own timelines.
+    // The payload is discarded either way — it just triggers a recount.
     const eventsChannel = supabase
       .channel('event_usage_events')
       .on(

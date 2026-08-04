@@ -1,9 +1,14 @@
 import React, { useRef } from 'react';
 import { FileUp, Download } from 'lucide-react';
-import { read, utils, writeFile } from 'xlsx';
 import { TimelineEvent, CategoryConfig } from '../../types/event';
 import { supabase } from '../../lib/supabase';
 import { getCurrentLimits, isOverEventLimit } from '../../lib/limits';
+import {
+  downloadTemplate,
+  isInstructionRow,
+  parseSheetRows,
+  type SheetCellValue,
+} from '../../utils/excelSheet';
 
 async function isAlreadyAtEventLimit(): Promise<{ limited: boolean; message: string }> {
   const { data: { user } } = await supabase.auth.getUser();
@@ -24,13 +29,6 @@ async function isAlreadyAtEventLimit(): Promise<{ limited: boolean; message: str
 interface ImportExcelButtonProps {
   onImport: (events: Omit<TimelineEvent, 'id'>[], categories: CategoryConfig[]) => void;
   categories: CategoryConfig[];
-}
-
-interface ExcelRow {
-  'Event Title': string;
-  'Start Date': string | number;
-  'End Date'?: string | number;
-  'Category': string;
 }
 
 const MAX_TITLE_LENGTH = 55;
@@ -54,7 +52,11 @@ export function ImportExcelButton({ onImport, categories }: ImportExcelButtonPro
     );
   };
 
-  const parseExcelDate = (value: string | number): string | null => {
+  const parseExcelDate = (value: SheetCellValue): string | null => {
+    if (value instanceof Date) {
+      if (isNaN(value.getTime())) return null;
+      return value.toISOString().split('T')[0];
+    }
     if (typeof value === 'number') {
       // Handle Excel serial date number
       const date = new Date(Math.round((value - 25569) * 86400 * 1000));
@@ -108,23 +110,10 @@ export function ImportExcelButton({ onImport, categories }: ImportExcelButtonPro
     }
 
     try {
-      // Read Excel file
-      const data = await file.arrayBuffer();
-      const workbook = read(data, {
-        cellDates: true, // Parse dates as Date objects
-        dateNF: 'mm/dd/yyyy' // Preferred date format
-      });
-
-      // Get first sheet
-      const sheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
-
-      // Convert to JSON, skipping first two rows
-      const allRows = utils.sheet_to_json<ExcelRow>(worksheet, {
-        raw: false, // Convert all values to strings
-        dateNF: 'mm/dd/yyyy' // Format dates as MM/DD/YYYY
-      });
-      const rows = allRows.slice(2); // Skip first two rows
+      // Read Excel file (size-capped) and drop the template's instruction row
+      // wherever it appears — files without one keep every data row.
+      const allRows = await parseSheetRows(file);
+      const rows = allRows.filter((row) => !isInstructionRow(row));
 
       const events: Omit<TimelineEvent, 'id'>[] = [];
       const errors: string[] = [];
@@ -238,34 +227,10 @@ export function ImportExcelButton({ onImport, categories }: ImportExcelButtonPro
   };
 
   const handleExportTemplate = () => {
-    // Create workbook
-    const wb = utils.book_new();
-
-    // Create headers and instructions (first two rows)
-    const headers = ['Event Title', 'Start Date', 'End Date', 'Category'];
-    const instructions = [
-      `${MAX_TITLE_LENGTH} char limit`,
-      'Format: MM/DD/YYYY',
-      'Format: MM/DD/YYYY',
-      'Must match a timeline category'
-    ];
-
-    // Create sample data using existing category labels
-    const data = [
-      headers,
-      instructions,
-      ['Sample Event 1', '1/15/2024', '1/20/2024', categories[0]?.label || 'Personal Life'],
-      ['Sample Event 2', '10/14/2024', '10/16/2024', categories[1]?.label || 'Career']
-    ];
-
-    // Create worksheet
-    const ws = utils.aoa_to_sheet(data);
-
-    // Add worksheet to workbook
-    utils.book_append_sheet(wb, ws, 'Timeline Events');
-
-    // Save file
-    writeFile(wb, 'timeline-template.xlsx');
+    void downloadTemplate(MAX_TITLE_LENGTH, [
+      categories[0]?.label || 'Personal Life',
+      categories[1]?.label || 'Career',
+    ]);
   };
 
   return (

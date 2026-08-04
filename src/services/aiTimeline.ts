@@ -1,5 +1,4 @@
 import { supabase } from '../lib/supabase';
-import { getSessionToken } from './sessionToken';
 import { getAnthropicKey } from './userApiKey';
 import {
   classifySubjectDirect,
@@ -27,7 +26,9 @@ export interface ClassificationResult {
 /**
  * Classify a subject into a type. Uses the cheapest/fastest model.
  *
- * Routes via the BYOK key when present, otherwise hits our edge function.
+ * Routes via the BYOK key when present, otherwise hits our edge function
+ * (which requires a signed-in user — supabase.functions.invoke attaches the
+ * session JWT automatically).
  */
 export async function classifySubject(
   subject: string
@@ -48,7 +49,6 @@ export async function classifySubject(
     'generate-timeline',
     {
       body: { subject, mode: 'classify' },
-      headers: { 'x-session-token': getSessionToken() },
     }
   );
 
@@ -73,8 +73,8 @@ export async function classifySubject(
  * Generate a full timeline via LLM.
  *
  * Routes via the BYOK key when present (browser-direct, no rate limit),
- * otherwise hits our edge function with the user's JWT or an anonymous
- * session token.
+ * otherwise hits our edge function with the user's JWT. Logged-out users
+ * without a key are gated to sign-in-or-BYOK before this is called.
  */
 export async function generateTimeline(
   subject: string,
@@ -108,7 +108,6 @@ export async function generateTimeline(
     'generate-timeline',
     {
       body,
-      headers: { 'x-session-token': getSessionToken() },
     }
   );
 

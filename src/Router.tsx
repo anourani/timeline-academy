@@ -2,6 +2,8 @@ import { createBrowserRouter, RouterProvider, Outlet, Navigate } from 'react-rou
 import { App } from './App';
 import { AIModePage } from './components/AIMode/AIModePage';
 import { TimelineViewer } from './components/TimelineViewer/TimelineViewer';
+import { PrivacyPolicyPage } from './components/Legal/PrivacyPolicyPage';
+import { TermsPage } from './components/Legal/TermsPage';
 import { SidePanelProvider } from './contexts/SidePanelContext';
 import { GlobalLayout } from './components/Layout/GlobalLayout';
 
@@ -27,6 +29,14 @@ const router = createBrowserRouter([
   {
     path: '/view/:timelineId',
     element: <TimelineViewer />,
+  },
+  {
+    path: '/privacy',
+    element: <PrivacyPolicyPage />,
+  },
+  {
+    path: '/terms',
+    element: <TermsPage />,
   },
 ]);
 

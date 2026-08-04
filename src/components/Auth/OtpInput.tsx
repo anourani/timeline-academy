@@ -15,9 +15,15 @@ export function OtpInput({ length = 6, onComplete, disabled = false }: OtpInputP
     inputRefs.current[0]?.focus();
   }, []);
 
+  // Submitting the same six digits twice would burn a second verification
+  // attempt against a token the first attempt already consumed, so each
+  // distinct code is only ever submitted once per mount.
+  const lastSubmittedRef = useRef<string | null>(null);
+
   const triggerComplete = (values: string[]) => {
     const code = values.join('');
-    if (code.length === length) {
+    if (code.length === length && code !== lastSubmittedRef.current) {
+      lastSubmittedRef.current = code;
       onComplete(code);
     }
   };
