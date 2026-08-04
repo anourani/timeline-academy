@@ -84,7 +84,7 @@ export function createDraft(): LocalDraft | null {
     description: '',
     events: [],
     categories: [...DEFAULT_CATEGORIES],
-    scale: 'small',
+    scale: 'large',
     verticalScale: 'medium',
     groupByCategory: false,
     savedAt: new Date().toISOString(),

@@ -561,7 +561,7 @@ Three scales live in `src/constants/scales.ts`:
 | `medium` | `20` | `5` |
 | `small` | `12` | `3` |
 
-`useTimelineScale(initialScale = 'medium')` holds the active scale and exposes `currentScale` (the full `TimelineScale` object). The selected scale is persisted to `timelines.scale` (`'large' | 'medium' | 'small'`) by `useAutosave`.
+`useTimelineScale(initialScale = 'large')` holds the active scale and exposes `currentScale` (the full `TimelineScale` object). The selected scale is persisted to `timelines.scale` (`'large' | 'medium' | 'small'`) by `useAutosave`.
 
 Switching scale recalculates all event positions: the grid math (§21) is unchanged but the pixel widths differ. CSS transitions on `min-width`, `grid-template-columns`, and span positions animate the change. Month abbreviations only render at `large` scale (see §7).
 

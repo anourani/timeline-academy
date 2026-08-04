@@ -59,7 +59,7 @@ export function TimelineViewer() {
             description: draft.description || '',
             events: draft.events || [],
             categories,
-            scale: draft.scale || 'small',
+            scale: draft.scale || 'large',
             verticalScale: draft.verticalScale ?? 'medium',
             groupByCategory: draft.groupByCategory ?? false
           });
@@ -142,7 +142,7 @@ export function TimelineViewer() {
           description: timelineData.description || '',
           events: formattedEvents,
           categories: categories,
-          scale: timelineData.scale || 'small',
+          scale: timelineData.scale || 'large',
           verticalScale: timelineData.vertical_scale ?? 'medium',
           groupByCategory: timelineData.group_by_category ?? false
         });
