@@ -2,9 +2,11 @@
 // sites can't drive these functions from their visitors' browsers. Override
 // with a comma-separated ALLOWED_ORIGINS env var (e.g. to add a preview URL).
 const DEFAULT_ALLOWED_ORIGINS = [
+  "https://app.timeline.academy", // production app
   "https://timeline.academy",
   "https://www.timeline.academy",
-  "http://localhost:5173",
+  "https://timelineacademy.netlify.app", // netlify default domain
+  "http://localhost:5173", // vite dev server
 ];
 
 function allowedOrigins(): string[] {
