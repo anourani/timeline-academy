@@ -21,6 +21,12 @@ interface EnrichRequest {
 const MAX_TITLE_LENGTH = 200;
 const MAX_DATE_LENGTH = 40;
 
+// Descriptions generate automatically whenever a user opens an event that
+// doesn't have one saved yet, so this budget has to be large enough to flesh
+// out a whole timeline in one sitting. Each result is persisted, so a given
+// event is only ever enriched once.
+const ENRICH_RATE_LIMIT = 30;
+
 function capped(value: string | undefined, max: number): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
@@ -98,8 +104,8 @@ Deno.serve(async (req: Request) => {
   }
   const sessionKey = `enrich:user:${userId}`;
 
-  // Rate limit (5 enrichments per identity per 24h).
-  const { allowed } = await checkRateLimit(sessionKey);
+  // Rate limit (ENRICH_RATE_LIMIT enrichments per user per 24h).
+  const { allowed } = await checkRateLimit(sessionKey, ENRICH_RATE_LIMIT);
   if (!allowed) {
     return new Response(
       JSON.stringify({
