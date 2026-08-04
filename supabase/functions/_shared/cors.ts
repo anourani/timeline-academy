@@ -33,7 +33,10 @@ export function corsHeadersFor(req: Request): Record<string, string> {
     "Access-Control-Allow-Origin": isAllowed(origin, origins) ? origin : origins[0],
     Vary: "Origin",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
+    // x-session-token is no longer read by any function, but older cached
+    // builds of the app still send it. Listing it keeps their preflight from
+    // failing, which would block the request before it was ever sent.
     "Access-Control-Allow-Headers":
-      "authorization, x-client-info, apikey, content-type",
+      "authorization, x-client-info, apikey, content-type, x-session-token",
   };
 }
