@@ -1,12 +1,15 @@
 # Supabase project configuration (checked in so function settings are
 # reviewable in source control instead of living only in deploy-time flags).
 #
-# Set project_id to your project ref before using the CLI against production:
-# project_id = "your-project-ref"
+# project_id is the project ref, not a secret — it's part of the public API
+# URL that already ships in the browser bundle. The deploy workflow passes
+# --project-ref explicitly; this is here so local CLI use targets the same
+# project by default.
+project_id = "ltudgurcouffxyuxvpmw"
 
-# Both functions independently verify the caller's JWT via auth.getUser() and
-# reject anonymous requests; verify_jwt = true adds gateway-level rejection of
-# requests without any valid JWT as defense in depth.
+# Each function verifies the caller's JWT itself via auth.getUser() and rejects
+# anonymous requests; verify_jwt adds gateway-level rejection of requests
+# carrying no valid JWT at all, as defense in depth.
 
 [functions.generate-timeline]
 verify_jwt = true

@@ -1,0 +1,45 @@
+# Deploys every Supabase edge function straight from main.
+#
+# These used to be copied into the Supabase dashboard by hand, one file at a
+# time. A function's index.ts and the files it imports from _shared/ have to
+# change together — pasting them separately leaves the function broken, which
+# is exactly how generation went down. The CLI bundles each function with its
+# imports and ships it as one unit, so that failure mode disappears.
+#
+# The first run is triggered by hand (workflow_dispatch) so the initial
+# deploy is a deliberate act rather than a side effect of merging.
+
+name: Deploy Supabase Edge Functions
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/**'
+      - 'supabase/config.toml'
+      - '.github/workflows/deploy-functions.yml'
+  workflow_dispatch:
+
+# Two merges in quick succession must not deploy over each other.
+concurrency:
+  group: deploy-functions
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # No function name means "all of them". Directories starting with an
+      # underscore (_shared) are skipped rather than deployed as functions.
+      # Per-function settings such as verify_jwt come from supabase/config.toml.
+      - name: Deploy functions
+        run: supabase functions deploy --project-ref "$SUPABASE_PROJECT_ID"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
