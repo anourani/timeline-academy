@@ -1,3 +1,12 @@
+// Legacy permissive headers, kept only for the rolled-back generate-timeline
+// on this branch. Every other function uses corsHeadersFor() below, which
+// pins the origin. Remove this together with the rollback.
+export const corsHeaders: Record<string, string> = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "*",
+};
+
 // CORS is pinned to the app's own origins instead of "*" so third-party sites
 // can't drive these functions from their visitors' browsers. Override the exact
 // list with a comma-separated ALLOWED_ORIGINS env var.
