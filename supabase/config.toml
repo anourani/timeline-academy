@@ -7,18 +7,29 @@
 # project by default.
 project_id = "ltudgurcouffxyuxvpmw"
 
-# Each function verifies the caller's JWT itself via auth.getUser() and rejects
-# anonymous requests; verify_jwt adds gateway-level rejection of requests
-# carrying no valid JWT at all, as defense in depth.
+# verify_jwt MUST stay false for anything a browser calls.
+#
+# Browsers send a CORS preflight (OPTIONS) before a cross-origin POST, and by
+# specification that preflight carries no Authorization header. With
+# verify_jwt = true the gateway rejects it before the function runs and answers
+# with its own minimal CORS headers — which omit content-type. The browser then
+# refuses to send the real request, surfacing as "Failed to send a request to
+# the Edge Function". No amount of CORS handling inside the function can fix
+# this, because the function is never reached.
+#
+# Nothing is lost by disabling it: every function below authenticates the
+# caller itself with supabase.auth.getUser() and returns 401 to anonymous
+# requests. The gateway check was redundant with that, and incompatible with
+# browser clients.
 
 [functions.generate-timeline]
-verify_jwt = true
+verify_jwt = false
 
 [functions.enrich-event]
-verify_jwt = true
+verify_jwt = false
 
 [functions.set-byok-flag]
-verify_jwt = true
+verify_jwt = false
 
 [functions.delete-account]
-verify_jwt = true
+verify_jwt = false
