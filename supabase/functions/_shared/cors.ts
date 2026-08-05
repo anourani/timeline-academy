@@ -29,14 +29,25 @@ function isAllowed(origin: string, origins: string[]): boolean {
 export function corsHeadersFor(req: Request): Record<string, string> {
   const origins = allowedOrigins();
   const origin = req.headers.get("origin") ?? "";
+
+  // Echo back whatever headers the browser asked permission for, rather than
+  // maintaining a hand-written list. A list has to predict every header the
+  // client library sends; miss one and the preflight is refused, so the real
+  // request never leaves the browser — and no curl reproduces it, because a
+  // curl only asks for headers you already thought of. The pre-review version
+  // of this file allowed "*" for the same reason.
+  //
+  // This is not a weakening: Access-Control-Allow-Origin above decides *who*
+  // may call these functions, and each function authenticates the caller with
+  // supabase.auth.getUser(). Which header names a permitted origin may send
+  // was never a security control.
+  const requestedHeaders = req.headers.get("access-control-request-headers");
+
   return {
     "Access-Control-Allow-Origin": isAllowed(origin, origins) ? origin : origins[0],
-    Vary: "Origin",
+    Vary: "Origin, Access-Control-Request-Headers",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-    // x-session-token is no longer read by any function, but older cached
-    // builds of the app still send it. Listing it keeps their preflight from
-    // failing, which would block the request before it was ever sent.
     "Access-Control-Allow-Headers":
-      "authorization, x-client-info, apikey, content-type, x-session-token",
+      requestedHeaders ?? "authorization, x-client-info, apikey, content-type",
   };
 }
