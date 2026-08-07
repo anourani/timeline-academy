@@ -715,7 +715,37 @@ both claiming the same mount.
 
 ### Local draft
 
-`useLocalDraft` exposes `loadAllDrafts`, `loadDraft`, `saveDraft` (debounced 500 ms), `saveDraftImmediate`, `createDraft`, `deleteDraft`, `clearAllDrafts`, `getDraftCount`. It delegates persistence to `src/utils/draftStorage.ts`; the payload type is `LocalDraft` exported from that module.
+Guests get localStorage drafts rather than Supabase rows — one key,
+`timeline_drafts`, capped at `MAX_DRAFTS = 3` (`PLAN_LIMITS.guest.timelineLimit`).
+"Create a Timeline" branches on sign-in state in `SidePanelBody.handleBuildFromScratch`
+and sends guests `{newTimeline, skipCreationScreen}`, which only the logged-out
+hydration effect in `App.tsx` consumes — a fully separate path from the signed-in
+`{timelineId}` one, and one that needs its own fixes for the same classes of bug.
+
+`useLocalDraft` exposes `loadAllDrafts`, `loadDraft`, `saveDraft` (debounced 500 ms), `saveDraftImmediate`, `flushDraftSave`, `createDraft`, `deleteDraft`, `clearAllDrafts`, `getDraftCount`. It delegates persistence to `src/utils/draftStorage.ts`; the payload type is `LocalDraft` exported from that module.
+
+**Flush applies here too.** `flushDraftSave()` runs before `handleDraftSwitch`
+replaces the editor's contents, and on unmount / `beforeunload` / `pagehide` — the
+debounced save holds a snapshot whose arguments the next edit overwrites, so without
+it a rename made within 500 ms of switching drafts or closing the tab was lost
+silently. The `beforeunload` guard in `useAutosave` does not cover this: its
+`hasUnsavedChanges` flag is only ever set on the signed-in path.
+
+**Two latches, not one.** The logged-out effect keys route-state handling on
+`location.key` (like the signed-in effect) but still gates the *no-route-state*
+bootstrap on the once-per-mount `draftHydrated` flag. Both are needed: the key latch
+is what makes a second "Create a Timeline" work from inside `/editor`, while the
+mount flag stops the `state:{}` reset — which mints a fresh key — from re-hydrating
+over the draft just created.
+
+**Making a new draft visible.** `SidePanelBody` lives in `GlobalLayout` outside the
+router `<Outlet />` and is hidden with a transform rather than unmounted, so
+navigating to `/editor` never remounts it and it has no realtime channel to lean on.
+Its `localDrafts` read therefore depends on `activeDraftId`, which changes exactly
+when the guest's draft set does, and the synthetic active-row fallback in the `rows`
+memo covers guests as well as signed-in users — otherwise a freshly created draft
+stayed invisible behind the "Sign in to save timelines" empty state until the panel
+was toggled or the page reloaded.
 
 ### Event operations
 

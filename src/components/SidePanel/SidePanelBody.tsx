@@ -165,13 +165,21 @@ export function SidePanelBody() {
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
 
+  // `activeDraftId` is in the deps because it is the only signal this component
+  // gets that the guest's draft list changed. This panel lives outside the
+  // router's <Outlet /> and is hidden with a transform rather than unmounted, so
+  // navigating to /editor never remounts it — without this, a draft created in
+  // the editor stayed invisible until the panel was toggled or the page
+  // reloaded, and the empty-state "sign in to save timelines" copy rendered
+  // where the new tile should have been. Signed-in users get this for free from
+  // the realtime channel; guests have no equivalent.
   useEffect(() => {
     if (!user) {
       setLocalDrafts(getAllDrafts())
     } else {
       setLocalDrafts([])
     }
-  }, [user, isOpen])
+  }, [user, isOpen, activeDraftId])
 
   // Freshen the list when the panel opens so the tile labels reflect any
   // recent edits that haven't come through the realtime channel yet.
@@ -195,24 +203,30 @@ export function SidePanelBody() {
       ? timelines.map(t => ({ id: t.id, title: t.title || DEFAULT_TIMELINE_TITLE, kind: 'timeline' as const }))
       : localDrafts.map(d => ({ id: d.id, title: d.title || DEFAULT_TIMELINE_TITLE, kind: 'draft' as const }))
 
-    // If the editor's active timeline isn't in the fetched list yet (new-timeline
-    // race, stale list, or dropped realtime event), synthesize a tile for it at
-    // the top using live context values so the user always sees their session.
-    const hasActiveRow = !!(user && activeTimelineId && baseRows.some(r => r.kind === 'timeline' && r.id === activeTimelineId))
-    if (!hasActiveRow && user && activeTimelineId) {
+    // If whatever the editor has open isn't in the list yet (new-timeline race,
+    // stale list, or dropped realtime event), synthesize a tile for it at the
+    // top using live context values so the user always sees their session.
+    //
+    // Guests need this at least as much as signed-in users: their draft is
+    // written to localStorage by the editor, and the read above can easily lose
+    // the race with it.
+    const activeId = user ? activeTimelineId : activeDraftId
+    const activeKind = user ? ('timeline' as const) : ('draft' as const)
+    const hasActiveRow = !!(activeId && baseRows.some(r => r.kind === activeKind && r.id === activeId))
+    if (!hasActiveRow && activeId) {
       return [
         {
-          id: activeTimelineId,
+          id: activeId,
           title: activeTimelineTitle && activeTimelineTitle.length > 0
             ? activeTimelineTitle
             : DEFAULT_TIMELINE_TITLE,
-          kind: 'timeline' as const,
+          kind: activeKind,
         },
         ...baseRows,
       ]
     }
     return baseRows
-  }, [user, timelines, localDrafts, activeTimelineId, activeTimelineTitle])
+  }, [user, timelines, localDrafts, activeTimelineId, activeDraftId, activeTimelineTitle])
 
   const timelineIds = useMemo(
     () => rows.filter(r => r.kind === 'timeline').map(r => r.id),

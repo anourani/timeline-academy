@@ -34,6 +34,15 @@ export function useLocalDraft() {
     storageSaveDraft(draft);
   }, []);
 
+  // Commit a pending debounced save now. The debounced call holds a *snapshot*
+  // of its arguments and each new call replaces them, so anything that is about
+  // to change which draft is being edited — or to tear the page down — has to
+  // flush first or that snapshot is silently discarded. localStorage writes are
+  // synchronous, so this is safe to call from an unload handler.
+  const flushDraftSave = useCallback(() => {
+    saveDraft.flush();
+  }, [saveDraft]);
+
   const handleCreateDraft = useCallback((): LocalDraft | null => {
     return createDraft();
   }, []);
@@ -55,6 +64,7 @@ export function useLocalDraft() {
     loadDraft,
     saveDraft,
     saveDraftImmediate,
+    flushDraftSave,
     createDraft: handleCreateDraft,
     deleteDraft: handleDeleteDraft,
     clearAllDrafts: handleClearAllDrafts,

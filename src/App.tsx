@@ -47,7 +47,7 @@ export function App() {
   const [pendingScrollDate, setPendingScrollDate] = useState<string | null>(null);
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
-  const { loadAllDrafts, loadDraft, saveDraft, createDraft, clearAllDrafts, deleteDraft: deleteLocalDraft } = useLocalDraft();
+  const { loadAllDrafts, loadDraft, saveDraft, flushDraftSave, createDraft, clearAllDrafts, deleteDraft: deleteLocalDraft } = useLocalDraft();
   // Which timeline's contents are actually in the editor right now. This is the
   // only id the app may act on — autosave, Share and Delete all key off it.
   // It is written in exactly one place: applyLoadedTimeline().
@@ -58,6 +58,10 @@ export function App() {
   // second navigation into an already-mounted /editor was ignored outright,
   // which is what made "Create a Timeline" and "Import Data" no-ops.
   const handledRouteStateRef = useRef<string | null>(null);
+  // Same latch, for the logged-out effect. Guests take a completely separate
+  // route-state path ({newTimeline} rather than {timelineId}), so it needs its
+  // own — sharing one would let whichever effect ran first swallow the key.
+  const handledDraftRouteKeyRef = useRef<string | null>(null);
   // Set once the editor has been given something to display, by either the
   // route-state effect or the no-route-state bootstrap, so the two can't both
   // claim the mount.
@@ -117,7 +121,7 @@ export function App() {
   // refresh of /editor ran the logged-out path first — hydrating a stale draft
   // and clearing `location.state` before the signed-in effect below could read it.
   useEffect(() => {
-    if (authReady && !user && !draftHydrated) {
+    if (authReady && !user) {
       const routeState = location.state as {
         newTimeline?: boolean;
         skipCreationScreen?: boolean;
@@ -131,6 +135,32 @@ export function App() {
         };
         importedEvents?: TimelineEvent[];
       } | null;
+
+      // Two different guards, because there are two different questions here.
+      //
+      // When the route state carries an instruction, latch on location.key like
+      // the signed-in effect does — /editor → /editor doesn't remount App, so
+      // the old once-per-mount boolean made every later "Create a Timeline"
+      // click a silent no-op for guests.
+      //
+      // When it doesn't, we're bootstrapping the editor from whatever's in
+      // storage, and that must happen only once per mount: the state:{} reset
+      // at the end of this effect mints a fresh key, and re-running the
+      // bootstrap on it would re-hydrate over the draft just created — and over
+      // anything the user has typed since.
+      const hasRouteInstruction = !!(
+        routeState?.importedEvents ||
+        routeState?.aiGenerated ||
+        (routeState?.newTimeline && routeState.skipCreationScreen) ||
+        routeState?.draftId
+      );
+
+      if (hasRouteInstruction) {
+        if (handledDraftRouteKeyRef.current === location.key) return;
+        handledDraftRouteKeyRef.current = location.key;
+      } else if (draftHydrated) {
+        return;
+      }
 
       if (routeState?.importedEvents) {
         const newDraft = createDraft();
@@ -190,6 +220,9 @@ export function App() {
         updateCategories(newDraft.categories);
         handleScaleChange(newDraft.scale);
         handleVerticalScaleChange(newDraft.verticalScale ?? 'medium');
+        // Reset grouping too, or the previous draft's setting leaks into this
+        // brand-new one — the sibling branches below already do this.
+        handleGroupByCategoryChange(newDraft.groupByCategory ?? false);
       } else if (routeState?.draftId) {
         // Resuming a local draft (e.g. from the side panel)
         const draft = loadDraft(routeState.draftId);
@@ -231,7 +264,23 @@ export function App() {
       // Clear the route state so refreshing doesn't re-trigger
       routerNavigate('/editor', { replace: true, state: {} });
     }
-  }, [authReady, user, draftHydrated, createDraft, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange, loadAllDrafts, loadDraft, location.state, routerNavigate, setDescription, setEvents, setTitle, updateCategories]);
+  }, [authReady, user, draftHydrated, createDraft, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange, loadAllDrafts, loadDraft, location.state, location.key, routerNavigate, setDescription, setEvents, setTitle, updateCategories]);
+
+  // Guest drafts save on a 500 ms debounce, so a rename followed immediately by
+  // closing the tab or navigating away would be lost — the draft path has no
+  // equivalent of the signed-in beforeunload guard, because `hasUnsavedChanges`
+  // is never set for it. localStorage writes are synchronous, so flushing from
+  // an unload handler reliably commits.
+  useEffect(() => {
+    const flush = () => flushDraftSave();
+    window.addEventListener('beforeunload', flush);
+    window.addEventListener('pagehide', flush);
+    return () => {
+      window.removeEventListener('beforeunload', flush);
+      window.removeEventListener('pagehide', flush);
+      flush();
+    };
+  }, [flushDraftSave]);
 
   // Save to localStorage when logged out
   useEffect(() => {
@@ -478,6 +527,12 @@ export function App() {
     if (newDraftId === activeDraftId) {
       return;
     }
+    // Commit the outgoing draft's pending save before its contents are replaced.
+    // Without this the debounced call's arguments are overwritten by the
+    // incoming draft's snapshot and the last <500 ms of edits are dropped —
+    // the same hazard switchTimeline flushes for on the signed-in path.
+    flushDraftSave();
+
     const draft = loadDraft(newDraftId);
     if (!draft) {
       console.error('Draft not found:', newDraftId);
