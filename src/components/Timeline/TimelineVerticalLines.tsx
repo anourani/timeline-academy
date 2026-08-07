@@ -99,14 +99,19 @@ export function TimelineVerticalLines({
         // neighbor is December.
         const prev = i > 0 ? months[i - 1] : null;
         const isYearBoundary = prev?.month === 11;
+        // Only year-boundary lines take part in the scroll-in reveal, so only
+        // they need a ref, a data-line-key and an observer entry. Month lines
+        // render at full height and are left alone.
         return (
           <span
             key={key}
-            ref={setSpanRef(key)}
-            data-line-key={key}
-            className={`timeline-vertical-line ${
-              isYearBoundary ? 'bg-line-year-boundary' : 'bg-line-default'
-            }`}
+            ref={isYearBoundary ? setSpanRef(key) : undefined}
+            data-line-key={isYearBoundary ? key : undefined}
+            className={
+              isYearBoundary
+                ? 'timeline-vertical-line timeline-vertical-line-reveal bg-line-year-boundary'
+                : 'timeline-vertical-line bg-line-default'
+            }
             style={{ left: `${i * scale.monthWidth}px` }}
           />
         );
@@ -117,11 +122,13 @@ export function TimelineVerticalLines({
         return (
           <span
             key={TRAILING_EDGE_KEY}
-            ref={setSpanRef(TRAILING_EDGE_KEY)}
-            data-line-key={TRAILING_EDGE_KEY}
-            className={`timeline-vertical-line ${
-              trailingIsYearBoundary ? 'bg-line-year-boundary' : 'bg-line-default'
-            }`}
+            ref={trailingIsYearBoundary ? setSpanRef(TRAILING_EDGE_KEY) : undefined}
+            data-line-key={trailingIsYearBoundary ? TRAILING_EDGE_KEY : undefined}
+            className={
+              trailingIsYearBoundary
+                ? 'timeline-vertical-line timeline-vertical-line-reveal bg-line-year-boundary'
+                : 'timeline-vertical-line bg-line-default'
+            }
             style={{ left: `${months.length * scale.monthWidth}px` }}
           />
         );
