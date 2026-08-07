@@ -241,11 +241,19 @@
     position: absolute;
     top: 0;
     width: 1px;
-    height: 0;
+    height: 100%;
     transition: left 200ms ease-in-out, height 400ms ease-out 200ms;
   }
 
-  .timeline-vertical-line[data-revealed="true"] {
-    height: 100%;
+  /* Only year-boundary lines draw downward as they scroll into view; month
+     lines are full height from first paint. The `:not()` gives this rule
+     specificity (0,2,0) against the base rule's (0,1,0), so it wins on
+     specificity rather than source order — Tailwind rewrites this @layer
+     block at build time and author order inside it is not contractual.
+     The `height` transition leg above is inert for month lines: their
+     computed height stays the token `100%` and never changes, and a parent
+     resize alters only the used value, which does not start a transition. */
+  .timeline-vertical-line-reveal:not([data-revealed="true"]) {
+    height: 0;
   }
 }

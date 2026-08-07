@@ -252,9 +252,9 @@ The displayed year is `months[Math.max(0, Math.floor(visibleRange.start / 4))]?.
 
 `TimelineVerticalLines.tsx` overlays a vertical line at every month boundary plus a trailing edge. The component is `aria-hidden`, `pointer-events-none`, and absolute-positioned to fill its parent.
 
-For each month index `i`, a `<span>` is placed at `left: i * scale.monthWidth` with class `bg-line-year-boundary` if its left-side neighbor is December, else `bg-line-default`. A trailing `<span>` is placed at `left: months.length * scale.monthWidth`.
+For each month index `i`, a `<span>` is placed at `left: i * scale.monthWidth` with class `bg-line-year-boundary` if its left-side neighbor is December, else `bg-line-default`. A trailing `<span>` is placed at `left: months.length * scale.monthWidth`. Year-boundary spans additionally get `timeline-vertical-line-reveal`, which is what opts them into the reveal animation — the same `isYearBoundary` test drives both the color and the animation, so the two can never disagree.
 
-Reveal animation: an `IntersectionObserver` rooted on the scroll container marks each line `data-revealed="true"` the first time it intersects the viewport (the CSS for `.timeline-vertical-line[data-revealed]` handles the reveal). When `window.matchMedia('(prefers-reduced-motion: reduce)').matches`, every line is revealed immediately and the observer is skipped.
+Reveal animation (year-boundary lines only): month lines are full height from first paint and are given no ref, no `data-line-key` and no observer entry. An `IntersectionObserver` rooted on the scroll container marks each year-boundary line `data-revealed="true"` the first time it intersects the viewport; `.timeline-vertical-line-reveal:not([data-revealed="true"])` holds it at `height: 0` until then, and the `height` leg of the base rule's `transition` draws it downward. That transition leg is inert for month lines — their computed height stays the token `100%` and never changes. When `window.matchMedia('(prefers-reduced-motion: reduce)').matches`, every reveal-eligible line is revealed immediately and the observer is skipped.
 
 The observer effect re-runs only when the months range key (`first..last`) or the scroll container ref changes — scale changes are handled by CSS transitions, not a new observer.
 
