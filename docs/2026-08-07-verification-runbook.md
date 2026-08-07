@@ -17,6 +17,13 @@ Two ground rules carried over from the outage post-mortem:
 
 ## 0. Before anything: confirm the live schema
 
+> **Result — 7 Aug 2026: PASS.** All three checks returned what they should:
+> the 9 columns exist, the 5 functions exist, and `ai_rate_limits` has RLS on
+> with zero policies and no anon/authenticated grants. The live database and
+> this repo agree. The five-month drift is closed, and the schema half of the
+> three-month autosave bug is confirmed fixed at the database level (whether
+> the app actually writes to it is section 2a).
+
 Every check further down assumes the April–May 2026 columns actually exist in
 production. The handoff says all 11 migrations were applied without error, but
 that claim has never been re-checked, and this is the exact failure that cost
@@ -188,6 +195,10 @@ where email = 'nourani1alex+deltest@gmail.com';
 longer exists to look up by email. Paste it into the query below in place of
 `PASTE-UUID-HERE`.
 
+This is **the** query for this test. You run the identical query twice — once
+now, once after deleting — and compare. One statement, one row, every number
+visible at once, so nothing can be hidden the way the RLS check was.
+
 ```sql
 with u as (select 'PASTE-UUID-HERE'::uuid as id)
 select
@@ -202,12 +213,26 @@ select
     where session_key in ('user:' || u.id,
                           'enrich:user:' || u.id,
                           'classify:user:' || u.id)) as rate_limit_rows,
-  (select count(*) from auth.users where id = u.id) as auth_rows
+  (select count(*) from auth.users where id = u.id) as auth_rows,
+  -- These three are global, not per-user. They must be 0 both before and
+  -- after; a 0 before and a non-zero after means the deletion broke something
+  -- for somebody else.
+  (select count(*) from events e
+     left join timelines t on t.id = e.timeline_id
+    where t.id is null) as orphaned_events,
+  (select count(*) from timeline_categories c
+     left join timelines t on t.id = c.timeline_id
+    where t.id is null) as orphaned_categories,
+  (select count(*) from timelines t
+     left join auth.users au on au.id = t.user_id
+    where au.id is null) as timelines_with_no_user
 from u;
 ```
 
-Write these five numbers down. `timelines`, `events` and `auth_rows` must all
-be **greater than zero** or the test proves nothing.
+Screenshot the result. The first five numbers must be **greater than zero**
+(see the note below about `categories`) or the test proves nothing — you can't
+demonstrate that deletion removes data that was never there. The last three
+must already be zero.
 
 > **Note on `timeline_categories`:** nothing in the app writes to that table any
 > more — categories now live in a `categories` column on `timelines`, and
@@ -233,46 +258,16 @@ be **greater than zero** or the test proves nothing.
 4. Note exactly what you see: the success alert (*"Your account and all its
    data have been deleted."*), the failure alert, or nothing at all.
 
-**Step 4 — confirm nothing survived.** In the SQL Editor, same UUID:
+**Step 4 — confirm nothing survived.** Run **the exact same query from step 2**
+again, with the same UUID. Nothing to rewrite — scroll up and re-run it.
 
-```sql
-with u as (select 'PASTE-UUID-HERE'::uuid as id)
-select
-  (select count(*) from timelines where user_id = u.id) as timelines_left,
-  (select count(*) from events e
-     join timelines t on t.id = e.timeline_id
-    where t.user_id = u.id) as events_left,
-  (select count(*) from timeline_categories c
-     join timelines t on t.id = c.timeline_id
-    where t.user_id = u.id) as categories_left,
-  (select count(*) from ai_rate_limits
-    where session_key in ('user:' || u.id,
-                          'enrich:user:' || u.id,
-                          'classify:user:' || u.id)) as rate_limit_rows_left,
-  (select count(*) from auth.users where id = u.id) as auth_rows_left
-from u;
-```
+**All eight numbers must now be `0`.** Because the query builds its own row
+from a literal UUID, it always returns exactly one row: a row of zeroes is a
+real pass, not an empty result that happens to look like one.
 
-**All five must be `0`.** This query always returns exactly one row, so a row
-of zeroes is a real pass, not an empty result.
-
-Then check for anything orphaned globally — this should be impossible given the
-foreign keys, but it is cheap and it is the thing you actually want to know:
-
-```sql
-select
-  (select count(*) from events e
-     left join timelines t on t.id = e.timeline_id
-    where t.id is null) as orphaned_events,
-  (select count(*) from timeline_categories c
-     left join timelines t on t.id = c.timeline_id
-    where t.id is null) as orphaned_categories,
-  (select count(*) from timelines t
-     left join auth.users u on u.id = t.user_id
-    where u.id is null) as timelines_with_no_user;
-```
-
-All three must be `0`.
+Compare against your step 2 screenshot. The first five went from positive to
+zero — that is the deletion working. The last three were zero and stayed zero —
+that is the deletion not damaging anyone else's data.
 
 Finally, one thing the handoff did not think to check — Supabase's own auth
 audit log, which is separate from your tables:
