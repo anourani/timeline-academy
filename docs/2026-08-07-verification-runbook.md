@@ -5,6 +5,60 @@ list of things that were deployed but never actually run (its section 6). This
 one is the procedure for running them, in priority order, written to be followed
 step by step.
 
+## Status ledger — updated 7 Aug 2026
+
+Kept honest deliberately: "deployed" and "worked once in a way that proves it"
+are different things, and conflating them is what produced the three broken
+features in the first place.
+
+| Item | Status |
+|---|---|
+| Live schema matches the repo (9 columns, 5 functions) | **VERIFIED** 7 Aug |
+| `ai_rate_limits` locked down (RLS on, no policies, no grants) | **VERIFIED** 7 Aug |
+| **`delete-account` end to end** | **VERIFIED** 7 Aug — see below |
+| AI event descriptions — server side | **VERIFIED** 7 Aug (indirectly) |
+| Supabase access token expiry | **RESOLVED** — set to never expire |
+| New-user signup sends a 6-digit code | **FIXED, NOT PROVEN** — see 0b |
+| Autosave persistence | **NOT TESTED** |
+| Sharing / unsharing end to end | **NOT TESTED** |
+| AI descriptions persisting to `events.description` | **NOT TESTED** |
+| Anonymous sign-in-or-BYOK gate | **NOT TESTED** |
+| `/privacy` and `/terms` rendering | **NOT TESTED** |
+| `set-byok-flag` | **NOT TESTED** |
+| Security headers on production responses | **NOT TESTED** |
+| `events` realtime subscription honours RLS | **NOT TESTED** |
+| Second Supabase project — custom SMTP disabled | **NOT DONE** |
+| Five unused Resend keys deleted | **NOT DONE** |
+
+### `delete-account` — verified 7 August 2026
+
+Run against a throwaway account (`+deltest`) holding 1 timeline, 21 events,
+1 seeded category row, 3 rate-limit rows and 1 auth record.
+
+**Before:** `1 / 21 / 1 / 3 / 1`, with all three orphan counts at `0`.
+**After:** every one of the eight columns `0`.
+
+The UI reported success and returned a signed-out home screen.
+
+What that actually establishes, beyond "the button works":
+
+- The **delete ordering is correct against the real foreign keys** — timelines
+  before the auth record. Had it been wrong, the auth deletion would have
+  failed on the `timelines.user_id` constraint and left a half-deleted account.
+- **Both cascades fire.** 21 events and the seeded `timeline_categories` row
+  went with their parent timeline. The category row was inserted by hand
+  precisely so this was a real test rather than an empty table matching an
+  empty table.
+- **All three rate-limit key formats are purged.** The baseline happened to
+  contain one row under each of `user:`, `classify:user:` and `enrich:user:`,
+  so the `.in()` filter was exercised completely rather than partially.
+- **Nothing was orphaned globally.** The three cross-table checks were zero
+  before and zero after, so no other account's data was disturbed.
+
+The one open question is `auth.audit_log_entries` — see section 4, item 2.
+
+---
+
 Two ground rules carried over from the outage post-mortem:
 
 - **Get evidence before forming a theory.** Every step below says what result
