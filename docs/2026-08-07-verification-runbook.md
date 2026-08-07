@@ -59,16 +59,45 @@ order by proname;
 ```
 
 ```sql
--- Expect: ai_rate_limits with rowsecurity = true, and zero policies.
--- (RLS on with no policies is correct here — edge functions use the service
--- role, which bypasses RLS; everyone else is denied.)
-select relname, relrowsecurity as rls_enabled
-from pg_class
-where relname = 'ai_rate_limits';
+-- ai_rate_limits must have RLS ON and ZERO policies. That combination is what
+-- locks it: edge functions use the service role, which bypasses RLS, and
+-- everyone else — including anyone holding the public anon key — is denied.
+--
+-- "Zero policies" ALONE proves nothing. Zero policies with RLS *off* is the
+-- opposite: the table is readable by the whole internet. That is the exposure
+-- this migration closed, so check both together.
+--
+-- Written as one query on purpose. The Supabase SQL editor only shows the
+-- result of the LAST statement, so two separate selects will silently hide
+-- the first answer.
+select
+  c.relrowsecurity as rls_enabled,
+  (select count(*) from pg_policies
+    where schemaname = 'public' and tablename = 'ai_rate_limits') as policy_count,
+  case
+    when c.relrowsecurity
+     and (select count(*) from pg_policies
+           where schemaname = 'public' and tablename = 'ai_rate_limits') = 0
+      then 'PASS — RLS on, no policies, locked to the service role'
+    when not c.relrowsecurity
+      then 'FAIL — RLS is OFF. Anyone with the anon key can read this table.'
+    else 'CHECK — RLS on but policies exist; read them before trusting this.'
+  end as verdict
+from pg_class c
+join pg_namespace n on n.oid = c.relnamespace
+where c.relname = 'ai_rate_limits'
+  and n.nspname = 'public';
+```
 
-select count(*) as policy_count
-from pg_policies
-where tablename = 'ai_rate_limits';
+```sql
+-- Defence in depth: the migration also revoked the default PostgREST grants.
+-- Expect ZERO rows. Any row here means anon or authenticated still holds a
+-- direct grant on the table.
+select grantee, privilege_type
+from information_schema.role_table_grants
+where table_schema = 'public'
+  and table_name = 'ai_rate_limits'
+  and grantee in ('anon', 'authenticated');
 ```
 
 **If any row is missing, stop.** The corresponding migration in
@@ -408,18 +437,25 @@ it — a 429 means the limit, not a bug.
 
 ## 3. Operational loose ends
 
-### 3a. Supabase access token expiry (do this first — CI dies silently)
+### 3a. Supabase access token expiry — RESOLVED, 7 Aug 2026
 
-Last successful deploy: **5 Aug 2026, 02:17 UTC**. Three runs, all green. So
-the token was alive two days ago; its expiry date is not recorded anywhere.
+**Checked: the token is set to never expire.** The failure this open item
+existed to prevent — CI silently stopping on an unrecorded expiry date — cannot
+happen. No rotation reminder is needed to keep deploys alive, and this item is
+closed.
 
-1. Go to **https://supabase.com/dashboard/account/tokens**.
-2. Find the token used for CI. Note its **created** date and whether an expiry
-   is shown.
-3. If Supabase shows no expiry field, the token does not expire, and the only
-   remaining risk is accidental revocation — note that and move on.
-4. If it does expire, tell me the date and I will set a calendar reminder for
-   two weeks before it.
+Last successful deploy: 5 Aug 2026, 02:17 UTC. Three runs, all green.
+
+What remains is a smaller, different risk, recorded here rather than acted on:
+a non-expiring token is a permanent credential with full access to the Supabase
+account, held in GitHub Actions secrets. The trade-off was made in the right
+direction — a silently-dead deploy pipeline is the more likely and more
+damaging failure for a project this size. If you ever want to reduce the
+standing exposure, the move is an annual rotation on a calendar reminder, not
+a short expiry.
+
+The only remaining way CI dies quietly is accidental revocation, which is
+noisy in a different way: the deploy fails visibly on the next merge.
 
 **A stronger check, if you want certainty rather than inference:** trigger the
 deploy workflow by hand from the GitHub Actions tab (**Deploy Supabase Edge
