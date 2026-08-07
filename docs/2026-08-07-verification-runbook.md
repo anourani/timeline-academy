@@ -334,10 +334,17 @@ must already be zero.
 > select id, 'test-cat', 'Cascade test', '#888888', 0
 > from timelines
 > where user_id = 'PASTE-UUID-HERE'::uuid
-> limit 1;
+> limit 1
+> returning id, timeline_id, label;
 > ```
 >
-> Then re-run the baseline query — `categories` should now be `1`.
+> **The `returning` line matters.** Without it the editor says *"Success. No
+> rows returned"* whether it inserted one row or none — the insert is
+> conditional on the UUID matching a timeline, so a mistyped UUID fails
+> silently and looks identical to success. With `returning`, one row back
+> means it worked and zero rows means it matched nothing.
+>
+> The baseline query confirms it independently: `categories` should be `1`.
 
 **Step 3 — delete.** Back in the incognito window:
 
