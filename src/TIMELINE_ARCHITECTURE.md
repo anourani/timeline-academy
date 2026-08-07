@@ -713,6 +713,45 @@ gate a hard refresh ran the logged-out draft path first and cleared `location.st
 before the signed-in path could read it. `editorSeededRef` keeps the two paths from
 both claiming the same mount.
 
+### Keeping the side panel current
+
+The panel is not remounted by navigation (`GlobalLayout` renders it outside the router
+`<Outlet />` and hides it with a transform), so nothing about it refreshes for free.
+Four distinct mechanisms keep it honest, and they cover different things:
+
+| Layer | Signed in | Guest |
+|---|---|---|
+| Row set + titles | `useTimelines` realtime on the **`timelines` table** + `loadTimelines()` on panel open | `localDrafts` re-read, keyed on `activeDraftId` |
+| Live values for the open timeline | `activeTimelineTitle` / `activeEventCount` / `activeDominantCategoryColor` pushed from `App` | same — the overrides key off `isActive`, not `row.kind` |
+| Missing-row fallback | synthetic active row in the `rows` memo | same, via `activeDraftId` |
+| Counts + colour dots for *other* rows | `useTimelineMetadata`: write-through + explicit `refresh()` | recomputed from `localDrafts` |
+
+**Nothing subscribes to the `events` table here.** `useTimelineMetadata` fetches keyed
+on the *set* of timeline ids, so a timeline's contents changing is invisible to it by
+construction. That is why it exposes two escape hatches:
+
+- `applyLocalMetadata(id, patch)` — the panel writes the editor's live count and colour
+  into the map continuously while a timeline is open. The active tile already renders
+  from the context values directly; this exists for the moment it stops being active,
+  which is when the tile would otherwise fall back to the page-load value and the badge
+  would visibly revert. This is only safe because `applyLoadedTimeline` puts the id and
+  the contents in one commit — otherwise it could file one timeline's count under
+  another's id.
+- `refresh()` — called on panel open and from the context's `refreshTimelines`, which
+  now refreshes rows *and* metadata.
+
+A failed metadata fetch unlatches its key so the next `refresh()` retries; latching it
+before the request and never clearing it meant one transient failure froze every badge
+at `0` for the life of the page.
+
+Deliberately **not** covered: changes made in another browser tab. Guest drafts have no
+`storage` listener, and closing the signed-in half would need an `events` realtime
+subscription — `useEventUsage` has one, but RLS on `postgres_changes` for that table is
+flagged as untested in the verification runbook. Also note the realtime DELETE on
+`timelines` likely never fires: the handler reads `payload.old.id` under a `user_id`
+filter, and with default replica identity a DELETE's `old` carries only the primary key.
+Deleting from this tab works because `refreshTimelines()` is called explicitly.
+
 ### Local draft
 
 Guests get localStorage drafts rather than Supabase rows — one key,
@@ -826,6 +865,6 @@ Hooks consumed (directly or via composition) by the timeline page.
 | `useEventDrag` | `hooks/useEventDrag.ts` | Pointer-driven drag state machine; defines `DRAG_THRESHOLD = 5` |
 | `useLocalDraft` | `hooks/useLocalDraft.ts` | localStorage draft CRUD with 500 ms debounced save |
 | `useTimelines` | `hooks/useTimelines.ts` | List of the user's timelines with realtime subscription and retry-with-backoff |
-| `useTimelineMetadata` | `hooks/useTimelineMetadata.ts` | Per-timeline event count, year range, and dominant category color (for timeline cards) |
+| `useTimelineMetadata` | `hooks/useTimelineMetadata.ts` | Per-timeline event count, year range, and dominant category color (for timeline cards). Returns `{ metadata, applyLocalMetadata, refresh }` — the fetch is keyed on the *set* of ids, so contents changes need the write-through or an explicit refresh |
 | `useSidePanel` | `hooks/useSidePanel.ts` | Accesses `SidePanelContext` (open/close state for the event details side panel) |
 | `useAuth` | `hooks/useAuth.ts` | Accesses `AuthContext` (current user, plus `authReady` — whether the session lookup has answered yet) |

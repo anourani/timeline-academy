@@ -271,7 +271,12 @@ export function App() {
   // equivalent of the signed-in beforeunload guard, because `hasUnsavedChanges`
   // is never set for it. localStorage writes are synchronous, so flushing from
   // an unload handler reliably commits.
-  useEffect(() => {
+  //
+  // useLayoutEffect, and declared above the side-panel pushes below, so that on
+  // unmount this cleanup runs *before* they null `activeDraftId`. That null is
+  // what makes the panel re-read localStorage; flushing afterwards would mean it
+  // re-read stale data and nothing ever corrected it.
+  useLayoutEffect(() => {
     const flush = () => flushDraftSave();
     window.addEventListener('beforeunload', flush);
     window.addEventListener('pagehide', flush);
