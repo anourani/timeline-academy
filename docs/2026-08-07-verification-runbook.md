@@ -114,6 +114,95 @@ first.
 
 ---
 
+## 0b. New-user signup sent a link, not a code — found 7 Aug
+
+Discovered while creating the throwaway account for the deletion test. Not on
+the original list, and more consequential than most things that were.
+
+### What happened
+
+Signing in with a genuinely new email delivered a *"confirm your email"* link,
+while the UI showed six boxes and the words *"We sent a 6-digit code"*
+(`AuthModal.tsx:327`). The two did not match.
+
+### Why
+
+`signInWithOtp` sends a different email template depending on the address:
+
+| Address | Template used |
+|---|---|
+| Existing, confirmed account | **Magic Link** |
+| Brand-new address | **Confirm signup** |
+
+The app calls the same function either way and cannot choose. The **Magic
+Link** template had been customised to render `{{ .Token }}` — the 6-digit
+code. **Confirm signup** had not; it still carried Supabase's stock
+`{{ .ConfirmationURL }}` link.
+
+So sign-in worked flawlessly for every existing user, and every genuinely new
+visitor was told to expect a code that never came. Section 6 of the handoff
+lists *"Sign-in end to end"* as confirmed working — and it is, for an existing
+account. Nobody had created a new one. The tested and untested halves of the
+same feature sat directly beside each other.
+
+### Fix applied — 7 Aug 2026
+
+The **Confirm signup** template now renders the code *alongside* the existing
+link rather than replacing it:
+
+```html
+<p>Your verification code is:</p>
+<h2>{{ .Token }}</h2>
+<p>Or click here to confirm: <a href="{{ .ConfirmationURL }}">Confirm your email</a></p>
+```
+
+Additive on purpose. Anyone holding an unclicked link keeps working, and if the
+code path ever needs a client change the link remains as a fallback — the same
+reasoning as the CORS rule about never narrowing a path that currently works.
+
+### Verification status: **NOT yet proven**
+
+The first attempt after the fix succeeded, but does not count. The timestamps
+on that account tell the story:
+
+```
+created_at         2026-08-07 20:31:24
+email_confirmed_at 2026-08-07 20:31:51   <- 27s later, BEFORE the template fix
+last_sign_in_at    2026-08-07 20:40:08
+```
+
+The address was confirmed 27 seconds after creation — by clicking the link in
+the original email, before the template was edited. That made it an existing,
+confirmed account, so the later code request was served by the **Magic Link**
+template, which already worked. The successful login re-proved a path that was
+never in doubt.
+
+**To actually prove the fix**, use an address that has never been seen before
+and **do not click the link**:
+
+1. Sign in with a fresh plus-address (e.g. `+verify`).
+2. Open the email. It must contain **6 digits**. If it only has a link, the
+   template change did not take effect.
+3. Type the digits into the boxes — do not click through.
+4. Confirm in SQL that the code alone did the work:
+
+```sql
+select email, created_at, email_confirmed_at, last_sign_in_at
+from auth.users
+where email = 'PASTE-THE-FRESH-ADDRESS-HERE';
+```
+
+**Pass:** `email_confirmed_at` is set, and it is within seconds of
+`last_sign_in_at` — meaning the typed code both confirmed and signed in, with
+no link involved. **Fail:** the code is rejected, which would point at
+`verifyOtp({ type: 'email' })` in `AuthContext.tsx:77` not accepting a signup
+token — a one-line change, but do not make it speculatively.
+
+This doubles as the `+verify` account section 2 needs, so it costs nothing
+extra.
+
+---
+
 ## 1. `delete-account` — the destructive one
 
 ### What I confirmed by reading the code and the deploy logs
