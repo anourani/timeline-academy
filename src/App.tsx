@@ -4,7 +4,7 @@ import { Header } from './components/Layout/Header';
 import { GlobalNav } from '@/components/Navigation/GlobalNav';
 import { Timeline } from './components/Timeline/Timeline';
 import { useTimelineState } from './hooks/useTimelineState';
-import { useTimeline } from './hooks/useTimeline';
+import { useTimeline, type TimelineData } from './hooks/useTimeline';
 import { useAuth } from './hooks/useAuth';
 import { useAutosave } from './hooks/useAutosave';
 import { useSidePanel } from './hooks/useSidePanel';
@@ -34,8 +34,8 @@ export function App() {
     verticalScale, currentVerticalScale, handleVerticalScaleChange,
     groupByCategory, handleGroupByCategoryChange,
   } = useTimelineState();
-  const { user } = useAuth();
-  const { saveTimeline, timelineId, loadTimeline, error: timelineError, retryInitialLoad } = useTimeline();
+  const { user, authReady } = useAuth();
+  const { getMostRecentTimelineId, createTimelineFrom, loadTimeline } = useTimeline();
   const location = useLocation();
   const routerNavigate = useNavigate();
   const [pendingSwitchTimelineId, setPendingSwitchTimelineId] = useState<string | null>(null);
@@ -48,12 +48,25 @@ export function App() {
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   const { loadAllDrafts, loadDraft, saveDraft, createDraft, clearAllDrafts, deleteDraft: deleteLocalDraft } = useLocalDraft();
-  const handledRouteStateRef = useRef(false);
+  // Which timeline's contents are actually in the editor right now. This is the
+  // only id the app may act on — autosave, Share and Delete all key off it.
+  // It is written in exactly one place: applyLoadedTimeline().
+  const [loadedTimelineId, setLoadedTimelineId] = useState<string | null>(null);
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null);
+  const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
+  // Latches the location we've already acted on. A boolean here meant the
+  // second navigation into an already-mounted /editor was ignored outright,
+  // which is what made "Create a Timeline" and "Import Data" no-ops.
+  const handledRouteStateRef = useRef<string | null>(null);
+  // Set once the editor has been given something to display, by either the
+  // route-state effect or the no-route-state bootstrap, so the two can't both
+  // claim the mount.
+  const editorSeededRef = useRef(false);
   const migrationDoneRef = useRef(false);
   const { setOnTimelineSelect, setOnDraftSelect, refreshTimelines, setOnOpenSettings, setActiveTimelineId, setActiveDraftId: setPanelActiveDraftId, setActiveTimelineTitle, setActiveEventCount, setActiveDominantCategoryColor } = useSidePanel();
 
   const timelineData = {
-    id: timelineId,
+    id: loadedTimelineId,
     title,
     description,
     events,
@@ -63,7 +76,7 @@ export function App() {
     groupByCategory,
   };
 
-  const { saveStatus, lastSavedTime, handleChange } = useAutosave(timelineData);
+  const { saveStatus, lastSavedTime, handleChange, flushPendingSave, cancelPendingSave } = useAutosave(timelineData);
 
   const handleAddEventClick = () => {
     setActivePanel(null);
@@ -76,11 +89,16 @@ export function App() {
     [events, categories],
   );
 
-  // Trigger autosave when timeline data changes
+  // Trigger autosave when timeline data changes.
+  //
+  // `loadedTimelineId` is null until a timeline's contents are actually in the
+  // editor, so this can no longer fire with a real id next to another
+  // timeline's (or the default empty) contents — which is what let a save
+  // rename a timeline and diff-delete all of its events.
   useEffect(() => {
-    if (timelineId) {
+    if (loadedTimelineId) {
       handleChange({
-        id: timelineId,
+        id: loadedTimelineId,
         title,
         description,
         events,
@@ -90,11 +108,16 @@ export function App() {
         groupByCategory,
       });
     }
-  }, [timelineId, title, description, events, categories, currentScale.value, currentVerticalScale.value, groupByCategory, handleChange]);
+  }, [loadedTimelineId, title, description, events, categories, currentScale.value, currentVerticalScale.value, groupByCategory, handleChange]);
 
-  // Hydrate from localStorage draft if logged out
+  // Hydrate from localStorage draft if logged out.
+  //
+  // Gated on `authReady`: `user` is null both before the session lookup answers
+  // and when the user is genuinely signed out, so without this every hard
+  // refresh of /editor ran the logged-out path first — hydrating a stale draft
+  // and clearing `location.state` before the signed-in effect below could read it.
   useEffect(() => {
-    if (!user && !draftHydrated) {
+    if (authReady && !user && !draftHydrated) {
       const routeState = location.state as {
         newTimeline?: boolean;
         skipCreationScreen?: boolean;
@@ -208,7 +231,7 @@ export function App() {
       // Clear the route state so refreshing doesn't re-trigger
       routerNavigate('/editor', { replace: true, state: {} });
     }
-  }, [user, draftHydrated, createDraft, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange, loadAllDrafts, loadDraft, location.state, routerNavigate, setDescription, setEvents, setTitle, updateCategories]);
+  }, [authReady, user, draftHydrated, createDraft, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange, loadAllDrafts, loadDraft, location.state, routerNavigate, setDescription, setEvents, setTitle, updateCategories]);
 
   // Save to localStorage when logged out
   useEffect(() => {
@@ -239,7 +262,7 @@ export function App() {
       (async () => {
         for (const draft of draftsWithEvents) {
           try {
-            await saveTimeline(draft.title, draft.events, draft.scale, draft.verticalScale ?? 'medium');
+            await createTimelineFrom(draft.title, draft.events, draft.scale, draft.verticalScale ?? 'medium');
           } catch (err: unknown) {
             if (err instanceof LimitReachedError) {
               alert(
@@ -258,33 +281,47 @@ export function App() {
       clearAllDrafts();
       setActiveDraftId(null);
     }
-  }, [user, draftHydrated, clearAllDrafts, loadAllDrafts, saveTimeline]);
+  }, [user, draftHydrated, clearAllDrafts, loadAllDrafts, createTimelineFrom]);
+
+  /**
+   * The one and only writer of the editor's contents *and* of the id those
+   * contents belong to. Every setter plus `setLoadedTimelineId` runs in a
+   * single synchronous block, so React 18 commits them together and no render
+   * — and therefore no autosave — can ever observe one timeline's id beside
+   * another timeline's data.
+   *
+   * If you add a field to the editor, add it here too: anything set outside
+   * this function reopens the desync this exists to prevent.
+   */
+  const applyLoadedTimeline = useCallback((data: TimelineData) => {
+    setTitle(data.title);
+    setDescription(data.description || '');
+    setEvents(data.events);
+    if (data.categories) {
+      updateCategories(data.categories);
+    } else {
+      resetCategories();
+    }
+    handleScaleChange(data.scale || 'medium');
+    handleVerticalScaleChange(data.verticalScale ?? 'small');
+    handleGroupByCategoryChange(data.groupByCategory ?? false);
+    setLoadedTimelineId(data.id);
+  }, [setTitle, setDescription, setEvents, updateCategories, resetCategories, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange]);
 
   const switchTimeline = useCallback(async (newTimelineId: string) => {
     try {
-      // Load new data first — don't clear state until we have the replacement
-      const {
-        title: newTitle,
-        description: newDescription,
-        events: newEvents,
-        categories: newCategories,
-        scale: newScale,
-        verticalScale: newVerticalScale,
-        groupByCategory: newGroupByCategory,
-      } = await loadTimeline(newTimelineId);
+      // Commit anything still pending for the outgoing timeline before its
+      // contents are replaced. The debounced save holds a snapshot of its
+      // arguments, and the next edit would overwrite them — silently dropping
+      // the last couple of seconds of work on the timeline we're leaving.
+      await flushPendingSave();
 
-      // Only update state after successful load
-      setTitle(newTitle);
-      setDescription(newDescription || '');
-      setEvents(newEvents);
-      if (newCategories) {
-        updateCategories(newCategories);
-      } else {
-        resetCategories();
-      }
-      handleScaleChange(newScale || 'medium');
-      handleVerticalScaleChange(newVerticalScale ?? 'small');
-      handleGroupByCategoryChange(newGroupByCategory ?? false);
+      // Load new data first — don't clear state until we have the replacement
+      const data = await loadTimeline(newTimelineId);
+
+      // Only update state after a successful load, and via the single
+      // atomic writer so the id and the contents can't drift apart.
+      applyLoadedTimeline(data);
     } catch (error) {
       console.error('Error switching timeline:', error);
       // `.single()` returns PGRST116 when the row doesn't exist — that's the
@@ -292,13 +329,19 @@ export function App() {
       // on home quietly rather than stranding them in /editor with an alert.
       const code = (error as { code?: string } | null)?.code;
       if (code === 'PGRST116') {
-        setActiveTimelineId(null);
+        setLoadedTimelineId(null);
         routerNavigate('/', { replace: true });
+        return;
+      }
+      // Creating a timeline goes through here too ('new'), so the plan cap is
+      // a normal outcome — telling the user to retry would be a lie.
+      if (error instanceof LimitReachedError) {
+        alert(limitReachedMessage(error.kind));
         return;
       }
       alert('Failed to load timeline. Please try again.');
     }
-  }, [loadTimeline, setTitle, setDescription, setEvents, updateCategories, resetCategories, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange, routerNavigate, setActiveTimelineId]);
+  }, [flushPendingSave, loadTimeline, applyLoadedTimeline, routerNavigate]);
 
   // Handle navigation from AI mode or the side panel with a specific timeline to load
   useEffect(() => {
@@ -313,10 +356,21 @@ export function App() {
       };
       importedEvents?: TimelineEvent[];
     } | null;
-    if (!user || handledRouteStateRef.current) return;
+    if (!authReady || !user) return;
+
+    // Latch on the location itself, not a boolean. /editor → /editor doesn't
+    // remount App, so a once-per-mount flag made every navigation after the
+    // first a silent no-op — "Create a Timeline", "Import Data" and a second
+    // hand-off from AI mode all did nothing at all.
+    //
+    // Recorded unconditionally, and only after the auth guard: the state:{}
+    // replacements below mint a fresh key, and that pass needs latching too,
+    // while an early pass with no user yet must not consume the real key.
+    if (handledRouteStateRef.current === location.key) return;
+    handledRouteStateRef.current = location.key;
 
     if (state?.importedEvents) {
-      handledRouteStateRef.current = true;
+      editorSeededRef.current = true;
       const imported = state.importedEvents;
       (async () => {
         await switchTimeline('new');
@@ -328,11 +382,11 @@ export function App() {
       })();
       routerNavigate('/editor', { replace: true, state: {} });
     } else if (state?.aiGenerated) {
-      handledRouteStateRef.current = true;
+      editorSeededRef.current = true;
       const aiData = state.aiGenerated;
       (async () => {
-        // Creates the timeline row in Supabase and sets timelineId so autosave
-        // will persist subsequent state updates to the new row.
+        // Creates the timeline row in Supabase and binds the editor to it, so
+        // autosave persists the state updates below to the new row.
         await switchTimeline('new');
         setTitle(aiData.title);
         setDescription(aiData.description);
@@ -345,7 +399,7 @@ export function App() {
       })();
       routerNavigate('/editor', { replace: true, state: {} });
     } else if (state?.timelineId) {
-      handledRouteStateRef.current = true;
+      editorSeededRef.current = true;
       if (state.timelineId === 'new' && state.skipCreationScreen) {
         switchTimeline('new');
       } else if (state.timelineId === 'new') {
@@ -357,7 +411,48 @@ export function App() {
       }
       routerNavigate('/editor', { replace: true, state: {} });
     }
-  }, [location.state, user, routerNavigate, setDescription, setEvents, setTitle, switchTimeline, updateCategories]);
+  }, [location.state, location.key, authReady, user, routerNavigate, setDescription, setEvents, setTitle, switchTimeline, updateCategories]);
+
+  // Signed in, on /editor, with nothing in the route state telling us what to
+  // show — a bookmark, a refresh, or the browser back button.
+  //
+  // Previously nothing loaded here at all: `useTimeline` just pointed itself at
+  // an arbitrary row on mount while the editor still held its empty defaults,
+  // and autosave then wrote those defaults over that row. Now the id only ever
+  // arrives attached to the data it names, via switchTimeline.
+  useEffect(() => {
+    if (!authReady || !user || editorSeededRef.current) return;
+
+    const state = location.state as {
+      timelineId?: string;
+      aiGenerated?: unknown;
+      importedEvents?: unknown;
+    } | null;
+    // The effect above owns these; it runs first and will set the seed flag.
+    if (state?.timelineId || state?.aiGenerated || state?.importedEvents) return;
+
+    editorSeededRef.current = true;
+    (async () => {
+      try {
+        const mostRecentId = await getMostRecentTimelineId();
+        if (mostRecentId) {
+          await switchTimeline(mostRecentId);
+        } else {
+          // Nothing to open — send them to the AI entry point to make one.
+          routerNavigate('/', { replace: true });
+        }
+      } catch (err) {
+        console.error('Failed to open a timeline:', err);
+        setBootstrapError('Failed to load your timelines. Please try again.');
+      }
+    })();
+  }, [authReady, user, location.state, bootstrapAttempt, getMostRecentTimelineId, switchTimeline, routerNavigate]);
+
+  const retryBootstrap = () => {
+    setBootstrapError(null);
+    editorSeededRef.current = false;
+    setBootstrapAttempt(n => n + 1);
+  };
 
   const handleTimelineSwitch = async (newTimelineId: string) => {
     if (newTimelineId === 'new') {
@@ -367,12 +462,14 @@ export function App() {
 
     // Dedup: if the user clicked the tile for the timeline that's already
     // loaded, there's nothing to switch to — skip the refetch.
-    if (newTimelineId === timelineId) {
+    //
+    // Compared against the *loaded* id specifically. When this compared against
+    // a separate pointer, a desynced pointer made the tile it named permanently
+    // unclickable: the guard matched, so its contents never loaded.
+    if (newTimelineId === loadedTimelineId) {
       return;
     }
 
-    // Switch immediately; any in-flight autosave captured its own snapshot
-    // (via debounce) and will still commit the outgoing timeline's data.
     await switchTimeline(newTimelineId);
   };
 
@@ -440,9 +537,9 @@ export function App() {
   // synchronously with the editor's render. Cleanup clears it on unmount so
   // non-editor routes (e.g. AI mode) don't show a stale highlight.
   useLayoutEffect(() => {
-    setActiveTimelineId(timelineId);
+    setActiveTimelineId(loadedTimelineId);
     return () => setActiveTimelineId(null);
-  }, [timelineId, setActiveTimelineId]);
+  }, [loadedTimelineId, setActiveTimelineId]);
 
   useLayoutEffect(() => {
     setPanelActiveDraftId(activeDraftId);
@@ -473,12 +570,20 @@ export function App() {
   };
 
   const handleDeleteTimeline = async () => {
+    // Drop any queued save before the row goes away. This is the one case where
+    // cancelling beats flushing: the editor now flushes on unmount, and
+    // navigating away below would otherwise re-insert the events we just
+    // deleted. Unbinding the editor is what makes that flush a no-op.
+    cancelPendingSave();
+    const deletingId = loadedTimelineId;
+    setLoadedTimelineId(null);
+
     try {
-      if (user && timelineId) {
+      if (user && deletingId) {
         const { error: deleteError } = await supabase
           .from('timelines')
           .delete()
-          .eq('id', timelineId);
+          .eq('id', deletingId);
         if (deleteError) throw deleteError;
       } else if (activeDraftId) {
         deleteLocalDraft(activeDraftId);
@@ -530,7 +635,7 @@ export function App() {
     <div className="app-container h-screen bg-black text-white overflow-hidden flex flex-col">
       <GlobalNav
         variant="timeline"
-        timelineId={timelineId}
+        timelineId={loadedTimelineId}
         timelineTitle={title}
         onTimelineTitleChange={setTitle}
         events={events}
@@ -569,12 +674,12 @@ export function App() {
         onDeleteTimeline={handleDeleteTimeline}
         mode={mode}
       />
-      {timelineError ? (
+      {bootstrapError ? (
         <div className="flex-1 flex items-center justify-center py-20">
           <div className="bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full text-center">
-            <p className="text-red-400 mb-4">{timelineError}</p>
+            <p className="text-red-400 mb-4">{bootstrapError}</p>
             <button
-              onClick={retryInitialLoad}
+              onClick={retryBootstrap}
               className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
             >
               Retry

@@ -66,10 +66,25 @@ export function useAutosave(timelineData: TimelineData) {
     debouncedSave(data);
   }, [debouncedSave]);
 
-  // Clean up debounced function on unmount
+  // Commit any pending save now. Callers about to replace the editor's
+  // contents (switching timelines) must call this — the debounced call holds a
+  // snapshot of the *outgoing* timeline, and the next handleChange would
+  // otherwise overwrite those arguments and discard them.
+  const flushPendingSave = useCallback(async () => {
+    await debouncedSave.flush();
+  }, [debouncedSave]);
+
+  // Drop the pending save without running it. Only correct when the target row
+  // is going away (deleting a timeline), where committing would resurrect it.
+  const cancelPendingSave = useCallback(() => {
+    debouncedSave.cancel();
+  }, [debouncedSave]);
+
+  // Flush — not cancel — on unmount, so navigating away from the editor
+  // doesn't drop the last edits.
   useEffect(() => {
     return () => {
-      debouncedSave.cancel();
+      void debouncedSave.flush();
     };
   }, [debouncedSave]);
 
@@ -102,6 +117,8 @@ export function useAutosave(timelineData: TimelineData) {
   return {
     saveStatus,
     lastSavedTime,
-    handleChange
+    handleChange,
+    flushPendingSave,
+    cancelPendingSave
   };
 }

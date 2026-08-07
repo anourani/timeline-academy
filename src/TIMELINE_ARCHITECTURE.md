@@ -648,23 +648,70 @@ useTimelineState
 Other timeline-page hooks live alongside but are not composed by `useTimelineState`:
 
 ```
-useTimeline           ─ load / create / save the timeline record itself
+useTimeline           ─ load / create the timeline record itself (holds no state)
 useAutosave           ─ debounced persistence + status state
 useLocalDraft         ─ localStorage drafts
 useTimelineScroll     ─ scroll position + visible quarter range (consumed by Timeline.tsx)
 useEventDrag          ─ drag interaction state machine (consumed by Timeline.tsx)
 ```
 
+### Which timeline is open — `loadedTimelineId`
+
+`App.tsx` holds `loadedTimelineId`: the row whose contents are actually in the
+editor. It is the **only** id the app acts on — autosave, Share and Delete all key
+off it — and it is written in exactly one place, `applyLoadedTimeline(data)`, which
+sets it alongside every content setter (`setTitle`, `setDescription`, `setEvents`,
+categories, both scales, `groupByCategory`) in a single synchronous block. React 18
+commits that batch together, so no render can observe one timeline's id beside
+another timeline's data.
+
+This invariant is load-bearing, not stylistic. `useTimeline` previously kept its own
+`timelineId`, written in three places — including a mount effect that pointed it at
+an arbitrary row via `.limit(1)` with no `.order()`, and a `setTimelineId(id)` that
+fired *before* the three sequential fetches it named had returned. Autosave keyed off
+that pointer while reading the editor's separately-held contents, so the two could
+disagree, and a save would then write one timeline's title and events onto a
+different timeline's row — deleting the victim's events, because the event save is a
+diff. The same desync made the side panel paint the open timeline's name and count
+onto the wrong tile, and made that tile permanently unclickable (the switch dedup
+matched the stale pointer, so its contents never loaded).
+
+`useTimeline` therefore holds **no state at all** now. `getMostRecentTimelineId()`
+and `loadTimeline(id)` *return* ids; `loadTimeline` includes the resolved `id` in its
+`TimelineData` so the caller can bind it to the data it came with. Anything that sets
+editor content outside `applyLoadedTimeline` reopens the bug.
+
 ### Save flow
 
 1. User makes a change (event edit, drag, rename, scale toggle, group toggle, etc.).
-2. `useAutosave.handleChange(data)` sets `saveStatus = 'saving'`, marks `hasUnsavedChanges`, and starts a 2000 ms debounce.
+2. `useAutosave.handleChange(data)` sets `saveStatus = 'saving'`, marks `hasUnsavedChanges`, and starts a 2000 ms debounce. `App.tsx` only calls it when `loadedTimelineId` is non-null, so a save can never target a timeline the editor hasn't loaded.
 3. After the debounce fires, `save(data)`:
    - `UPDATE` the `timelines` row (title, description, scale, group_by_category, updated_at).
-   - `saveTimelineEvents(timelineId, events)` performs a diff-based sync: classifies each event as INSERT / UPDATE / DELETE relative to the server, then executes UPDATE → DELETE → INSERT.
+   - `saveTimelineEvents(timelineId, events)` performs a diff-based sync: classifies each event as INSERT / UPDATE / DELETE relative to the server, then executes UPDATE → INSERT → DELETE. INSERT precedes DELETE deliberately: these are separate HTTP calls, not one transaction, so a mismatched client array fails the INSERT on a duplicate primary key *before* anything has been deleted.
 4. On success: `saveStatus = 'saved'`, `lastSavedTime = now`, `hasUnsavedChanges = false`.
 5. On failure: `saveStatus = 'error'`. A `window.online` listener retries `save(timelineData)` when the browser comes back online.
 6. A `beforeunload` listener fires `e.preventDefault()` while `hasUnsavedChanges` is true, prompting the browser's "leave site?" dialog.
+
+**Flush, don't cancel.** The debounced call holds a *snapshot* of its arguments, and
+each new call replaces them — so dropping the timer discards the pending write rather
+than deferring it. `useAutosave` exposes `flushPendingSave()` (awaited by
+`switchTimeline` before it loads, and run on unmount) so the outgoing timeline's last
+≤2 s of edits commit instead of being overwritten by the incoming timeline's
+snapshot. `cancelPendingSave()` is correct only when the target row is going away —
+`handleDeleteTimeline` calls it, since flushing there would re-insert the events it
+just deleted.
+
+### Entering the editor
+
+`/editor` → `/editor` does not remount `App`, so the route-state effect latches on
+`location.key` rather than a once-per-mount boolean. A boolean made every navigation
+after the first a silent no-op, which is what broke "Create a Timeline", "Import
+Data", and a second hand-off from AI mode. Both the route-state effect and the
+no-route-state bootstrap are gated on `authReady` from `AuthContext` — `user` is null
+both before the session lookup answers and when genuinely signed out, so without the
+gate a hard refresh ran the logged-out draft path first and cleared `location.state`
+before the signed-in path could read it. `editorSeededRef` keeps the two paths from
+both claiming the same mount.
 
 ### Local draft
 
@@ -738,9 +785,9 @@ Hooks consumed (directly or via composition) by the timeline page.
 | Hook | File | Purpose |
 |---|---|---|
 | `useTimelineState` | `hooks/useTimelineState.ts` | Composes events, title, categories, scale, and groupByCategory into a single state hook |
-| `useTimeline` | `hooks/useTimeline.ts` | Loads / creates / saves the timeline record from Supabase; enforces plan limits before creation |
+| `useTimeline` | `hooks/useTimeline.ts` | Loads / creates timeline records in Supabase; enforces plan limits before creation. Stateless by design — returns ids rather than holding a "current timeline" pointer |
 | `useEvents` | `hooks/useEvents.ts` | Local event CRUD (add, update, batch-add with dedup, clear) |
-| `useAutosave` | `hooks/useAutosave.ts` | Debounced persistence (2000 ms), beforeunload guard, online retry |
+| `useAutosave` | `hooks/useAutosave.ts` | Debounced persistence (2000 ms), flush/cancel controls, beforeunload guard, online retry |
 | `useTimelineScale` | `hooks/useTimelineScale.ts` | Scale toggle (`large` / `medium` / `small`) + current `TimelineScale` |
 | `useTimelineTitle` | `hooks/useTimelineTitle.ts` | Title and description state |
 | `useCategories` | `hooks/useCategories.ts` | Category config state with `DEFAULT_CATEGORIES` fallback |
@@ -751,4 +798,4 @@ Hooks consumed (directly or via composition) by the timeline page.
 | `useTimelines` | `hooks/useTimelines.ts` | List of the user's timelines with realtime subscription and retry-with-backoff |
 | `useTimelineMetadata` | `hooks/useTimelineMetadata.ts` | Per-timeline event count, year range, and dominant category color (for timeline cards) |
 | `useSidePanel` | `hooks/useSidePanel.ts` | Accesses `SidePanelContext` (open/close state for the event details side panel) |
-| `useAuth` | `hooks/useAuth.ts` | Accesses `AuthContext` (current user) |
+| `useAuth` | `hooks/useAuth.ts` | Accesses `AuthContext` (current user, plus `authReady` — whether the session lookup has answered yet) |

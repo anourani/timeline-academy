@@ -71,7 +71,14 @@ export async function saveTimelineEvents(
     .filter(e => !clientIds.has(e.id))
     .map(e => e.id);
 
-  // 3. Execute operations: UPDATE first, then DELETE, then INSERT
+  // 3. Execute operations: UPDATE, then INSERT, then DELETE.
+  //
+  // INSERT must precede DELETE. These are separate HTTP calls, not one
+  // transaction, so a DELETE that runs first commits on its own. If the caller
+  // ever hands us a client array belonging to a *different* timeline, those
+  // events carry ids that already exist, the INSERT fails 23505 — and running
+  // it first means it fails before anything has been deleted. Deleting first
+  // would empty the timeline and then fail, which is unrecoverable.
 
   // Updates — Supabase doesn't support batch update by different IDs,
   // so we issue individual upserts for changed rows.
@@ -89,17 +96,6 @@ export async function saveTimelineEvents(
         sources: event.sources ?? null,
       })
       .eq('id', event.id)
-      .eq('timeline_id', timelineId);
-
-    if (error) throw error;
-  }
-
-  // Deletes
-  if (toDeleteIds.length > 0) {
-    const { error } = await supabase
-      .from('events')
-      .delete()
-      .in('id', toDeleteIds)
       .eq('timeline_id', timelineId);
 
     if (error) throw error;
@@ -123,6 +119,17 @@ export async function saveTimelineEvents(
           sources: event.sources ?? null,
         }))
       );
+
+    if (error) throw error;
+  }
+
+  // Deletes
+  if (toDeleteIds.length > 0) {
+    const { error } = await supabase
+      .from('events')
+      .delete()
+      .in('id', toDeleteIds)
+      .eq('timeline_id', timelineId);
 
     if (error) throw error;
   }

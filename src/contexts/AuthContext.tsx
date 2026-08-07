@@ -5,6 +5,13 @@ import { clearAllCachedEvents } from '../services/viewerEventCache';
 
 interface AuthContextType {
   user: User | null;
+  /**
+   * False until the initial session lookup has answered. `user` is null both
+   * before we know and when the user is genuinely signed out, so consumers that
+   * branch on signed-in vs signed-out must wait for this — otherwise they run
+   * their logged-out path on every full page load.
+   */
+  authReady: boolean;
   signInWithEmail: (email: string) => Promise<void>;
   verifyEmailOtp: (email: string, token: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -14,6 +21,7 @@ export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState(false);
 
   const signOut = useCallback(async () => {
     try {
@@ -46,9 +54,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) {
         console.error('Error getting session:', error);
         handleAuthError(error);
+        // Still "ready" — we asked and got an answer, even a failed one.
+        // Leaving this false would hang every consumer forever.
+        setAuthReady(true);
         return;
       }
       setUser(session?.user ?? null);
+      setAuthReady(true);
     });
 
     // Listen for auth changes
@@ -60,6 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setUser(session?.user ?? null);
       }
+      setAuthReady(true);
     });
 
     return () => subscription.unsubscribe();
@@ -82,7 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [handleAuthError]);
 
   return (
-    <AuthContext.Provider value={{ user, signInWithEmail, verifyEmailOtp, signOut }}>
+    <AuthContext.Provider value={{ user, authReady, signInWithEmail, verifyEmailOtp, signOut }}>
       {children}
     </AuthContext.Provider>
   );
