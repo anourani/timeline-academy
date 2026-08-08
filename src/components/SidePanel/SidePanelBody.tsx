@@ -554,8 +554,8 @@ export function SidePanelBody() {
 
       {/* Creation actions */}
       <div className="flex flex-col p-3 shrink-0">
-        <SidePanelActionButton icon={Telescope} label="Discover a Timeline" onClick={handleBuildWithAI} />
-        <SidePanelActionButton icon={CirclePlus} label="Create a Timeline" onClick={handleBuildFromScratch} />
+        <SidePanelActionButton icon={Telescope} label="AI Timeline" onClick={handleBuildWithAI} />
+        <SidePanelActionButton icon={CirclePlus} label="New Timeline" onClick={handleBuildFromScratch} />
         <SidePanelActionButton icon={FileSpreadsheet} label="Import Data" onClick={handleImportData} />
         <SidePanelActionButton icon={Download} label="Download Template" onClick={handleDownloadTemplate} />
       </div>
