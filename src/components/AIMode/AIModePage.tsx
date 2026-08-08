@@ -15,6 +15,7 @@ export function AIModePage() {
     isGenerating,
     isClassifying,
     classifiedType,
+    categoryLabels,
     error,
     classifyAndGenerate,
     abort,
@@ -83,6 +84,7 @@ export function AIModePage() {
         isGenerating={isGenerating}
         isClassifying={isClassifying}
         classifiedType={classifiedType}
+        categoryLabels={categoryLabels}
         error={error}
       />
       <ApiKeyModal
