@@ -1,11 +1,9 @@
 import { useState } from 'react'
-import { useAuth } from '@/hooks/useAuth'
 import { useAccountTier } from '@/hooks/useAccountTier'
 import { useEventUsage } from '@/hooks/useEventUsage'
 import { useSidePanel } from '@/hooks/useSidePanel'
 import { AuthModal } from '@/components/Auth/AuthModal'
 import { ApiKeyModal } from '@/components/Modal/ApiKeyModal'
-import { getAccountDisplayName } from '@/utils/displayName'
 import { PLAN_LIMITS } from '@/constants/plans'
 import type { AccountTier } from '@/hooks/useAccountTier'
 
@@ -21,7 +19,6 @@ const COL_HEADER_CLASS =
   "font-['Avenir',sans-serif] text-[12px] leading-[140%] font-medium text-[#9B9EA3]"
 
 export function UsageLimits() {
-  const { user } = useAuth()
   const tier = useAccountTier()
   const { eventCount, timelineCount } = useEventUsage()
   const { onOpenSettings } = useSidePanel()
@@ -157,7 +154,7 @@ export function UsageLimits() {
               ) : (
                 <>
                   <TierRow
-                    label={getAccountDisplayName(user)}
+                    label="Your Account"
                     timelineCap={freeCaps.timelineLimit}
                     eventCap={freeCaps.eventLimit}
                     variant="highlighted"
