@@ -229,8 +229,12 @@ function renderHeaderCta({
  *
  * Not a TierRow and not a stat tile: this visitor has no plan, no caps and no
  * saved timeline list, and dressing the state up as a row in the tier table
- * would imply all three. Renders nothing at all until they have actually made
- * something, so a first-time visitor's panel looks exactly as it did before.
+ * would imply all three.
+ *
+ * It does still always render, though — this is the only way in to sign-in or
+ * BYOK from the side panel, and the whole tier table it replaced carried those
+ * two calls to action. Hiding it until the visitor had made something left a
+ * first-time visitor with no way to log in at all.
  */
 function TrialStatus({
   eventCount,
@@ -241,19 +245,22 @@ function TrialStatus({
   onLogIn: () => void
   onAddKey: () => void
 }) {
-  if (eventCount === 0) return null
-
   const linkClass =
     "font-['Avenir',sans-serif] text-[12px] leading-[18px] font-normal underline text-text-secondary hover:text-text-primary transition-colors"
+  const hasWork = eventCount > 0
 
   return (
     <div className="px-3 pb-2.5">
       <div className="bg-[#0A0A0A] rounded-[8px] py-3 px-4 flex flex-col gap-1.5">
         <span className={STAT_TILE_LABEL_CLASS}>
-          {eventCount} event{eventCount === 1 ? '' : 's'} · not saved
+          {hasWork
+            ? `${eventCount} event${eventCount === 1 ? '' : 's'} · not saved`
+            : 'Nothing saved yet'}
         </span>
         <span className="font-['Avenir',sans-serif] text-[12px] leading-[16px] text-[#6b6e73]">
-          This timeline lives in this tab only.{' '}
+          {hasWork
+            ? 'This timeline lives in this tab only. '
+            : 'Timelines you build stay in this tab. '}
           <button type="button" onClick={onLogIn} className={linkClass}>
             Log in
           </button>{' '}
@@ -261,7 +268,7 @@ function TrialStatus({
           <button type="button" onClick={onAddKey} className={linkClass}>
             add an API key
           </button>{' '}
-          to keep it.
+          {hasWork ? 'to keep it.' : 'to keep them.'}
         </span>
       </div>
     </div>
