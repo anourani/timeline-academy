@@ -18,19 +18,15 @@ export function ApiKeySection({ defaultExpanded = false }: ApiKeySectionProps) {
   const [draft, setDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
 
-  if (!user) {
-    return (
-      <div className="flex flex-col gap-2.5">
-        <span className="label-m-type2 text-[#9B9EA3]">AI Settings</span>
-        <div className="h-px bg-[#262626] w-full" />
-        <p className="body-m text-[#c9ced4] m-0">
-          Log in to add an Anthropic API key for unlimited AI generation.
-        </p>
-      </div>
-    )
-  }
-
-  const status: 'byok' | 'server' = key ? 'byok' : 'server'
+  // Three states, not two. A key always wins, signed in or not — that's how the
+  // AI routing itself decides. Without one, whether there's a fallback depends
+  // on having an account: server-funded generation requires a JWT, so telling a
+  // signed-out visitor they're "using our server" would be plainly false.
+  //
+  // This section used to bail out entirely when signed out, which left the
+  // account-free byok-anon tier with no way to see, replace or remove the key
+  // it is defined by.
+  const status: 'byok' | 'server' | 'none' = key ? 'byok' : user ? 'server' : 'none'
 
   const startEdit = () => {
     setDraft('')
@@ -144,7 +140,7 @@ export function ApiKeySection({ defaultExpanded = false }: ApiKeySectionProps) {
 function StatusPill({
   status,
 }: {
-  status: 'byok' | 'server'
+  status: 'byok' | 'server' | 'none'
 }) {
   const config = {
     byok: {
@@ -155,6 +151,11 @@ function StatusPill({
     server: {
       label: "Using Timeline Academy's server (5/day)",
       dot: '#9B9EA3',
+      text: '#9B9EA3',
+    },
+    none: {
+      label: 'AI is off — add a key or log in',
+      dot: '#6b6e73',
       text: '#9B9EA3',
     },
   }[status]

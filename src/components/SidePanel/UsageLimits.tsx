@@ -1,14 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { useAuth } from '@/hooks/useAuth'
+import { useAccountTier } from '@/hooks/useAccountTier'
 import { useEventUsage } from '@/hooks/useEventUsage'
 import { useSidePanel } from '@/hooks/useSidePanel'
-import { useAnthropicKey } from '@/services/userApiKey'
 import { AuthModal } from '@/components/Auth/AuthModal'
 import { ApiKeyModal } from '@/components/Modal/ApiKeyModal'
 import { getAccountDisplayName } from '@/utils/displayName'
 import { PLAN_LIMITS } from '@/constants/plans'
-
-type TierState = 'guest' | 'free' | 'byok'
+import type { AccountTier } from '@/hooks/useAccountTier'
 
 const STAT_TILE_LABEL_CLASS =
   "font-['Avenir',sans-serif] text-[12px] leading-[140%] font-medium text-[#9B9EA3]"
@@ -23,36 +22,22 @@ const COL_HEADER_CLASS =
 
 export function UsageLimits() {
   const { user } = useAuth()
-  const apiKey = useAnthropicKey()
+  const tier = useAccountTier()
   const { eventCount, timelineCount } = useEventUsage()
   const { onOpenSettings } = useSidePanel()
 
-  const tierState: TierState = !user ? 'guest' : apiKey ? 'byok' : 'free'
-
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [showApiKeyModal, setShowApiKeyModal] = useState(false)
-  const pendingApiKeyModalRef = useRef(false)
-
-  // Guest "Add API Key" gated flow: open AuthModal first, then ApiKeyModal
-  // automatically once the user is signed in.
-  useEffect(() => {
-    if (user && pendingApiKeyModalRef.current) {
-      pendingApiKeyModalRef.current = false
-      setShowApiKeyModal(true)
-    }
-  }, [user])
 
   function handleLogIn() {
-    pendingApiKeyModalRef.current = false
     setShowAuthModal(true)
   }
 
-  function handleAddApiKeyAsGuest() {
-    pendingApiKeyModalRef.current = true
-    setShowAuthModal(true)
-  }
-
-  function handleAddApiKeyAsUser() {
+  // Opens the key modal directly, for signed-in and signed-out alike. This used
+  // to route a signed-out visitor through AuthModal first and only then show
+  // the key field, which made byok-anon — an account-free tier — unreachable
+  // from the one panel that advertises it.
+  function handleAddApiKey() {
     setShowApiKeyModal(true)
   }
 
@@ -60,34 +45,48 @@ export function UsageLimits() {
     onOpenSettings()
   }
 
-  function handleAuthModalClose() {
-    if (!user) pendingApiKeyModalRef.current = false
-    setShowAuthModal(false)
-  }
-
   // Caps for the table — pulled from PLAN_LIMITS so this stays in sync with
   // the data layer without depending on the resolver's current value.
-  const guestCaps = PLAN_LIMITS['byok-anon']
+  const byokAnonCaps = PLAN_LIMITS['byok-anon']
   const freeCaps = PLAN_LIMITS.free
   const byokCaps = PLAN_LIMITS.byok
 
-  const timelineCap =
-    tierState === 'guest'
-      ? guestCaps.timelineLimit
-      : tierState === 'free'
-        ? freeCaps.timelineLimit
-        : byokCaps.timelineLimit
-  const eventCap =
-    tierState === 'guest'
-      ? guestCaps.eventLimit
-      : tierState === 'free'
-        ? freeCaps.eventLimit
-        : byokCaps.eventLimit
+  // The trial has no plan and no numbers to show. Until it holds something
+  // there is nothing worth saying at all, so the card renders as a single line
+  // rather than a tier table someone hasn't opted into yet.
+  if (tier === 'loading') return null
+
+  if (tier === 'trial') {
+    return (
+      <>
+        <TrialStatus
+          eventCount={eventCount}
+          onLogIn={handleLogIn}
+          onAddKey={handleAddApiKey}
+        />
+        <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} />
+        <ApiKeyModal
+          isOpen={showApiKeyModal}
+          onClose={() => setShowApiKeyModal(false)}
+          onKeySaved={() => setShowApiKeyModal(false)}
+          onRequestSignIn={() => {
+            setShowApiKeyModal(false)
+            setShowAuthModal(true)
+          }}
+        />
+      </>
+    )
+  }
+
+  const currentCaps =
+    tier === 'byok-anon' ? byokAnonCaps : tier === 'free' ? freeCaps : byokCaps
+  const timelineCap = currentCaps.timelineLimit
+  const eventCap = currentCaps.eventLimit
 
   const headerCta = renderHeaderCta({
-    tierState,
+    tier,
     onLogIn: handleLogIn,
-    onAddKey: handleAddApiKeyAsUser,
+    onAddKey: handleAddApiKey,
     onManageKey: handleManageApiKey,
   })
 
@@ -112,16 +111,16 @@ export function UsageLimits() {
             <StatTile
               label="Events"
               value={
-                tierState === 'byok'
+                tier === 'byok'
                   ? '♾️'
                   : `${eventCount}/${eventCap ?? ''}`
               }
-              ariaLabel={tierState === 'byok' ? 'unlimited' : undefined}
+              ariaLabel={tier === 'byok' ? 'unlimited' : undefined}
             />
           </div>
 
           {/* Tier table — hidden in BYOK state */}
-          {tierState !== 'byok' && (
+          {tier !== 'byok' && (
             <div className="flex flex-col items-start w-full">
               {/* Column header */}
               <div className="flex flex-row justify-between items-center px-2 py-1 gap-1 w-full">
@@ -136,27 +135,23 @@ export function UsageLimits() {
                 </div>
               </div>
 
-              {tierState === 'guest' ? (
+              {tier === 'byok-anon' ? (
                 <>
                   <TierRow
-                    label="Guest"
-                    timelineCap={guestCaps.timelineLimit}
-                    eventCap={guestCaps.eventLimit}
+                    label="Your API key"
+                    timelineCap={byokAnonCaps.timelineLimit}
+                    eventCap={byokAnonCaps.eventLimit}
                     variant="highlighted"
                   />
+                  {/* Signing in from here lands on byok, not free — the key is
+                      already in hand, so projecting the free caps would
+                      understate what logging in actually gets you. */}
                   <TierRow
                     label="Log In"
-                    timelineCap={freeCaps.timelineLimit}
-                    eventCap={freeCaps.eventLimit}
-                    variant="subtle"
-                    onClick={handleLogIn}
-                  />
-                  <TierRow
-                    label="Add API Key"
                     timelineCap={byokCaps.timelineLimit}
                     eventCap="Unlimited"
-                    variant="link"
-                    onClick={handleAddApiKeyAsGuest}
+                    variant="subtle"
+                    onClick={handleLogIn}
                   />
                 </>
               ) : (
@@ -172,7 +167,7 @@ export function UsageLimits() {
                     timelineCap={byokCaps.timelineLimit}
                     eventCap="Unlimited"
                     variant="link"
-                    onClick={handleAddApiKeyAsUser}
+                    onClick={handleAddApiKey}
                   />
                 </>
               )}
@@ -181,7 +176,7 @@ export function UsageLimits() {
         </div>
       </div>
 
-      <AuthModal isOpen={showAuthModal} onClose={handleAuthModalClose} />
+      <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} />
       <ApiKeyModal
         isOpen={showApiKeyModal}
         onClose={() => setShowApiKeyModal(false)}
@@ -196,26 +191,26 @@ export function UsageLimits() {
 }
 
 function renderHeaderCta({
-  tierState,
+  tier,
   onLogIn,
   onAddKey,
   onManageKey,
 }: {
-  tierState: TierState
+  tier: AccountTier
   onLogIn: () => void
   onAddKey: () => void
   onManageKey: () => void
 }) {
   const baseClass =
     "font-['Avenir',sans-serif] text-[12px] leading-[18px] font-normal underline text-text-secondary hover:text-text-primary transition-colors"
-  if (tierState === 'guest') {
+  if (tier === 'byok-anon') {
     return (
       <button type="button" onClick={onLogIn} className={baseClass}>
         Log In
       </button>
     )
   }
-  if (tierState === 'free') {
+  if (tier === 'free') {
     return (
       <button type="button" onClick={onAddKey} className={baseClass}>
         Add API Key
@@ -226,6 +221,50 @@ function renderHeaderCta({
     <button type="button" onClick={onManageKey} className={baseClass}>
       API Key Connected
     </button>
+  )
+}
+
+/**
+ * The trial's entire presence in this panel.
+ *
+ * Not a TierRow and not a stat tile: this visitor has no plan, no caps and no
+ * saved timeline list, and dressing the state up as a row in the tier table
+ * would imply all three. Renders nothing at all until they have actually made
+ * something, so a first-time visitor's panel looks exactly as it did before.
+ */
+function TrialStatus({
+  eventCount,
+  onLogIn,
+  onAddKey,
+}: {
+  eventCount: number
+  onLogIn: () => void
+  onAddKey: () => void
+}) {
+  if (eventCount === 0) return null
+
+  const linkClass =
+    "font-['Avenir',sans-serif] text-[12px] leading-[18px] font-normal underline text-text-secondary hover:text-text-primary transition-colors"
+
+  return (
+    <div className="px-3 pb-2.5">
+      <div className="bg-[#0A0A0A] rounded-[8px] py-3 px-4 flex flex-col gap-1.5">
+        <span className={STAT_TILE_LABEL_CLASS}>
+          {eventCount} event{eventCount === 1 ? '' : 's'} · not saved
+        </span>
+        <span className="font-['Avenir',sans-serif] text-[12px] leading-[16px] text-[#6b6e73]">
+          This timeline lives in this tab only.{' '}
+          <button type="button" onClick={onLogIn} className={linkClass}>
+            Log in
+          </button>{' '}
+          or{' '}
+          <button type="button" onClick={onAddKey} className={linkClass}>
+            add an API key
+          </button>{' '}
+          to keep it.
+        </span>
+      </div>
+    </div>
   )
 }
 

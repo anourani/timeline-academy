@@ -342,6 +342,25 @@ export function App() {
     };
   }, [flushDraftSave]);
 
+  // Warn a trial visitor before the tab takes their work with it.
+  //
+  // Only trial: sessionStorage dies with the tab, so this is the one state
+  // where closing it actually destroys something. byok-anon's drafts and a
+  // signed-in user's timelines are both still there afterwards.
+  //
+  // The generic browser dialog is the whole ceiling here — `beforeunload`
+  // cannot show custom UI, so offering to sign in at this point isn't
+  // possible; the gate covers the moment that can be handled properly.
+  useEffect(() => {
+    if (tier !== 'trial' || events.length === 0) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [tier, events.length]);
+
   // Save to the browser store when logged out.
   //
   // Held off until reconciliation settles: mid-migration the store this writes

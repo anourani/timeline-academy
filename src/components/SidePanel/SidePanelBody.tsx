@@ -14,6 +14,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+import { useAccountTier } from '@/hooks/useAccountTier'
 import { useSidePanel } from '@/hooks/useSidePanel'
 import { useTimelines } from '@/hooks/useTimelines'
 import { useTimelineMetadata } from '@/hooks/useTimelineMetadata'
@@ -152,6 +153,7 @@ function TileMenuButton({
 export function SidePanelBody() {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const tier = useAccountTier()
   const { isOpen, close, onTimelineSelect, onDraftSelect, setRefreshTimelines, activeTimelineId, activeDraftId, activeTimelineTitle, activeEventCount, activeDominantCategoryColor } = useSidePanel()
   const { timelines, isLoading, error, loadTimelines } = useTimelines()
   const [localDrafts, setLocalDrafts] = useState<LocalDraft[]>([])
@@ -172,12 +174,16 @@ export function SidePanelBody() {
   // where the new tile should have been. Signed-in users get this for free from
   // the realtime channel; guests have no equivalent.
   useEffect(() => {
-    if (!user) {
+    // byok-anon only. A trial visitor's single timeline lives in sessionStorage
+    // and is intentionally absent from this list: it has no saved existence to
+    // list, and every affordance on a tile (share, duplicate, export, delete)
+    // either can't work or doesn't mean anything for one ephemeral item.
+    if (tier === 'byok-anon') {
       setLocalDrafts(byokAnonDraftStore.getAllDrafts())
     } else {
       setLocalDrafts([])
     }
-  }, [user, isOpen, activeDraftId])
+  }, [tier, isOpen, activeDraftId])
 
   // Re-read whenever the draft store is written, so a guest's edit reorders
   // the list as it happens rather than sitting still and then snapping the next
@@ -185,11 +191,11 @@ export function SidePanelBody() {
   // debounce — and an immediate re-read wouldn't work anyway, since the write
   // is what it needs to observe.
   useEffect(() => {
-    if (user) return
+    if (tier !== 'byok-anon') return
     const reread = () => setLocalDrafts(byokAnonDraftStore.getAllDrafts())
     window.addEventListener(DRAFTS_CHANGED_EVENT, reread)
     return () => window.removeEventListener(DRAFTS_CHANGED_EVENT, reread)
-  }, [user])
+  }, [tier])
 
   // Freshen the list when the panel opens so the tile labels reflect any
   // recent edits that haven't come through the realtime channel yet.
@@ -205,7 +211,12 @@ export function SidePanelBody() {
     // Guests need this at least as much as signed-in users: their draft is
     // written to localStorage by the editor, and the read above can easily lose
     // the race with it.
-    const activeId = user ? activeTimelineId : activeDraftId
+    //
+    // Trial is excluded on purpose. `activeDraftId` is set for them too, so
+    // without the tier check this fallback would synthesize the very tile the
+    // list above deliberately leaves out — and it would be the only row there,
+    // implying a saved timeline that doesn't exist.
+    const activeId = user ? activeTimelineId : tier === 'byok-anon' ? activeDraftId : null
     const activeKind = user ? ('timeline' as const) : ('draft' as const)
     const hasActiveRow = !!(activeId && baseRows.some(r => r.kind === activeKind && r.id === activeId))
     if (!hasActiveRow && activeId) {
@@ -221,7 +232,7 @@ export function SidePanelBody() {
       ]
     }
     return baseRows
-  }, [user, timelines, localDrafts, activeTimelineId, activeDraftId, activeTimelineTitle])
+  }, [user, tier, timelines, localDrafts, activeTimelineId, activeDraftId, activeTimelineTitle])
 
   const timelineIds = useMemo(
     () => rows.filter(r => r.kind === 'timeline').map(r => r.id),
