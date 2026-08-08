@@ -8,7 +8,7 @@ import { SCALES } from '../../constants/scales';
 import { VERTICAL_SCALES } from '../../constants/verticalScales';
 import { DEFAULT_CATEGORIES } from '../../constants/categories';
 import { TimelineEvent, CategoryConfig } from '../../types/event';
-import { getDraft } from '../../utils/draftStorage';
+import { byokAnonDraftStore } from '../../utils/draftStorage';
 import {
   getCachedEvent,
   setCachedEvent,
@@ -44,7 +44,7 @@ export function TimelineViewer() {
       if (timelineId === 'local') {
         try {
           const draftId = searchParams.get('draftId');
-          const draft = draftId ? getDraft(draftId) : null;
+          const draft = draftId ? byokAnonDraftStore.getDraft(draftId) : null;
           if (!draft) {
             setError('No local draft found');
             setLoading(false);

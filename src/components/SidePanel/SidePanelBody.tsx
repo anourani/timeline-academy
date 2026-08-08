@@ -24,10 +24,7 @@ import { ImportCSVModal } from '@/components/AIMode/ImportCSVModal'
 import { AuthModal } from '@/components/Auth/AuthModal'
 import { DEFAULT_TIMELINE_TITLE } from '@/constants/defaults'
 import {
-  getAllDrafts,
-  getDraft,
-  saveDraft,
-  deleteDraft as deleteLocalDraft,
+  byokAnonDraftStore,
   DRAFTS_CHANGED_EVENT,
   MAX_DRAFTS,
   type LocalDraft,
@@ -176,7 +173,7 @@ export function SidePanelBody() {
   // the realtime channel; guests have no equivalent.
   useEffect(() => {
     if (!user) {
-      setLocalDrafts(getAllDrafts())
+      setLocalDrafts(byokAnonDraftStore.getAllDrafts())
     } else {
       setLocalDrafts([])
     }
@@ -189,7 +186,7 @@ export function SidePanelBody() {
   // is what it needs to observe.
   useEffect(() => {
     if (user) return
-    const reread = () => setLocalDrafts(getAllDrafts())
+    const reread = () => setLocalDrafts(byokAnonDraftStore.getAllDrafts())
     window.addEventListener(DRAFTS_CHANGED_EVENT, reread)
     return () => window.removeEventListener(DRAFTS_CHANGED_EVENT, reread)
   }, [user])
@@ -302,7 +299,7 @@ export function SidePanelBody() {
     try {
       const title = row.title || DEFAULT_TIMELINE_TITLE
       if (row.kind === 'draft') {
-        const draft = getDraft(row.id)
+        const draft = byokAnonDraftStore.getDraft(row.id)
         if (!draft) {
           alert('Could not find draft to export.')
           return
@@ -345,8 +342,8 @@ export function SidePanelBody() {
         if (deleteError) throw deleteError
         loadTimelines()
       } else {
-        deleteLocalDraft(pendingDeleteId)
-        setLocalDrafts(getAllDrafts())
+        byokAnonDraftStore.deleteDraft(pendingDeleteId)
+        setLocalDrafts(byokAnonDraftStore.getAllDrafts())
       }
       // If the user just deleted the timeline/draft they were viewing in the
       // editor, land them back on home instead of leaving the deleted content
@@ -458,12 +455,12 @@ export function SidePanelBody() {
 
   const handleDuplicate = async (row: TileRow) => {
     if (row.kind === 'draft') {
-      const original = getDraft(row.id)
+      const original = byokAnonDraftStore.getDraft(row.id)
       if (!original) {
         alert('Could not find draft to duplicate.')
         return
       }
-      if (getAllDrafts().length >= MAX_DRAFTS) {
+      if (byokAnonDraftStore.getAllDrafts().length >= MAX_DRAFTS) {
         alert('Draft limit reached. Sign in to save more timelines.')
         return
       }
@@ -473,8 +470,8 @@ export function SidePanelBody() {
         title: `${original.title} (Copy)`,
         savedAt: new Date().toISOString(),
       }
-      saveDraft(clone)
-      setLocalDrafts(getAllDrafts())
+      byokAnonDraftStore.saveDraft(clone)
+      setLocalDrafts(byokAnonDraftStore.getAllDrafts())
       return
     }
 

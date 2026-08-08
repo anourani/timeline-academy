@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
+import { useAccountTier } from '@/hooks/useAccountTier'
 import { getCurrentLimits } from '@/lib/limits'
-import { getAllDrafts } from '@/utils/draftStorage'
+import { byokAnonDraftStore, trialDraftStore, type DraftStore } from '@/utils/draftStorage'
 
 interface EventUsage {
   eventCount: number
@@ -13,22 +14,29 @@ interface EventUsage {
   refetch: () => Promise<void>
 }
 
-function getLocalDraftUsage(): { eventCount: number; timelineCount: number } {
-  const drafts = getAllDrafts()
+function getLocalDraftUsage(store: DraftStore): { eventCount: number; timelineCount: number } {
+  const drafts = store.getAllDrafts()
   const eventCount = drafts.reduce((sum, d) => sum + d.events.length, 0)
   return { eventCount, timelineCount: drafts.length }
 }
 
 export function useEventUsage(): EventUsage {
   const { user } = useAuth()
-  const { eventLimit, timelineLimit } = getCurrentLimits()
+  const tier = useAccountTier()
+  // The trial has nothing to enforce — one sessionStorage timeline that costs
+  // nothing and vanishes with the tab. `null` is this codebase's existing
+  // spelling of "no limit" (see isOverEventLimit), so callers need no new case.
+  const { eventLimit, timelineLimit } = tier === 'trial'
+    ? { eventLimit: null, timelineLimit: null }
+    : getCurrentLimits()
+  const localStore = tier === 'trial' ? trialDraftStore : byokAnonDraftStore
   const [eventCount, setEventCount] = useState(0)
   const [timelineCount, setTimelineCount] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
 
   const refetch = useCallback(async () => {
     if (!user) {
-      const local = getLocalDraftUsage()
+      const local = getLocalDraftUsage(localStore)
       setEventCount(local.eventCount)
       setTimelineCount(local.timelineCount)
       setIsLoading(false)
@@ -51,16 +59,16 @@ export function useEventUsage(): EventUsage {
     } finally {
       setIsLoading(false)
     }
-  }, [user])
+  }, [user, localStore])
 
   useEffect(() => {
     refetch()
 
     if (!user) {
-      // For logged-out users, poll localStorage every 2s so the counter
+      // For logged-out users, poll the browser store every 2s so the counter
       // stays in sync as the user adds/removes events in drafts.
       const interval = setInterval(() => {
-        const local = getLocalDraftUsage()
+        const local = getLocalDraftUsage(localStore)
         setEventCount(local.eventCount)
         setTimelineCount(local.timelineCount)
       }, 2000)
@@ -93,7 +101,7 @@ export function useEventUsage(): EventUsage {
       supabase.removeChannel(eventsChannel)
       supabase.removeChannel(timelinesChannel)
     }
-  }, [user, refetch])
+  }, [user, refetch, localStore])
 
   return { eventCount, eventLimit, timelineCount, timelineLimit, isLoading, refetch }
 }

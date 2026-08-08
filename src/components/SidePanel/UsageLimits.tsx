@@ -67,7 +67,7 @@ export function UsageLimits() {
 
   // Caps for the table — pulled from PLAN_LIMITS so this stays in sync with
   // the data layer without depending on the resolver's current value.
-  const guestCaps = PLAN_LIMITS.guest
+  const guestCaps = PLAN_LIMITS['byok-anon']
   const freeCaps = PLAN_LIMITS.free
   const byokCaps = PLAN_LIMITS.byok
 

@@ -19,12 +19,18 @@ export class LimitReachedError extends Error {
 // and the 'byok:changed' event dispatched from userApiKey.ts. Stays sync
 // for callers; the cache may lag by one frame after auth/key transitions,
 // but the next render after the listener fires corrects it.
-let cachedPlan: Plan = 'guest'
+//
+// Deliberately resolves only the three *durable* plans — the ephemeral trial
+// state is not represented here. Everything downstream of this module either
+// runs signed-in only (useTimeline, useAIMode) or wants byok-anon's numbers;
+// the one place that needs to say "limits don't apply" is useEventUsage, which
+// asks useAccountTier() directly rather than routing through this cache.
+let cachedPlan: Plan = 'byok-anon'
 
 async function refreshPlan(): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
-    cachedPlan = 'guest'
+    cachedPlan = 'byok-anon'
     return
   }
   cachedPlan = getAnthropicKey() ? 'byok' : 'free'
