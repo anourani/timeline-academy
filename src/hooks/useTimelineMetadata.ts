@@ -64,9 +64,14 @@ export function useTimelineMetadata(timelineIds: string[]) {
   }, []);
 
   useEffect(() => {
-    // `nonce` is part of the key so refresh() forces a fetch the id-set check
+    // Keyed on the *set* of ids, so the ids are sorted first — the list itself
+    // re-sorts whenever a timeline is edited, and an order-sensitive key would
+    // turn every reorder into two needless queries plus a full map replacement
+    // that discards the write-through values applyLocalMetadata just put there.
+    //
+    // `nonce` is part of the key so refresh() forces a fetch the set check
     // would otherwise skip.
-    const fetchKey = `${nonce}:${JSON.stringify(timelineIds)}`;
+    const fetchKey = `${nonce}:${[...timelineIds].sort().join(',')}`;
     if (fetchKey === prevFetchKeyRef.current) return;
     // Latched up front so `timelineIds` identity churn doesn't re-fire the
     // request; the error path below unlatches it again.

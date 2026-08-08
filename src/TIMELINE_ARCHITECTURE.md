@@ -684,13 +684,53 @@ editor content outside `applyLoadedTimeline` reopens the bug.
 ### Save flow
 
 1. User makes a change (event edit, drag, rename, scale toggle, group toggle, etc.).
-2. `useAutosave.handleChange(data)` sets `saveStatus = 'saving'`, marks `hasUnsavedChanges`, and starts a 2000 ms debounce. `App.tsx` only calls it when `loadedTimelineId` is non-null, so a save can never target a timeline the editor hasn't loaded.
+2. `useAutosave.handleChange(data)` fingerprints the payload and **returns immediately if nothing changed** (see below). Otherwise it sets `saveStatus = 'saving'`, marks `hasUnsavedChanges`, and starts a 2000 ms debounce. `App.tsx` only calls it when `loadedTimelineId` is non-null, so a save can never target a timeline the editor hasn't loaded.
 3. After the debounce fires, `save(data)`:
    - `UPDATE` the `timelines` row (title, description, scale, group_by_category, updated_at).
    - `saveTimelineEvents(timelineId, events)` performs a diff-based sync: classifies each event as INSERT / UPDATE / DELETE relative to the server, then executes UPDATE → INSERT → DELETE. INSERT precedes DELETE deliberately: these are separate HTTP calls, not one transaction, so a mismatched client array fails the INSERT on a duplicate primary key *before* anything has been deleted.
 4. On success: `saveStatus = 'saved'`, `lastSavedTime = now`, `hasUnsavedChanges = false`.
 5. On failure: `saveStatus = 'error'`. A `window.online` listener retries `save(timelineData)` when the browser comes back online.
 6. A `beforeunload` listener fires `e.preventDefault()` while `hasUnsavedChanges` is true, prompting the browser's "leave site?" dialog.
+
+### Dirty tracking — why opening a timeline must not write
+
+`applyLoadedTimeline` sets the exact state the autosave effect watches, so applying
+freshly fetched data used to look identical to a user edit: opening any timeline
+rewrote its row ~2 s later with byte-identical data. Because `timelines.updated_at` is
+the side panel's sort key — and `useAutosave` is its only writer, there is no DB
+trigger — merely *looking* at a timeline moved it to the top of the list. It also ran
+the full `saveTimelineEvents` diff (an events SELECT) and armed the browser's "Leave
+site?" prompt, both for nothing.
+
+`src/utils/timelineFingerprint.ts` provides an **exact serialisation** (never a hash —
+a collision would silently drop a real save) of precisely what each store persists.
+`useAutosave` keeps two refs:
+
+- `intendedRef` — the store holds this, *or* a write for exactly this is armed or in
+  flight. Seeded by `markClean(...)`, which `applyLoadedTimeline` calls before any
+  setter, so a load is born clean.
+- `persistedRef` — a save of exactly this is known to have completed. A backstop for
+  callers that reach `save()` without going through `handleChange`, notably the
+  back-online retry.
+
+**The baseline advances at arm time, not on save success.** This is the subtle part.
+With success-only advancement, typing a character and deleting it inside the debounce
+window reads as clean on the way back — so `handleChange` returns early, the
+already-armed write still carries the intermediate text, and it commits a character the
+user removed with nothing left to reconcile it. Advancing on arm makes the revert
+dirty, which re-arms the debounce with the correct content.
+
+A failed save nulls **both** refs: if the `timelines` UPDATE succeeded and
+`saveTimelineEvents` then threw, the store is partially written and neither ref may
+authorise a skip. The id is part of the fingerprint, so a write armed for the outgoing
+timeline (the user can keep typing during `await loadTimeline`) can never be mistaken
+for the incoming one's baseline.
+
+The guest path does the same thing in `useLocalDraft`, with two differences: the
+baseline **seeds itself from localStorage** via `getDraft(id)` — for a synchronous
+store the honest baseline is the store itself, which avoids needing a hook into all
+five hydration branches — and its fingerprint **includes `categories`**, because
+`LocalDraft` persists them where the `timelines` UPDATE does not.
 
 **Flush, don't cancel.** The debounced call holds a *snapshot* of its arguments, and
 each new call replaces them — so dropping the timer discards the pending write rather
@@ -721,7 +761,8 @@ Four distinct mechanisms keep it honest, and they cover different things:
 
 | Layer | Signed in | Guest |
 |---|---|---|
-| Row set + titles | `useTimelines` realtime on the **`timelines` table** + `loadTimelines()` on panel open | `localDrafts` re-read, keyed on `activeDraftId` |
+| Row set + titles | `useTimelines` realtime on the **`timelines` table** + `loadTimelines()` on panel open | `localDrafts` re-read, keyed on `activeDraftId` *and* on the `DRAFTS_CHANGED_EVENT` the storage layer dispatches after every write |
+| Order | client-side `byUpdatedAtDesc` applied on fetch **and after every realtime merge**, so an edit moves its tile immediately | `getAllDrafts()` sorts by `savedAt`; the change event makes it live |
 | Live values for the open timeline | `activeTimelineTitle` / `activeEventCount` / `activeDominantCategoryColor` pushed from `App` | same — the overrides key off `isActive`, not `row.kind` |
 | Missing-row fallback | synthetic active row in the `rows` memo | same, via `activeDraftId` |
 | Counts + colour dots for *other* rows | `useTimelineMetadata`: write-through + explicit `refresh()` | recomputed from `localDrafts` |
@@ -856,7 +897,7 @@ Hooks consumed (directly or via composition) by the timeline page.
 | `useTimelineState` | `hooks/useTimelineState.ts` | Composes events, title, categories, scale, and groupByCategory into a single state hook |
 | `useTimeline` | `hooks/useTimeline.ts` | Loads / creates timeline records in Supabase; enforces plan limits before creation. Stateless by design — returns ids rather than holding a "current timeline" pointer |
 | `useEvents` | `hooks/useEvents.ts` | Local event CRUD (add, update, batch-add with dedup, clear) |
-| `useAutosave` | `hooks/useAutosave.ts` | Debounced persistence (2000 ms), flush/cancel controls, beforeunload guard, online retry |
+| `useAutosave` | `hooks/useAutosave.ts` | Debounced persistence (2000 ms), fingerprint dirty-check + `markClean`, flush/cancel controls, beforeunload guard, online retry |
 | `useTimelineScale` | `hooks/useTimelineScale.ts` | Scale toggle (`large` / `medium` / `small`) + current `TimelineScale` |
 | `useTimelineTitle` | `hooks/useTimelineTitle.ts` | Title and description state |
 | `useCategories` | `hooks/useCategories.ts` | Category config state with `DEFAULT_CATEGORIES` fallback |

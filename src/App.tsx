@@ -80,7 +80,7 @@ export function App() {
     groupByCategory,
   };
 
-  const { saveStatus, lastSavedTime, handleChange, flushPendingSave, cancelPendingSave } = useAutosave(timelineData);
+  const { saveStatus, lastSavedTime, handleChange, markClean, flushPendingSave, cancelPendingSave } = useAutosave(timelineData);
 
   const handleAddEventClick = () => {
     setActivePanel(null);
@@ -348,19 +348,41 @@ export function App() {
    * this function reopens the desync this exists to prevent.
    */
   const applyLoadedTimeline = useCallback((data: TimelineData) => {
+    // Normalise ONCE and feed the same values to both the setters and
+    // markClean. `useTimeline`'s TimelineData has these optional while
+    // autosave's has them required, and this is where the two meet — if the
+    // baseline were taken from the raw payload while the editor got the
+    // normalised one, every load would look dirty and write itself back.
+    const description = data.description || '';
+    const scale = data.scale || 'medium';
+    const verticalScale = data.verticalScale ?? 'small';
+    const groupByCategory = data.groupByCategory ?? false;
+
+    // First, before any setter, so no ordering of effects can let the autosave
+    // effect see this content while the baseline still describes the last one.
+    markClean({
+      id: data.id,
+      title: data.title,
+      description,
+      events: data.events,
+      scale,
+      verticalScale,
+      groupByCategory,
+    });
+
     setTitle(data.title);
-    setDescription(data.description || '');
+    setDescription(description);
     setEvents(data.events);
     if (data.categories) {
       updateCategories(data.categories);
     } else {
       resetCategories();
     }
-    handleScaleChange(data.scale || 'medium');
-    handleVerticalScaleChange(data.verticalScale ?? 'small');
-    handleGroupByCategoryChange(data.groupByCategory ?? false);
+    handleScaleChange(scale);
+    handleVerticalScaleChange(verticalScale);
+    handleGroupByCategoryChange(groupByCategory);
     setLoadedTimelineId(data.id);
-  }, [setTitle, setDescription, setEvents, updateCategories, resetCategories, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange]);
+  }, [markClean, setTitle, setDescription, setEvents, updateCategories, resetCategories, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange]);
 
   const switchTimeline = useCallback(async (newTimelineId: string) => {
     try {

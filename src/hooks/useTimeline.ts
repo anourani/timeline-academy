@@ -95,9 +95,21 @@ export function useTimeline() {
     if (id === 'new') {
       await checkCreateTimelineLimits(user.id);
 
+      // Write the display defaults explicitly rather than leaning on the
+      // column defaults, which differ ('large' / 'small'). Autosave used to
+      // paper over the mismatch by immediately rewriting the row on open; now
+      // that opening a timeline no longer writes, an untouched new timeline
+      // would keep the column defaults while the editor showed these — and
+      // reopening it would visibly change zoom.
       const { data: newTimeline, error: createError } = await supabase
         .from('timelines')
-        .insert({ title: DEFAULT_TIMELINE_TITLE, user_id: user.id })
+        .insert({
+          title: DEFAULT_TIMELINE_TITLE,
+          user_id: user.id,
+          scale: 'small',
+          vertical_scale: 'medium',
+          group_by_category: false,
+        })
         .select('id')
         .single();
 

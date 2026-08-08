@@ -28,6 +28,7 @@ import {
   getDraft,
   saveDraft,
   deleteDraft as deleteLocalDraft,
+  DRAFTS_CHANGED_EVENT,
   MAX_DRAFTS,
   type LocalDraft,
 } from '@/utils/draftStorage'
@@ -180,6 +181,18 @@ export function SidePanelBody() {
       setLocalDrafts([])
     }
   }, [user, isOpen, activeDraftId])
+
+  // Re-read whenever the draft store is written, so a guest's edit reorders
+  // the list as it happens rather than sitting still and then snapping the next
+  // time they switch drafts. Naturally rate-limited by the 500 ms draft
+  // debounce — and an immediate re-read wouldn't work anyway, since the write
+  // is what it needs to observe.
+  useEffect(() => {
+    if (user) return
+    const reread = () => setLocalDrafts(getAllDrafts())
+    window.addEventListener(DRAFTS_CHANGED_EVENT, reread)
+    return () => window.removeEventListener(DRAFTS_CHANGED_EVENT, reread)
+  }, [user])
 
   // Freshen the list when the panel opens so the tile labels reflect any
   // recent edits that haven't come through the realtime channel yet.
