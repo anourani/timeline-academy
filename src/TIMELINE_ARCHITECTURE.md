@@ -726,11 +726,13 @@ authorise a skip. The id is part of the fingerprint, so a write armed for the ou
 timeline (the user can keep typing during `await loadTimeline`) can never be mistaken
 for the incoming one's baseline.
 
-The guest path does the same thing in `useLocalDraft`, with two differences: the
-baseline **seeds itself from localStorage** via `getDraft(id)` — for a synchronous
+The signed-out path does the same thing in `useLocalDraft`, with two differences: the
+baseline **seeds itself from the store** via `store.getDraft(id)` — for a synchronous
 store the honest baseline is the store itself, which avoids needing a hook into all
 five hydration branches — and its fingerprint **includes `categories`**, because
-`LocalDraft` persists them where the `timelines` UPDATE does not.
+`LocalDraft` persists them where the `timelines` UPDATE does not. The baseline is
+keyed by store as well as id, since the same draft id exists in both stores across a
+migration and a baseline taken against one says nothing about the other.
 
 **Flush, don't cancel.** The debounced call holds a *snapshot* of its arguments, and
 each new call replaces them — so dropping the timer discards the pending write rather
@@ -795,14 +797,75 @@ Deleting from this tab works because `refreshTimelines()` is called explicitly.
 
 ### Local draft
 
-Guests get localStorage drafts rather than Supabase rows — one key,
-`timeline_drafts`, capped at `MAX_DRAFTS = 3` (`PLAN_LIMITS.guest.timelineLimit`).
-"Create a Timeline" branches on sign-in state in `SidePanelBody.handleBuildFromScratch`
-and sends guests `{newTimeline, skipCreationScreen}`, which only the logged-out
-hydration effect in `App.tsx` consumes — a fully separate path from the signed-in
-`{timelineId}` one, and one that needs its own fixes for the same classes of bug.
+Signed-out visitors get browser storage rather than Supabase rows — but *which*
+browser storage depends on which of the two anonymous states they are in
+(`useAccountTier()`):
 
-`useLocalDraft` exposes `loadAllDrafts`, `loadDraft`, `saveDraft` (debounced 500 ms), `saveDraftImmediate`, `flushDraftSave`, `createDraft`, `deleteDraft`, `clearAllDrafts`, `getDraftCount`. It delegates persistence to `src/utils/draftStorage.ts`; the payload type is `LocalDraft` exported from that module.
+| Tier | Store | Key | Cap |
+|---|---|---|---|
+| `trial` (no account, no key) | `sessionStorage` | `timeline_trial` | 1 |
+| `byok-anon` (key, no account) | `localStorage` | `timeline_drafts` | `MAX_DRAFTS = 3` |
+
+`src/utils/draftStorage.ts` is a `createDraftStore(...)` factory over an injected
+`Storage`, so both homes share one implementation and differ only in configuration.
+It exports the two configured instances. `saveDraft` returns a boolean: false means
+the store refused the draft because it is full, which is what lets reconciliation
+decide whether clearing the source would destroy the only copy.
+
+"Create a Timeline" branches on sign-in state in `SidePanelBody.handleBuildFromScratch`
+and sends signed-out visitors `{newTimeline, skipCreationScreen}`, which only the
+logged-out hydration effect in `App.tsx` consumes — a fully separate path from the
+signed-in `{timelineId}` one, and one that needs its own fixes for the same classes
+of bug.
+
+`useLocalDraft(store)` exposes `loadAllDrafts`, `loadDraft`, `saveDraft` (debounced 500 ms), `saveDraftImmediate`, `flushDraftSave`, `cancelPendingDraftSave`, `createDraft`, `deleteDraft`, `clearAllDrafts`, `getDraftCount`. The store is a required argument, not a default: picking the wrong home is silent data loss, so every call site has to say which it means. The payload type is `LocalDraft`.
+
+**The write target follows the content, not just the tier.** A draft that already
+lives in `localStorage` keeps being written there even after the tier drops to trial
+(the user removed their key). Losing a key takes away AI access, not work that was
+already saved — and switching stores mid-edit would fork the draft in two, leaving
+the localStorage copy silently stale while the user kept typing.
+
+### Storage reconciliation
+
+Content sitting in a store *below* the visitor's current tier is promoted to the
+home that tier uses: trial → byok-anon on adding a key, and both → Supabase on
+signing in. `storageReconciled` gates the hydration effect, the route-state effect
+and the no-route-state bootstrap; all three would otherwise write into a store whose
+contents are about to move.
+
+**A mount-time reconciliation, not a transition watcher.** The identity change that
+strands content almost always happens while `App.tsx` is unmounted — the API-key gate
+lives on `/` (`AIModePage`) and sign-in can be started from the side panel on any
+route — so there is no falsy→truthy flip here to observe; on the way back the value is
+simply already set. The only question that survives that is "is there content
+somewhere that isn't my home?", asked on every mount.
+
+Four rules it must keep:
+
+1. **Flush before reading.** The 500 ms debounce holds a snapshot; without
+   `flushDraftSave()` the last edits never reach storage and are then destroyed by
+   the clear.
+2. **Copy, confirm, then delete — per item.** Each draft is removed only after its
+   own write succeeds. Clearing the lot after a failure is how the previous version
+   deleted every draft that had not been migrated yet.
+3. **Promote only.** Removing a key drops you to trial; those localStorage drafts
+   must be neither adopted into sessionStorage nor deleted. Dormant, not gone.
+4. **Write through `saveDraftImmediate`**, which seeds the fingerprint baseline
+   against the new home. A raw store write leaves the baseline describing the old
+   one and lets the next render commit a spurious "edit" that bumps `savedAt` and
+   reorders the panel.
+
+### The trial gate
+
+A trial visitor has one slot, so starting something new while it is occupied is the
+only moment their work is genuinely at risk — everything else autosaves, which is why
+this is the single gate. The three `createDraft() === null` branches in the hydration
+effect stash the blocked route state and open `TrialGateModal` (keep / export /
+discard) instead of alerting. Answering it replays the instruction by re-navigating
+with the same state, minting a fresh `location.key` so the identical branch runs
+again rather than duplicating the seeding logic. `byok-anon` keeps the plain alert:
+"delete one of three" is not the same problem as "discard your only copy".
 
 **Flush applies here too.** `flushDraftSave()` runs before `handleDraftSwitch`
 replaces the editor's contents, and on unmount / `beforeunload` / `pagehide` — the
@@ -823,9 +886,11 @@ router `<Outlet />` and is hidden with a transform rather than unmounted, so
 navigating to `/editor` never remounts it and it has no realtime channel to lean on.
 Its `localDrafts` read therefore depends on `activeDraftId`, which changes exactly
 when the guest's draft set does, and the synthetic active-row fallback in the `rows`
-memo covers guests as well as signed-in users — otherwise a freshly created draft
+memo covers byok-anon as well as signed-in users — otherwise a freshly created draft
 stayed invisible behind the "Sign in to save timelines" empty state until the panel
-was toggled or the page reloaded.
+was toggled or the page reloaded. Trial is excluded from both: `activeDraftId` is set
+for them too, so without a tier check the fallback would synthesize the very tile the
+list deliberately omits, implying a saved timeline that does not exist.
 
 ### Event operations
 
@@ -884,7 +949,9 @@ was toggled or the page reloaded.
 | `STACK_TRANSITION_MS` | `src/components/Timeline/TimelineEvent.tsx` | `220` |
 | Wheel lerp factor | `src/components/Timeline/Timeline.tsx` | `0.18` |
 | Autosave debounce | `src/hooks/useAutosave.ts` | `2000` ms |
-| Local draft debounce | `src/hooks/useLocalDraft.ts` | `500` ms |
+| Local draft debounce | `src/hooks/useLocalDraft.ts` | `500` ms (both stores) |
+| Trial store | `src/utils/draftStorage.ts` | `sessionStorage`, `timeline_trial`, cap 1 |
+| byok-anon store | `src/utils/draftStorage.ts` | `localStorage`, `timeline_drafts`, cap 3 |
 
 ---
 
@@ -904,7 +971,8 @@ Hooks consumed (directly or via composition) by the timeline page.
 | `useGroupByCategory` | `hooks/useGroupByCategory.ts` | `groupByCategory` boolean toggle |
 | `useTimelineScroll` | `hooks/useTimelineScroll.ts` | Tracks `scrollLeft`, container/content widths, and `visibleRange` (in quarter-columns) |
 | `useEventDrag` | `hooks/useEventDrag.ts` | Pointer-driven drag state machine; defines `DRAG_THRESHOLD = 5` |
-| `useLocalDraft` | `hooks/useLocalDraft.ts` | localStorage draft CRUD with 500 ms debounced save |
+| `useLocalDraft` | `hooks/useLocalDraft.ts` | Draft CRUD against an injected `DraftStore` (trial or byok-anon), 500 ms debounced save |
+| `useAccountTier` | `hooks/useAccountTier.ts` | Resolves `loading` / `trial` / `byok-anon` / `free` / `byok` from auth + key presence |
 | `useTimelines` | `hooks/useTimelines.ts` | List of the user's timelines with realtime subscription and retry-with-backoff |
 | `useTimelineMetadata` | `hooks/useTimelineMetadata.ts` | Per-timeline event count, year range, and dominant category color (for timeline cards). Returns `{ metadata, applyLocalMetadata, refresh }` — the fetch is keyed on the *set* of ids, so contents changes need the write-through or an explicit refresh |
 | `useSidePanel` | `hooks/useSidePanel.ts` | Accesses `SidePanelContext` (open/close state for the event details side panel) |

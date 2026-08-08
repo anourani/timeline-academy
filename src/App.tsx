@@ -41,11 +41,22 @@ export function App() {
   } = useTimelineState();
   const { user, authReady } = useAuth();
   const tier = useAccountTier();
+  const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   // Where this visitor's browser-held work lives. Trial gets sessionStorage —
   // one timeline, gone when the tab closes; byok-anon keeps the localStorage
   // draft set. Signed-in users use neither, but the hook still needs a store,
   // and byok-anon's is the one reconciliation drains into Supabase.
-  const localStore = tier === 'trial' ? trialDraftStore : byokAnonDraftStore;
+  //
+  // The one wrinkle: a draft that is *already* in localStorage keeps being
+  // written there even after the tier drops to trial. Removing an API key
+  // takes away AI access, not work that was already saved — and switching the
+  // write target mid-edit would fork the draft into two stores, leaving the
+  // localStorage copy silently stale while the user kept typing.
+  const localStore = useMemo(() => {
+    if (tier !== 'trial') return byokAnonDraftStore;
+    if (activeDraftId && byokAnonDraftStore.getDraft(activeDraftId)) return byokAnonDraftStore;
+    return trialDraftStore;
+  }, [tier, activeDraftId]);
   const { getMostRecentTimelineId, createTimelineFrom, loadTimeline } = useTimeline();
   const location = useLocation();
   const routerNavigate = useNavigate();
@@ -57,7 +68,6 @@ export function App() {
   const [detailPanelEvent, setDetailPanelEvent] = useState<TimelineEvent | null>(null);
   const [pendingScrollDate, setPendingScrollDate] = useState<string | null>(null);
   const [draftHydrated, setDraftHydrated] = useState(false);
-  const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   // The route instruction a trial visitor asked for while their single slot was
   // still occupied. Held here rather than acted on, until they say what should
   // happen to the work already in the editor. Replayed by re-navigating with
