@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import type { SubjectType } from '@/constants/pillDefinitions'
 import { SubjectSuggestions } from '@/components/AIMode/SubjectSuggestions'
+import { GeneratingIndicator } from '@/components/NewTimeline/GeneratingIndicator'
 import { useSubjectSuggestions } from '@/hooks/useSubjectSuggestions'
 
 interface NewTimelineScreenProps {
@@ -9,6 +10,7 @@ interface NewTimelineScreenProps {
   isGenerating: boolean
   isClassifying: boolean
   classifiedType: SubjectType | null
+  categoryLabels: string[]
   error: string | null
 }
 
@@ -110,6 +112,7 @@ export function NewTimelineScreen({
   onCancel,
   isGenerating,
   isClassifying,
+  categoryLabels,
   error,
 }: NewTimelineScreenProps) {
   const [name, setName] = useState('')
@@ -211,6 +214,7 @@ export function NewTimelineScreen({
           <form
             ref={formRef}
             onSubmit={handleSubmit}
+            aria-busy={isWorking}
             className="w-[996px] max-w-full flex flex-col"
           >
             <h2 className="header-xsmall text-text-tertiary m-0">
@@ -264,7 +268,15 @@ export function NewTimelineScreen({
               )}
             </div>
 
-            {error && (
+            {isWorking && (
+              <GeneratingIndicator
+                subject={name}
+                phase={isClassifying ? 'classifying' : 'generating'}
+                categoryLabels={categoryLabels}
+              />
+            )}
+
+            {!isWorking && error && (
               <p className="mt-[16px] text-sm text-red-400">{error}</p>
             )}
           </form>
