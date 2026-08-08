@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { Timeline } from '../Timeline/Timeline';
 import { TimelineTitle } from '../TimelineTitle/TimelineTitle';
@@ -8,7 +8,6 @@ import { SCALES } from '../../constants/scales';
 import { VERTICAL_SCALES } from '../../constants/verticalScales';
 import { DEFAULT_CATEGORIES } from '../../constants/categories';
 import { TimelineEvent, CategoryConfig } from '../../types/event';
-import { getDraft } from '../../utils/draftStorage';
 import {
   getCachedEvent,
   setCachedEvent,
@@ -26,7 +25,6 @@ interface TimelineData {
 
 export function TimelineViewer() {
   const { timelineId } = useParams();
-  const [searchParams] = useSearchParams();
   const [timeline, setTimeline] = useState<TimelineData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,37 +35,6 @@ export function TimelineViewer() {
       if (!timelineId) {
         setError('No timeline ID provided');
         setLoading(false);
-        return;
-      }
-
-      // Load from localStorage for logged-out users
-      if (timelineId === 'local') {
-        try {
-          const draftId = searchParams.get('draftId');
-          const draft = draftId ? getDraft(draftId) : null;
-          if (!draft) {
-            setError('No local draft found');
-            setLoading(false);
-            return;
-          }
-          const categories = (draft.categories || DEFAULT_CATEGORIES).map((cat: CategoryConfig) => ({
-            ...cat,
-            visible: true
-          }));
-          setTimeline({
-            title: draft.title || 'Untitled Timeline',
-            description: draft.description || '',
-            events: draft.events || [],
-            categories,
-            scale: draft.scale || 'large',
-            verticalScale: draft.verticalScale ?? 'medium',
-            groupByCategory: draft.groupByCategory ?? false
-          });
-        } catch {
-          setError('Failed to load local draft');
-        } finally {
-          setLoading(false);
-        }
         return;
       }
 
@@ -155,7 +122,7 @@ export function TimelineViewer() {
     };
 
     loadTimeline();
-  }, [timelineId, searchParams]);
+  }, [timelineId]);
 
   if (loading) {
     return (

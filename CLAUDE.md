@@ -100,7 +100,25 @@ Each of these was learned the expensive way. See `docs/2026-08-05-security-revie
 
 ## Access & data model
 
+> **Nothing is saved and nothing costs us anything until you sign in or add a key — try the editor freely, and we'll only ask when you want to keep something or generate with AI.**
+
+That sentence is the whole model. Everything below is how it is enforced.
+
+- **Four states, three of them tiers.** `useAccountTier()` (`src/hooks/useAccountTier.ts`) is the single source of truth, derived from two independent axes — is there an account, is there an Anthropic key:
+
+  | State | Signed in | Key | Storage | Limits |
+  |---|---|---|---|---|
+  | `trial` | no | no | `sessionStorage`, one timeline, dies with the tab | none — not a plan |
+  | `byok-anon` | no | yes | `localStorage` drafts | 150 events / 3 timelines |
+  | `free` | yes | no | Supabase | 300 / 10 |
+  | `byok` | yes | yes | Supabase | 1200 / 25 |
+
+  **Trial is deliberately not a fourth plan.** It is absent from `PLAN_LIMITS`, has no row in the tier table, and costs nothing to host — so there is nothing to meter. `Plan` in `src/constants/plans.ts` holds only the three durable tiers.
+
+- **`useAccountTier` must be consumed with its `'loading'` state respected.** `user` is null both before the session lookup answers and when genuinely signed out; answering `trial` in that window points a signed-in user's editor at the wrong store. Same trap `authReady` exists to close.
 - **Server-funded AI requires sign-in.** Anonymous visitors hitting Generate get a gate offering email sign-in or their own Anthropic key. BYOK runs browser-direct (`services/anthropicDirect.ts`) and never touches our servers.
+- **Storage reconciliation promotes upward only** (`App.tsx`). Content in a store below the current tier is moved up on mount — never on a transition watcher, because the identity change usually happens while the editor is unmounted (the key gate lives on `/`, sign-in can start from the side panel anywhere). Removing a key drops you to trial and must leave localStorage drafts exactly where they are: dormant, not deleted.
+- **The only gate on trial work** is starting something new while the single slot is occupied. Everything else already autosaves, so navigating away and refreshing were never lossy.
 - **Identity is email-only** — passwordless OTP, 6-digit codes, custom SMTP via Resend from `timeline.academy`. Supabase's Email OTP Length setting must stay at 6 to match the UI.
 - **Timelines are private by default.** Sharing sets `timelines.is_public`; public reads go through the `get_public_timeline` RPC, which requires the timeline's UUID and never returns `user_id`. Table policies remain owner-only.
 - **Plan limits** live in `src/constants/plans.ts` and must stay in sync with `get_plan_limits` in SQL. The `byok_enabled` flag lives in `app_metadata` (service-role writable only) — never move it back to `user_metadata`, which users can edit themselves.

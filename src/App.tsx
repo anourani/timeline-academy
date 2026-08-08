@@ -9,9 +9,14 @@ import { useAuth } from './hooks/useAuth';
 import { useAutosave } from './hooks/useAutosave';
 import { useSidePanel } from './hooks/useSidePanel';
 import { computeDominantCategoryColor } from './utils/dominantCategory';
-import { UnsavedChangesModal } from './components/Modal/UnsavedChangesModal';
+import { TrialGateModal } from './components/Modal/TrialGateModal';
+import { ApiKeyModal } from './components/Modal/ApiKeyModal';
+import { AuthModal } from './components/Auth/AuthModal';
+import { exportEventsToExcel } from './utils/excelExport';
 import { EventDetailPanel } from './components/EventDetailPanel/EventDetailPanel';
 import { useLocalDraft } from './hooks/useLocalDraft';
+import { useAccountTier, type AccountTier } from './hooks/useAccountTier';
+import { byokAnonDraftStore, trialDraftStore } from './utils/draftStorage';
 import { TimelineEvent, CategoryConfig } from './types/event';
 import { LimitReachedError, getCurrentLimits } from './lib/limits';
 import { supabase } from './lib/supabase';
@@ -35,19 +40,41 @@ export function App() {
     groupByCategory, handleGroupByCategoryChange,
   } = useTimelineState();
   const { user, authReady } = useAuth();
+  const tier = useAccountTier();
+  const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
+  // Where this visitor's browser-held work lives. Trial gets sessionStorage —
+  // one timeline, gone when the tab closes; byok-anon keeps the localStorage
+  // draft set. Signed-in users use neither, but the hook still needs a store,
+  // and byok-anon's is the one reconciliation drains into Supabase.
+  //
+  // The one wrinkle: a draft that is *already* in localStorage keeps being
+  // written there even after the tier drops to trial. Removing an API key
+  // takes away AI access, not work that was already saved — and switching the
+  // write target mid-edit would fork the draft into two stores, leaving the
+  // localStorage copy silently stale while the user kept typing.
+  const localStore = useMemo(() => {
+    if (tier !== 'trial') return byokAnonDraftStore;
+    if (activeDraftId && byokAnonDraftStore.getDraft(activeDraftId)) return byokAnonDraftStore;
+    return trialDraftStore;
+  }, [tier, activeDraftId]);
   const { getMostRecentTimelineId, createTimelineFrom, loadTimeline } = useTimeline();
   const location = useLocation();
   const routerNavigate = useNavigate();
-  const [pendingSwitchTimelineId, setPendingSwitchTimelineId] = useState<string | null>(null);
-  const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const [activePanel, setActivePanel] = useState<'events' | 'settings' | null>(null);
   const [showAddEventModal, setShowAddEventModal] = useState(false);
   const [mode, setMode] = useState<'edit' | 'view'>('edit');
   const [detailPanelEvent, setDetailPanelEvent] = useState<TimelineEvent | null>(null);
   const [pendingScrollDate, setPendingScrollDate] = useState<string | null>(null);
   const [draftHydrated, setDraftHydrated] = useState(false);
-  const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
-  const { loadAllDrafts, loadDraft, saveDraft, flushDraftSave, createDraft, clearAllDrafts, deleteDraft: deleteLocalDraft } = useLocalDraft();
+  // The route instruction a trial visitor asked for while their single slot was
+  // still occupied. Held here rather than acted on, until they say what should
+  // happen to the work already in the editor. Replayed by re-navigating with
+  // the same state, which mints a fresh location.key and lets the hydration
+  // effect below run the identical branch a second time.
+  const [trialGateState, setTrialGateState] = useState<Record<string, unknown> | null>(null);
+  const { loadAllDrafts, loadDraft, saveDraft, saveDraftImmediate, flushDraftSave, cancelPendingDraftSave, createDraft, deleteDraft: deleteLocalDraft } = useLocalDraft(localStore);
   // Which timeline's contents are actually in the editor right now. This is the
   // only id the app may act on — autosave, Share and Delete all key off it.
   // It is written in exactly one place: applyLoadedTimeline().
@@ -66,7 +93,14 @@ export function App() {
   // route-state effect or the no-route-state bootstrap, so the two can't both
   // claim the mount.
   const editorSeededRef = useRef(false);
-  const migrationDoneRef = useRef(false);
+  // Which tier we have finished reconciling storage for. Compared against the
+  // live tier rather than being a bare boolean, so that signing in or adding a
+  // key mid-session re-runs the check instead of latching on the first answer.
+  const [reconciledTier, setReconciledTier] = useState<AccountTier | null>(null);
+  const reconcileStartedRef = useRef<AccountTier | null>(null);
+  // Nothing may hydrate, seed or create until storage has been reconciled: all
+  // three would otherwise write into a store whose contents are about to move.
+  const storageReconciled = tier !== 'loading' && reconciledTier === tier;
   const { setOnTimelineSelect, setOnDraftSelect, refreshTimelines, setOnOpenSettings, setActiveTimelineId, setActiveDraftId: setPanelActiveDraftId, setActiveTimelineTitle, setActiveEventCount, setActiveDominantCategoryColor } = useSidePanel();
 
   const timelineData = {
@@ -121,7 +155,11 @@ export function App() {
   // refresh of /editor ran the logged-out path first — hydrating a stale draft
   // and clearing `location.state` before the signed-in effect below could read it.
   useEffect(() => {
-    if (authReady && !user) {
+    // storageReconciled, not just authReady: adding a key promotes this
+    // visitor from trial to byok-anon, and hydrating before that content has
+    // moved would create a fresh draft in the new store while the old one
+    // still holds the only copy of their work.
+    if (authReady && storageReconciled && !user) {
       const routeState = location.state as {
         newTimeline?: boolean;
         skipCreationScreen?: boolean;
@@ -165,6 +203,15 @@ export function App() {
       if (routeState?.importedEvents) {
         const newDraft = createDraft();
         if (!newDraft) {
+          // Trial: the slot is full and its occupant exists nowhere else, so
+          // ask before replacing it. Deliberately does NOT navigate away or
+          // clear the route state — the editor keeps showing the work under
+          // discussion, and the stashed state replays once they choose.
+          if (tier === 'trial') {
+            setTrialGateState(routeState as Record<string, unknown>);
+            setDraftHydrated(true);
+            return;
+          }
           alert(limitReachedMessage('timeline'));
           routerNavigate('/', { replace: true });
           setDraftHydrated(true);
@@ -187,6 +234,15 @@ export function App() {
         // and seed it with the generated data.
         const newDraft = createDraft();
         if (!newDraft) {
+          // Trial: the slot is full and its occupant exists nowhere else, so
+          // ask before replacing it. Deliberately does NOT navigate away or
+          // clear the route state — the editor keeps showing the work under
+          // discussion, and the stashed state replays once they choose.
+          if (tier === 'trial') {
+            setTrialGateState(routeState as Record<string, unknown>);
+            setDraftHydrated(true);
+            return;
+          }
           alert(limitReachedMessage('timeline'));
           routerNavigate('/', { replace: true });
           setDraftHydrated(true);
@@ -208,6 +264,15 @@ export function App() {
         // "Create a Timeline" — create draft immediately
         const newDraft = createDraft();
         if (!newDraft) {
+          // Trial: the slot is full and its occupant exists nowhere else, so
+          // ask before replacing it. Deliberately does NOT navigate away or
+          // clear the route state — the editor keeps showing the work under
+          // discussion, and the stashed state replays once they choose.
+          if (tier === 'trial') {
+            setTrialGateState(routeState as Record<string, unknown>);
+            setDraftHydrated(true);
+            return;
+          }
           alert(limitReachedMessage('timeline'));
           routerNavigate('/', { replace: true });
           setDraftHydrated(true);
@@ -264,7 +329,7 @@ export function App() {
       // Clear the route state so refreshing doesn't re-trigger
       routerNavigate('/editor', { replace: true, state: {} });
     }
-  }, [authReady, user, draftHydrated, createDraft, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange, loadAllDrafts, loadDraft, location.state, location.key, routerNavigate, setDescription, setEvents, setTitle, updateCategories]);
+  }, [authReady, storageReconciled, tier, user, draftHydrated, createDraft, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange, loadAllDrafts, loadDraft, location.state, location.key, routerNavigate, setDescription, setEvents, setTitle, updateCategories]);
 
   // Guest drafts save on a 500 ms debounce, so a rename followed immediately by
   // closing the tab or navigating away would be lost — the draft path has no
@@ -287,9 +352,33 @@ export function App() {
     };
   }, [flushDraftSave]);
 
-  // Save to localStorage when logged out
+  // Warn a trial visitor before the tab takes their work with it.
+  //
+  // Only trial: sessionStorage dies with the tab, so this is the one state
+  // where closing it actually destroys something. byok-anon's drafts and a
+  // signed-in user's timelines are both still there afterwards.
+  //
+  // The generic browser dialog is the whole ceiling here — `beforeunload`
+  // cannot show custom UI, so offering to sign in at this point isn't
+  // possible; the gate covers the moment that can be handled properly.
   useEffect(() => {
-    if (!user && draftHydrated && activeDraftId) {
+    if (tier !== 'trial' || events.length === 0) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [tier, events.length]);
+
+  // Save to the browser store when logged out.
+  //
+  // Held off until reconciliation settles: mid-migration the store this writes
+  // through has already switched to the new tier's home, and writing there
+  // while the old home is still being drained races the copy — the stale side
+  // can land last and overwrite the fresher one.
+  useEffect(() => {
+    if (!user && storageReconciled && draftHydrated && activeDraftId) {
       saveDraft({
         id: activeDraftId,
         title,
@@ -302,40 +391,138 @@ export function App() {
         savedAt: new Date().toISOString()
       });
     }
-  }, [user, draftHydrated, activeDraftId, title, description, events, categories, currentScale.value, currentVerticalScale.value, groupByCategory, saveDraft]);
+  }, [user, storageReconciled, draftHydrated, activeDraftId, title, description, events, categories, currentScale.value, currentVerticalScale.value, groupByCategory, saveDraft]);
 
-  // Migrate localStorage drafts to Supabase on login
+  /**
+   * Move any work that is sitting in a store below the visitor's current tier
+   * into the home that tier actually uses.
+   *
+   * Deliberately a reconciliation, not a transition watcher. The identity
+   * change that strands the content usually happens while this component is
+   * unmounted — the API-key gate lives on `/` (AIModePage), and sign-in can be
+   * started from the side panel on any route — so there is no falsy→truthy
+   * flip here to observe. On the way back the value is simply already set. The
+   * only question that survives that is "does content exist somewhere that
+   * isn't my home?", asked on every mount.
+   *
+   * Promotes upward only. A byok-anon user who *removes* their key becomes
+   * trial, and their localStorage drafts must be left exactly where they are:
+   * intact, and recoverable the moment the key comes back.
+   */
   useEffect(() => {
-    if (!user || !draftHydrated || migrationDoneRef.current) return;
-    migrationDoneRef.current = true;
+    if (tier === 'loading') return;
+    // Ref, not the state, so a re-render mid-run can't start a second pass.
+    if (reconcileStartedRef.current === tier) return;
+    reconcileStartedRef.current = tier;
 
-    const allDrafts = loadAllDrafts();
-    const draftsWithEvents = allDrafts.filter(d => d.events.length > 0);
+    // Commit anything the debounce still holds before reading the stores. The
+    // pending write is a *snapshot*; without this the last ≤500 ms of edits
+    // never reach storage and are then destroyed by the clear below.
+    flushDraftSave();
 
-    if (draftsWithEvents.length > 0) {
-      (async () => {
-        for (const draft of draftsWithEvents) {
-          try {
-            await createTimelineFrom(draft.title, draft.events, draft.scale, draft.verticalScale ?? 'medium');
-          } catch (err: unknown) {
-            if (err instanceof LimitReachedError) {
-              alert(
-                `${limitReachedMessage(err.kind)} Some drafts couldn't be saved.`
-              );
-              break;
-            } else {
-              console.error('Failed to migrate draft:', err);
-            }
-          }
-        }
-        clearAllDrafts();
-        setActiveDraftId(null);
-      })();
-    } else {
-      clearAllDrafts();
-      setActiveDraftId(null);
+    if (tier === 'trial') {
+      // Nothing ranks below trial — this is already home.
+      setReconciledTier(tier);
+      return;
     }
-  }, [user, draftHydrated, clearAllDrafts, loadAllDrafts, createTimelineFrom]);
+
+    if (tier === 'byok-anon') {
+      // sessionStorage → localStorage. Both are synchronous, so this completes
+      // within the effect and no await window exists for anything to observe a
+      // half-migrated state.
+      const orphans = trialDraftStore.getAllDrafts();
+      let rejected = 0;
+      for (const draft of orphans) {
+        // Via the hook, not the store: it seeds the fingerprint baseline for
+        // this id against its new home. A raw write would leave the baseline
+        // describing the old store and let the next render commit a spurious
+        // "edit" that bumps savedAt and reorders the panel.
+        if (saveDraftImmediate({ ...draft, savedAt: new Date().toISOString() })) {
+          trialDraftStore.deleteDraft(draft.id);
+        } else {
+          rejected += 1;
+        }
+      }
+      if (rejected > 0) {
+        // At capacity. The trial copy is still the only copy, so it stays put
+        // rather than being dropped on the floor.
+        alert(
+          `${limitReachedMessage('timeline')} Your unsaved timeline is still here — free up a slot to keep it.`
+        );
+      }
+      setReconciledTier(tier);
+      return;
+    }
+
+    // Signed in: both browser stores drain into Supabase.
+    (async () => {
+      const pending = [
+        ...trialDraftStore.getAllDrafts().map(draft => ({ draft, store: trialDraftStore })),
+        ...byokAnonDraftStore.getAllDrafts().map(draft => ({ draft, store: byokAnonDraftStore })),
+      ];
+
+      for (const { draft, store } of pending) {
+        // Empty drafts carry nothing worth a row; drop them without a round trip.
+        if (draft.events.length === 0) {
+          store.deleteDraft(draft.id);
+          continue;
+        }
+        try {
+          await createTimelineFrom(draft.title, draft.events, draft.scale, draft.verticalScale ?? 'medium');
+          // Only after the write is confirmed, and only this one. The previous
+          // version cleared *everything* after a failure, so hitting the plan
+          // cap mid-migration deleted every draft that hadn't been saved yet.
+          store.deleteDraft(draft.id);
+        } catch (err: unknown) {
+          if (err instanceof LimitReachedError) {
+            alert(`${limitReachedMessage(err.kind)} Some drafts couldn't be saved.`);
+            break;
+          }
+          console.error('Failed to migrate draft:', err);
+          // Left in place deliberately: a transient failure should still be
+          // recoverable on the next mount.
+        }
+      }
+
+      setActiveDraftId(null);
+      // Guarded by the ref rather than a `cancelled` flag deliberately. This
+      // effect re-runs whenever createTimelineFrom's identity changes — which a
+      // token refresh alone can do, mid-flight — and a cancel-on-cleanup flag
+      // would then swallow the only call that ever sets this, leaving
+      // storageReconciled false forever and the editor permanently blank.
+      // Comparing against the ref instead means whichever run still owns the
+      // current tier reports completion, and a superseded one stays quiet.
+      if (reconcileStartedRef.current === tier) setReconciledTier(tier);
+    })();
+  }, [tier, flushDraftSave, saveDraftImmediate, createTimelineFrom]);
+
+  /**
+   * Run the instruction the trial gate was holding, once the visitor has
+   * actually acquired an identity and their work has been moved to safety.
+   *
+   * Waits on storageReconciled specifically: replaying while the trial store is
+   * still being drained would create the new timeline first and leave the old
+   * content to be adopted afterwards — or, in the signed-in case, race the
+   * migration's own inserts.
+   */
+  useEffect(() => {
+    if (!trialGateState) return;
+    if (tier === 'loading' || tier === 'trial') return;
+    if (!storageReconciled) return;
+
+    let state = trialGateState;
+    // "Create a Timeline" is spelled differently on the two paths — the guest
+    // effect reads {newTimeline}, the signed-in one reads {timelineId:'new'}.
+    // Someone who answered the gate by signing in crossed between them, so the
+    // instruction has to be translated or it matches no branch at all and the
+    // click is silently swallowed.
+    if (user && state.newTimeline && state.skipCreationScreen) {
+      state = { timelineId: 'new', skipCreationScreen: true };
+    }
+
+    setTrialGateState(null);
+    routerNavigate('/editor', { replace: true, state });
+  }, [trialGateState, tier, storageReconciled, user, routerNavigate]);
 
   /**
    * The one and only writer of the editor's contents *and* of the id those
@@ -432,7 +619,7 @@ export function App() {
       };
       importedEvents?: TimelineEvent[];
     } | null;
-    if (!authReady || !user) return;
+    if (!authReady || !storageReconciled || !user) return;
 
     // Latch on the location itself, not a boolean. /editor → /editor doesn't
     // remount App, so a once-per-mount flag made every navigation after the
@@ -487,7 +674,7 @@ export function App() {
       }
       routerNavigate('/editor', { replace: true, state: {} });
     }
-  }, [location.state, location.key, authReady, user, routerNavigate, setDescription, setEvents, setTitle, switchTimeline, updateCategories]);
+  }, [location.state, location.key, authReady, storageReconciled, user, routerNavigate, setDescription, setEvents, setTitle, switchTimeline, updateCategories]);
 
   // Signed in, on /editor, with nothing in the route state telling us what to
   // show — a bookmark, a refresh, or the browser back button.
@@ -497,7 +684,10 @@ export function App() {
   // and autosave then wrote those defaults over that row. Now the id only ever
   // arrives attached to the data it names, via switchTimeline.
   useEffect(() => {
-    if (!authReady || !user || editorSeededRef.current) return;
+    // Waits on reconciliation too, or it opens whatever was most recent
+    // *before* migration ran — which for someone who just signed in with local
+    // work is the wrong timeline, or none at all.
+    if (!authReady || !storageReconciled || !user || editorSeededRef.current) return;
 
     const state = location.state as {
       timelineId?: string;
@@ -522,7 +712,7 @@ export function App() {
         setBootstrapError('Failed to load your timelines. Please try again.');
       }
     })();
-  }, [authReady, user, location.state, bootstrapAttempt, getMostRecentTimelineId, switchTimeline, routerNavigate]);
+  }, [authReady, storageReconciled, user, location.state, bootstrapAttempt, getMostRecentTimelineId, switchTimeline, routerNavigate]);
 
   const retryBootstrap = () => {
     setBootstrapError(null);
@@ -575,24 +765,46 @@ export function App() {
     handleGroupByCategoryChange(draft.groupByCategory ?? false);
   };
 
-  const handleDiscardAndSwitch = async () => {
-    if (pendingSwitchTimelineId) {
-      await switchTimeline(pendingSwitchTimelineId);
-      setPendingSwitchTimelineId(null);
-      setShowUnsavedChangesModal(false);
-    }
+  /**
+   * Replay the instruction that was blocked by a full trial slot.
+   *
+   * Re-navigating with the same state rather than calling the branch directly:
+   * it mints a fresh location.key, which is exactly what the hydration effect's
+   * latch keys off, so the identical branch runs again with no duplicated
+   * seeding logic to drift out of sync.
+   */
+  const replayTrialGateState = (state: Record<string, unknown>) => {
+    setTrialGateState(null);
+    routerNavigate('/editor', { replace: true, state });
   };
 
-  const handleSaveAndSwitch = async () => {
+  const handleTrialDiscard = () => {
+    const pending = trialGateState;
+    if (!pending) return;
+    // Drop the armed write first, or the 500 ms debounce lands after the clear
+    // and resurrects the timeline the user just chose to throw away.
+    cancelPendingDraftSave();
+    trialDraftStore.clearAllDrafts();
+    setActiveDraftId(null);
+    replayTrialGateState(pending);
+  };
+
+  const handleTrialExport = () => {
     try {
-      // Wait for current save to complete
-      if (pendingSwitchTimelineId) {
-        await switchTimeline(pendingSwitchTimelineId);
-        setPendingSwitchTimelineId(null);
-      }
-    } finally {
-      setShowUnsavedChangesModal(false);
+      exportEventsToExcel(events, title || DEFAULT_TIMELINE_TITLE);
+    } catch (err) {
+      console.error('Failed to export trial timeline:', err);
+      alert('Failed to export. Please try again.');
     }
+    // Stays open on purpose: downloading is not itself an answer to "keep or
+    // discard", and closing here would silently abandon the pending action.
+  };
+
+  const handleTrialKeep = () => {
+    // Hand off to the existing chooser. Whichever path they take flips the
+    // tier, which triggers reconciliation; the effect below replays the
+    // pending instruction once the content has moved to its new home.
+    setShowApiKeyModal(true);
   };
 
   // Keep refs to the latest switch handlers so the registered callbacks
@@ -786,15 +998,24 @@ export function App() {
           />
         </main>
       )}
-      <UnsavedChangesModal
-        isOpen={showUnsavedChangesModal}
-        onClose={() => {
-          setShowUnsavedChangesModal(false);
-          setPendingSwitchTimelineId(null);
-        }}
-        onDiscard={handleDiscardAndSwitch}
-        onSave={handleSaveAndSwitch}
+      <TrialGateModal
+        isOpen={trialGateState !== null}
+        eventCount={events.length}
+        onClose={() => setTrialGateState(null)}
+        onDiscard={handleTrialDiscard}
+        onExport={handleTrialExport}
+        onKeep={handleTrialKeep}
       />
+      <ApiKeyModal
+        isOpen={showApiKeyModal}
+        onClose={() => setShowApiKeyModal(false)}
+        onKeySaved={() => setShowApiKeyModal(false)}
+        onRequestSignIn={() => {
+          setShowApiKeyModal(false);
+          setShowAuthModal(true);
+        }}
+      />
+      <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} />
       <EventDetailPanel
         open={detailPanelEvent !== null}
         event={detailPanelEvent}

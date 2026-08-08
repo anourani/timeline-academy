@@ -1,7 +1,11 @@
 // Numbers here must stay in sync with the SQL get_plan_limits function
 // defined in supabase/migrations/20260505000000_three_tier_model.sql.
 
-export type Plan = 'guest' | 'free' | 'byok'
+// A Plan is a *durable* tier — one whose content outlives the browser tab.
+// The ephemeral trial state (no sign-in, no key) is deliberately absent: it
+// holds a single sessionStorage timeline, has no limits to enforce and no row
+// in the tier comparison UI. Ask `useAccountTier()` for the full picture.
+export type Plan = 'byok-anon' | 'free' | 'byok'
 
 export interface PlanLimits {
   eventLimit: number | null
@@ -9,7 +13,8 @@ export interface PlanLimits {
 }
 
 export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
-  guest: { eventLimit: 150, timelineLimit: 3 },
+  // Has an Anthropic key but no account: browser-only localStorage drafts.
+  'byok-anon': { eventLimit: 150, timelineLimit: 3 },
   free: { eventLimit: 300, timelineLimit: 10 },
   byok: { eventLimit: 1200, timelineLimit: 25 },
 }
