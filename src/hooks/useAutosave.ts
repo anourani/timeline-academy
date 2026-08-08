@@ -8,6 +8,7 @@ import {
   metaFingerprint,
   type Fingerprint,
 } from '../utils/timelineFingerprint';
+import { notifyTimelineSaved } from '../utils/timelineSaved';
 import type { SaveStatus } from '../components/SaveStatusIndicator/SaveStatusIndicator';
 import type { TimelineEvent, CategoryConfig } from '../types/event';
 
@@ -22,8 +23,15 @@ interface TimelineData {
   groupByCategory: boolean;
 }
 
-/** What the caller must supply to declare the editor clean. */
-export type CleanState = Omit<TimelineData, 'categories'>;
+/**
+ * What the caller must supply to declare the editor clean.
+ *
+ * Categories are part of it now that autosave persists them. Anything absent
+ * here is absent from the fingerprint, so a field that the store writes but the
+ * baseline omits makes every load look dirty and write itself straight back —
+ * which is how merely opening a timeline used to reorder the side panel.
+ */
+export type CleanState = TimelineData;
 
 export function useAutosave(timelineData: TimelineData) {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
@@ -40,8 +48,10 @@ export function useAutosave(timelineData: TimelineData) {
   const persistedRef = useRef<Fingerprint | null>(null);
 
   const fingerprintOf = useCallback((data: CleanState): Fingerprint => ({
-    // `categories` is deliberately absent: autosave does not persist them, so
-    // a category edit must not count as a change to be written.
+    // `categories` is included because autosave now writes them to
+    // `timelines.categories`. It used to be excluded, correctly, for the
+    // opposite reason — nothing persisted them, so counting a category edit as
+    // dirty would have armed a write that changed nothing in the store.
     meta: metaFingerprint({
       id: data.id ?? '',
       title: data.title,
@@ -49,6 +59,7 @@ export function useAutosave(timelineData: TimelineData) {
       scale: data.scale,
       verticalScale: data.verticalScale,
       groupByCategory: data.groupByCategory,
+      categories: data.categories,
     }),
     events: eventsFpRef.current(data.events),
   }), []);
@@ -75,20 +86,44 @@ export function useAutosave(timelineData: TimelineData) {
     try {
       setSaveStatus('saving');
       
-      // First update the timeline
-      const { error: timelineError } = await supabase
+      // First update the timeline.
+      //
+      // `updated_at` is still sent from the client. Where the ordering
+      // migration has been applied a trigger stamps it server-side instead, but
+      // nothing in this repo can verify that it has been — so the client keeps
+      // supplying a value, and the `.select()` reads back whichever one won.
+      const { data: savedRow, error: timelineError } = await supabase
         .from('timelines')
         .update({
           title: data.title,
           description: data.description,
+          categories: data.categories,
           scale: data.scale,
           vertical_scale: data.verticalScale,
           group_by_category: data.groupByCategory,
           updated_at: new Date().toISOString()
         })
-        .eq('id', data.id);
+        .eq('id', data.id)
+        .select('updated_at')
+        // maybeSingle, not single: the row can already be gone when a pending
+        // save flushes — deleting from the side panel doesn't cancel it, and
+        // navigating away flushes on unmount. That is a silent no-op today, and
+        // `single` would turn it into a new throw.
+        .maybeSingle();
 
       if (timelineError) throw timelineError;
+
+      // Announce the bump here, before the event save rather than after the
+      // whole thing succeeds. These are separate HTTP calls: by this point
+      // `updated_at` has already moved in the database, whether or not the
+      // events below land. The side panel sorts on what the row actually holds,
+      // so it has to hear about it either way — and if the event save throws,
+      // the store is partially written and the row genuinely is the most
+      // recently touched one. Save success is a different fact, and it is
+      // already reported through `saveStatus`.
+      if (savedRow?.updated_at) {
+        notifyTimelineSaved({ id: data.id, updatedAt: savedRow.updated_at });
+      }
 
       // Diff-based event save
       await saveTimelineEvents(data.id, data.events);

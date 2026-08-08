@@ -142,16 +142,6 @@ export function useTimeline() {
 
     if (eventsError) throw eventsError;
 
-    // Also load timeline-specific categories if they exist
-    const { data: categories, error: categoriesError } = await supabase
-      .from('timeline_categories')
-      .select('*')
-      .eq('timeline_id', id);
-
-    if (categoriesError && categoriesError.message !== 'relation "timeline_categories" does not exist') {
-      throw categoriesError;
-    }
-
     return {
       id,
       title: timeline.title,
@@ -167,7 +157,19 @@ export function useTimeline() {
         imageAttribution: event.image_attribution ?? null,
         sources: event.sources ?? null,
       })),
-      categories: categories || undefined,
+      // Categories come off the timelines row itself, from the `categories`
+      // jsonb column — the same one the side panel's dominant-colour query
+      // reads, so the editor and the tile can no longer disagree about them.
+      //
+      // This used to be a third round trip to a separate `timeline_categories`
+      // table that nothing has ever written. It always came back `[]`, whose
+      // truthiness then wiped the editor's categories on every load, and its
+      // row shape (`category_id`, `order`) was never `CategoryConfig` anyway.
+      //
+      // Empty normalises to undefined so the editor falls back to defaults.
+      categories: Array.isArray(timeline.categories) && timeline.categories.length > 0
+        ? timeline.categories
+        : undefined,
       scale: timeline.scale || 'large',
       verticalScale: timeline.vertical_scale || 'medium',
       groupByCategory: timeline.group_by_category ?? false

@@ -21,6 +21,7 @@ import { TimelineEvent, CategoryConfig } from './types/event';
 import { LimitReachedError, getCurrentLimits } from './lib/limits';
 import { supabase } from './lib/supabase';
 import { DEFAULT_TIMELINE_TITLE } from './constants/defaults';
+import { DEFAULT_CATEGORIES } from './constants/categories';
 
 function limitReachedMessage(kind: 'event' | 'timeline'): string {
   const { eventLimit, timelineLimit } = getCurrentLimits();
@@ -544,6 +545,13 @@ export function App() {
     const scale = data.scale || 'medium';
     const verticalScale = data.verticalScale ?? 'small';
     const groupByCategory = data.groupByCategory ?? false;
+    // Resolved here rather than left to `updateCategories`' own fallback, so
+    // the baseline below records what will actually be in state. Autosave
+    // persists categories now, which means an unresolved `undefined` here
+    // fingerprints differently from the defaults that land a moment later —
+    // and every load would write itself straight back, reordering the panel
+    // just for having been opened.
+    const categories = data.categories?.length ? data.categories : DEFAULT_CATEGORIES;
 
     // First, before any setter, so no ordering of effects can let the autosave
     // effect see this content while the baseline still describes the last one.
@@ -552,6 +560,7 @@ export function App() {
       title: data.title,
       description,
       events: data.events,
+      categories,
       scale,
       verticalScale,
       groupByCategory,
@@ -560,16 +569,12 @@ export function App() {
     setTitle(data.title);
     setDescription(description);
     setEvents(data.events);
-    if (data.categories) {
-      updateCategories(data.categories);
-    } else {
-      resetCategories();
-    }
+    updateCategories(categories);
     handleScaleChange(scale);
     handleVerticalScaleChange(verticalScale);
     handleGroupByCategoryChange(groupByCategory);
     setLoadedTimelineId(data.id);
-  }, [markClean, setTitle, setDescription, setEvents, updateCategories, resetCategories, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange]);
+  }, [markClean, setTitle, setDescription, setEvents, updateCategories, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange]);
 
   const switchTimeline = useCallback(async (newTimelineId: string) => {
     try {
