@@ -1,9 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { TimelineEvent, CategoryConfig } from '../types/event';
 import { useAuth } from './useAuth';
 import { DEFAULT_TIMELINE_TITLE } from '../constants/defaults';
-import { saveTimelineEvents } from '../utils/saveEvents';
 import {
   LimitReachedError,
   getCurrentLimits,
@@ -35,7 +34,12 @@ async function checkCreateTimelineLimits(userId: string): Promise<void> {
   }
 }
 
-interface TimelineData {
+export interface TimelineData {
+  /**
+   * The row this data actually came from. Callers must bind their "currently
+   * open timeline" to this value and nothing else — see the note below.
+   */
+  id: string;
   title: string;
   description?: string;
   events: TimelineEvent[];
@@ -45,204 +49,180 @@ interface TimelineData {
   groupByCategory?: boolean;
 }
 
+/**
+ * Timeline record I/O.
+ *
+ * This hook deliberately holds **no "current timeline" state**. It used to keep
+ * a `timelineId` that was written in three places — including a mount effect
+ * that picked an arbitrary row, and a `setTimelineId(id)` that fired before the
+ * data it named had loaded. Because autosave keyed off that pointer while
+ * reading the editor's separately-held contents, the two could disagree, and a
+ * save would then write one timeline's title and events onto a different
+ * timeline's row (deleting the victim's events, since the event save is a
+ * diff).
+ *
+ * Every function here therefore *returns* an id rather than storing one. The
+ * caller is responsible for keeping the id and the contents it came with in a
+ * single atomic piece of state.
+ */
 export function useTimeline() {
   const { user } = useAuth();
-  const [timelineId, setTimelineId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  const loadInitialTimeline = useCallback(async () => {
-    if (!user) {
-      setTimelineId(null);
-      setIsLoading(false);
-      setError(null);
-      return;
-    }
+  /**
+   * The most recently updated timeline for this user, or null if they have
+   * none. Ordered, unlike the arbitrary `.limit(1)` this replaces, so landing
+   * on `/editor` with no route state is at least deterministic.
+   */
+  const getMostRecentTimelineId = useCallback(async (): Promise<string | null> => {
+    if (!user) return null;
 
-    try {
-      setIsLoading(true);
-      setError(null);
+    const { data, error } = await supabase
+      .from('timelines')
+      .select('id')
+      .eq('user_id', user.id)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-      const { data, error: fetchError } = await supabase
-        .from('timelines')
-        .select('id')
-        .eq('user_id', user.id)
-        .limit(1)
-        .maybeSingle();
+    if (error) throw error;
 
-      if (fetchError) {
-        throw fetchError;
-      }
-
-      setTimelineId(data?.id ?? null);
-    } catch (err) {
-      console.error('Error loading timeline:', err);
-      setError('Failed to load timeline. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
+    return data?.id ?? null;
   }, [user]);
-
-  const retryInitialLoad = () => {
-    loadInitialTimeline();
-  };
-
-  useEffect(() => {
-    loadInitialTimeline();
-  }, [loadInitialTimeline]);
 
   const loadTimeline = useCallback(async (id: string): Promise<TimelineData> => {
     if (!user) throw new Error('Must be signed in to load timeline');
-    
-    try {
-      // Set the timelineId immediately for UI feedback
-      setTimelineId(id === 'new' ? null : id);
-      
-      if (id === 'new') {
-        await checkCreateTimelineLimits(user.id);
 
-        // Create a new timeline
-        const { data: newTimeline, error: createError } = await supabase
-          .from('timelines')
-          .insert({ title: DEFAULT_TIMELINE_TITLE, user_id: user.id })
-          .select('id')
-          .single();
+    if (id === 'new') {
+      await checkCreateTimelineLimits(user.id);
 
-        if (createError) throw createError;
-        
-        // Update the timelineId with the newly created timeline
-        setTimelineId(newTimeline.id);
-        
-        return {
-          title: DEFAULT_TIMELINE_TITLE,
-          description: '',
-          events: [],
-          categories: undefined, // Will use default categories
-          scale: 'small',
-          verticalScale: 'medium',
-          groupByCategory: false
-        };
-      }
-
-      const { data: timeline, error: timelineError } = await supabase
+      // Write the display defaults explicitly rather than leaning on the
+      // column defaults, which differ ('large' / 'small'). Autosave used to
+      // paper over the mismatch by immediately rewriting the row on open; now
+      // that opening a timeline no longer writes, an untouched new timeline
+      // would keep the column defaults while the editor showed these — and
+      // reopening it would visibly change zoom.
+      const { data: newTimeline, error: createError } = await supabase
         .from('timelines')
-        .select('*')
-        .eq('id', id)
+        .insert({
+          title: DEFAULT_TIMELINE_TITLE,
+          user_id: user.id,
+          scale: 'small',
+          vertical_scale: 'medium',
+          group_by_category: false,
+        })
+        .select('id')
         .single();
 
-      if (timelineError) throw timelineError;
-
-      const { data: events, error: eventsError } = await supabase
-        .from('events')
-        .select('*')
-        .eq('timeline_id', id);
-
-      if (eventsError) throw eventsError;
-
-      // Also load timeline-specific categories if they exist
-      const { data: categories, error: categoriesError } = await supabase
-        .from('timeline_categories')
-        .select('*')
-        .eq('timeline_id', id);
-
-      if (categoriesError && categoriesError.message !== 'relation "timeline_categories" does not exist') {
-        throw categoriesError;
-      }
+      if (createError) throw createError;
 
       return {
-        title: timeline.title,
-        description: timeline.description || '',
-        events: events.map(event => ({
-          id: event.id,
-          title: event.title,
-          startDate: event.start_date,
-          endDate: event.end_date,
-          category: event.category,
-          description: event.description ?? null,
-          imageUrl: event.image_url ?? null,
-          imageAttribution: event.image_attribution ?? null,
-          sources: event.sources ?? null,
-        })),
-        categories: categories || undefined,
-        scale: timeline.scale || 'large',
-        verticalScale: timeline.vertical_scale || 'medium',
-        groupByCategory: timeline.group_by_category ?? false
+        id: newTimeline.id,
+        title: DEFAULT_TIMELINE_TITLE,
+        description: '',
+        events: [],
+        categories: undefined, // Will use default categories
+        scale: 'small',
+        verticalScale: 'medium',
+        groupByCategory: false
       };
-    } catch (error) {
-      // Reset timelineId if there was an error
-      setTimelineId(id === 'new' ? null : timelineId);
-      throw error;
     }
-  }, [user, timelineId]);
 
-  const saveTimeline = useCallback(async (
+    const { data: timeline, error: timelineError } = await supabase
+      .from('timelines')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (timelineError) throw timelineError;
+
+    const { data: events, error: eventsError } = await supabase
+      .from('events')
+      .select('*')
+      .eq('timeline_id', id);
+
+    if (eventsError) throw eventsError;
+
+    // Also load timeline-specific categories if they exist
+    const { data: categories, error: categoriesError } = await supabase
+      .from('timeline_categories')
+      .select('*')
+      .eq('timeline_id', id);
+
+    if (categoriesError && categoriesError.message !== 'relation "timeline_categories" does not exist') {
+      throw categoriesError;
+    }
+
+    return {
+      id,
+      title: timeline.title,
+      description: timeline.description || '',
+      events: events.map(event => ({
+        id: event.id,
+        title: event.title,
+        startDate: event.start_date,
+        endDate: event.end_date,
+        category: event.category,
+        description: event.description ?? null,
+        imageUrl: event.image_url ?? null,
+        imageAttribution: event.image_attribution ?? null,
+        sources: event.sources ?? null,
+      })),
+      categories: categories || undefined,
+      scale: timeline.scale || 'large',
+      verticalScale: timeline.vertical_scale || 'medium',
+      groupByCategory: timeline.group_by_category ?? false
+    };
+  }, [user]);
+
+  /**
+   * Unconditionally create a new timeline row from the given data and return
+   * its id. Used by the local-draft migration on login, which always wants a
+   * fresh row — the previous implementation branched on the hook's internal
+   * `timelineId` and would *overwrite* an existing timeline when that pointer
+   * happened to be set.
+   */
+  const createTimelineFrom = useCallback(async (
     title: string,
     events: TimelineEvent[],
     scale: 'large' | 'medium' | 'small' = 'small',
     verticalScale: 'small' | 'medium' = 'medium',
-  ) => {
+  ): Promise<string> => {
     if (!user) throw new Error('Must be signed in to save');
 
-    try {
-      if (!timelineId) {
-        await checkCreateTimelineLimits(user.id);
+    await checkCreateTimelineLimits(user.id);
 
-        // Create new timeline
-        const { data: timeline, error: timelineError } = await supabase
-          .from('timelines')
-          .insert({ title, user_id: user.id, scale, vertical_scale: verticalScale })
-          .select('id')
-          .single();
+    const { data: timeline, error: timelineError } = await supabase
+      .from('timelines')
+      .insert({ title, user_id: user.id, scale, vertical_scale: verticalScale })
+      .select('id')
+      .single();
 
-        if (timelineError) throw timelineError;
-        setTimelineId(timeline.id);
+    if (timelineError) throw timelineError;
 
-        // Insert events with client-generated IDs
-        if (events.length > 0) {
-          const { error: eventsError } = await supabase
-            .from('events')
-            .insert(
-              events.map(event => ({
-                id: event.id,
-                timeline_id: timeline.id,
-                title: event.title,
-                start_date: event.startDate,
-                end_date: event.endDate,
-                category: event.category
-              }))
-            );
+    // Insert events with client-generated IDs
+    if (events.length > 0) {
+      const { error: eventsError } = await supabase
+        .from('events')
+        .insert(
+          events.map(event => ({
+            id: event.id,
+            timeline_id: timeline.id,
+            title: event.title,
+            start_date: event.startDate,
+            end_date: event.endDate,
+            category: event.category
+          }))
+        );
 
-          if (eventsError) throw eventsError;
-        }
-      } else {
-        // Update existing timeline
-        const { error: timelineError } = await supabase
-          .from('timelines')
-          .update({
-            title,
-            updated_at: new Date().toISOString(),
-            scale,
-            vertical_scale: verticalScale
-          })
-          .eq('id', timelineId);
-
-        if (timelineError) throw timelineError;
-
-        // Diff-based event save
-        await saveTimelineEvents(timelineId, events);
-      }
-    } catch (error) {
-      console.error('Error saving timeline:', error);
-      throw error;
+      if (eventsError) throw eventsError;
     }
-  }, [user, timelineId]);
+
+    return timeline.id;
+  }, [user]);
 
   return {
-    timelineId,
-    isLoading,
-    error,
-    retryInitialLoad,
-    saveTimeline,
+    getMostRecentTimelineId,
+    createTimelineFrom,
     loadTimeline
   };
 }

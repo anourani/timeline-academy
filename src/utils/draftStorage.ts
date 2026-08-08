@@ -35,9 +35,20 @@ function readDrafts(): LocalDraft[] {
   }
 }
 
+/**
+ * Fired after any successful write, so the side panel can re-read.
+ *
+ * A `storage` listener would not do: that event fires only in *other* tabs,
+ * never the one that wrote. Hanging this off the storage layer rather than the
+ * editor means create, save, delete and duplicate are all covered wherever
+ * they're called from.
+ */
+export const DRAFTS_CHANGED_EVENT = 'timeline-academy:drafts-changed'
+
 function writeDrafts(drafts: LocalDraft[]): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ drafts }))
+    window.dispatchEvent(new Event(DRAFTS_CHANGED_EVENT))
   } catch {
     // Storage full or disabled — silently ignore
   }

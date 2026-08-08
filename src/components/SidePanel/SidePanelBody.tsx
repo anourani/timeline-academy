@@ -28,6 +28,7 @@ import {
   getDraft,
   saveDraft,
   deleteDraft as deleteLocalDraft,
+  DRAFTS_CHANGED_EVENT,
   MAX_DRAFTS,
   type LocalDraft,
 } from '@/utils/draftStorage'
@@ -165,60 +166,123 @@ export function SidePanelBody() {
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
 
+  // `activeDraftId` is in the deps because it is the only signal this component
+  // gets that the guest's draft list changed. This panel lives outside the
+  // router's <Outlet /> and is hidden with a transform rather than unmounted, so
+  // navigating to /editor never remounts it — without this, a draft created in
+  // the editor stayed invisible until the panel was toggled or the page
+  // reloaded, and the empty-state "sign in to save timelines" copy rendered
+  // where the new tile should have been. Signed-in users get this for free from
+  // the realtime channel; guests have no equivalent.
   useEffect(() => {
     if (!user) {
       setLocalDrafts(getAllDrafts())
     } else {
       setLocalDrafts([])
     }
-  }, [user, isOpen])
+  }, [user, isOpen, activeDraftId])
+
+  // Re-read whenever the draft store is written, so a guest's edit reorders
+  // the list as it happens rather than sitting still and then snapping the next
+  // time they switch drafts. Naturally rate-limited by the 500 ms draft
+  // debounce — and an immediate re-read wouldn't work anyway, since the write
+  // is what it needs to observe.
+  useEffect(() => {
+    if (user) return
+    const reread = () => setLocalDrafts(getAllDrafts())
+    window.addEventListener(DRAFTS_CHANGED_EVENT, reread)
+    return () => window.removeEventListener(DRAFTS_CHANGED_EVENT, reread)
+  }, [user])
+
+  // Freshen the list when the panel opens so the tile labels reflect any
+  // recent edits that haven't come through the realtime channel yet.
+  const rows = useMemo<TileRow[]>(() => {
+    const baseRows: TileRow[] = user
+      ? timelines.map(t => ({ id: t.id, title: t.title || DEFAULT_TIMELINE_TITLE, kind: 'timeline' as const }))
+      : localDrafts.map(d => ({ id: d.id, title: d.title || DEFAULT_TIMELINE_TITLE, kind: 'draft' as const }))
+
+    // If whatever the editor has open isn't in the list yet (new-timeline race,
+    // stale list, or dropped realtime event), synthesize a tile for it at the
+    // top using live context values so the user always sees their session.
+    //
+    // Guests need this at least as much as signed-in users: their draft is
+    // written to localStorage by the editor, and the read above can easily lose
+    // the race with it.
+    const activeId = user ? activeTimelineId : activeDraftId
+    const activeKind = user ? ('timeline' as const) : ('draft' as const)
+    const hasActiveRow = !!(activeId && baseRows.some(r => r.kind === activeKind && r.id === activeId))
+    if (!hasActiveRow && activeId) {
+      return [
+        {
+          id: activeId,
+          title: activeTimelineTitle && activeTimelineTitle.length > 0
+            ? activeTimelineTitle
+            : DEFAULT_TIMELINE_TITLE,
+          kind: activeKind,
+        },
+        ...baseRows,
+      ]
+    }
+    return baseRows
+  }, [user, timelines, localDrafts, activeTimelineId, activeDraftId, activeTimelineTitle])
+
+  const timelineIds = useMemo(
+    () => rows.filter(r => r.kind === 'timeline').map(r => r.id),
+    [rows],
+  )
+  const { metadata: timelineMetadata, applyLocalMetadata, refresh: refreshMetadata } = useTimelineMetadata(timelineIds)
 
   // Freshen the list when the panel opens so the tile labels reflect any
   // recent edits that haven't come through the realtime channel yet.
   useEffect(() => {
     if (isOpen && user) {
       loadTimelines()
+      // Counts and colour dots come from a separate query keyed on the set of
+      // timeline ids, so it never notices a timeline's *contents* changing.
+      // Refresh it explicitly or the badges stay at page-load values.
+      refreshMetadata()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, user])
 
-  // Expose loadTimelines to the context so actions originating outside this
+  // Expose the refresh to the context so actions originating outside this
   // component (e.g. deleting from the editor's settings panel) can force an
-  // immediate refetch instead of waiting on the realtime channel.
+  // immediate refetch instead of waiting on the realtime channel. Refreshes
+  // both the rows and their metadata — the realtime channel covers `timelines`
+  // only, never `events`.
+  //
+  // These two effects live below useTimelineMetadata rather than beside the
+  // other subscriptions above because they name `refreshMetadata` in their
+  // dependency arrays, which are evaluated during render.
   useEffect(() => {
-    setRefreshTimelines(() => loadTimelines())
+    setRefreshTimelines(() => {
+      loadTimelines()
+      refreshMetadata()
+    })
     return () => setRefreshTimelines(null)
-  }, [setRefreshTimelines, loadTimelines])
+  }, [setRefreshTimelines, loadTimelines, refreshMetadata])
 
-  const rows = useMemo<TileRow[]>(() => {
-    const baseRows: TileRow[] = user
-      ? timelines.map(t => ({ id: t.id, title: t.title || DEFAULT_TIMELINE_TITLE, kind: 'timeline' as const }))
-      : localDrafts.map(d => ({ id: d.id, title: d.title || DEFAULT_TIMELINE_TITLE, kind: 'draft' as const }))
-
-    // If the editor's active timeline isn't in the fetched list yet (new-timeline
-    // race, stale list, or dropped realtime event), synthesize a tile for it at
-    // the top using live context values so the user always sees their session.
-    const hasActiveRow = !!(user && activeTimelineId && baseRows.some(r => r.kind === 'timeline' && r.id === activeTimelineId))
-    if (!hasActiveRow && user && activeTimelineId) {
-      return [
-        {
-          id: activeTimelineId,
-          title: activeTimelineTitle && activeTimelineTitle.length > 0
-            ? activeTimelineTitle
-            : DEFAULT_TIMELINE_TITLE,
-          kind: 'timeline' as const,
-        },
-        ...baseRows,
-      ]
-    }
-    return baseRows
-  }, [user, timelines, localDrafts, activeTimelineId, activeTimelineTitle])
-
-  const timelineIds = useMemo(
-    () => rows.filter(r => r.kind === 'timeline').map(r => r.id),
-    [rows],
-  )
-  const timelineMetadata = useTimelineMetadata(timelineIds)
+  // Write the editor's live numbers for the timeline it currently has open into
+  // the metadata map, continuously while it is open.
+  //
+  // The tile for the *active* timeline already renders from these context
+  // values directly (below), so this exists for the moment it stops being
+  // active: without it the tile falls back to whatever the last fetch returned
+  // — in practice the page-load value — and the badge visibly reverts to a
+  // stale count the instant you switch to another timeline.
+  //
+  // Safe only because `activeTimelineId` and `activeEventCount` now reach the
+  // context in the same commit (App's applyLoadedTimeline sets the id and the
+  // contents in one batch). Before that, this could have filed one timeline's
+  // count under another's id.
+  useEffect(() => {
+    if (!activeTimelineId) return
+    if (activeEventCount == null && activeDominantCategoryColor == null) return
+    applyLocalMetadata(activeTimelineId, {
+      ...(activeEventCount != null ? { eventCount: activeEventCount } : {}),
+      ...(activeDominantCategoryColor != null ? { dominantCategoryColor: activeDominantCategoryColor } : {}),
+    })
+  }, [activeTimelineId, activeEventCount, activeDominantCategoryColor, applyLocalMetadata])
 
   const handleTileClick = (row: TileRow) => {
     if (row.kind === 'timeline') {
@@ -499,7 +563,10 @@ export function SidePanelBody() {
             </div>
           ) : isLoading && user ? (
             <div className="px-2 py-4 text-[14px] text-[#9b9ea3]">Loading timelines…</div>
-          ) : error && user ? (
+          ) : error && user && rows.length === 0 ? (
+            // Only when there is nothing to show. `error` is also set when the
+            // realtime channel drops, and replacing a perfectly good list with
+            // an error card over a websocket blip is worse than saying nothing.
             <div className="px-2 py-4">
               <p className="text-[14px] text-[#9b9ea3] mb-2">{error}</p>
               <button

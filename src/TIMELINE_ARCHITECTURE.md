@@ -648,27 +648,184 @@ useTimelineState
 Other timeline-page hooks live alongside but are not composed by `useTimelineState`:
 
 ```
-useTimeline           ─ load / create / save the timeline record itself
+useTimeline           ─ load / create the timeline record itself (holds no state)
 useAutosave           ─ debounced persistence + status state
 useLocalDraft         ─ localStorage drafts
 useTimelineScroll     ─ scroll position + visible quarter range (consumed by Timeline.tsx)
 useEventDrag          ─ drag interaction state machine (consumed by Timeline.tsx)
 ```
 
+### Which timeline is open — `loadedTimelineId`
+
+`App.tsx` holds `loadedTimelineId`: the row whose contents are actually in the
+editor. It is the **only** id the app acts on — autosave, Share and Delete all key
+off it — and it is written in exactly one place, `applyLoadedTimeline(data)`, which
+sets it alongside every content setter (`setTitle`, `setDescription`, `setEvents`,
+categories, both scales, `groupByCategory`) in a single synchronous block. React 18
+commits that batch together, so no render can observe one timeline's id beside
+another timeline's data.
+
+This invariant is load-bearing, not stylistic. `useTimeline` previously kept its own
+`timelineId`, written in three places — including a mount effect that pointed it at
+an arbitrary row via `.limit(1)` with no `.order()`, and a `setTimelineId(id)` that
+fired *before* the three sequential fetches it named had returned. Autosave keyed off
+that pointer while reading the editor's separately-held contents, so the two could
+disagree, and a save would then write one timeline's title and events onto a
+different timeline's row — deleting the victim's events, because the event save is a
+diff. The same desync made the side panel paint the open timeline's name and count
+onto the wrong tile, and made that tile permanently unclickable (the switch dedup
+matched the stale pointer, so its contents never loaded).
+
+`useTimeline` therefore holds **no state at all** now. `getMostRecentTimelineId()`
+and `loadTimeline(id)` *return* ids; `loadTimeline` includes the resolved `id` in its
+`TimelineData` so the caller can bind it to the data it came with. Anything that sets
+editor content outside `applyLoadedTimeline` reopens the bug.
+
 ### Save flow
 
 1. User makes a change (event edit, drag, rename, scale toggle, group toggle, etc.).
-2. `useAutosave.handleChange(data)` sets `saveStatus = 'saving'`, marks `hasUnsavedChanges`, and starts a 2000 ms debounce.
+2. `useAutosave.handleChange(data)` fingerprints the payload and **returns immediately if nothing changed** (see below). Otherwise it sets `saveStatus = 'saving'`, marks `hasUnsavedChanges`, and starts a 2000 ms debounce. `App.tsx` only calls it when `loadedTimelineId` is non-null, so a save can never target a timeline the editor hasn't loaded.
 3. After the debounce fires, `save(data)`:
    - `UPDATE` the `timelines` row (title, description, scale, group_by_category, updated_at).
-   - `saveTimelineEvents(timelineId, events)` performs a diff-based sync: classifies each event as INSERT / UPDATE / DELETE relative to the server, then executes UPDATE → DELETE → INSERT.
+   - `saveTimelineEvents(timelineId, events)` performs a diff-based sync: classifies each event as INSERT / UPDATE / DELETE relative to the server, then executes UPDATE → INSERT → DELETE. INSERT precedes DELETE deliberately: these are separate HTTP calls, not one transaction, so a mismatched client array fails the INSERT on a duplicate primary key *before* anything has been deleted.
 4. On success: `saveStatus = 'saved'`, `lastSavedTime = now`, `hasUnsavedChanges = false`.
 5. On failure: `saveStatus = 'error'`. A `window.online` listener retries `save(timelineData)` when the browser comes back online.
 6. A `beforeunload` listener fires `e.preventDefault()` while `hasUnsavedChanges` is true, prompting the browser's "leave site?" dialog.
 
+### Dirty tracking — why opening a timeline must not write
+
+`applyLoadedTimeline` sets the exact state the autosave effect watches, so applying
+freshly fetched data used to look identical to a user edit: opening any timeline
+rewrote its row ~2 s later with byte-identical data. Because `timelines.updated_at` is
+the side panel's sort key — and `useAutosave` is its only writer, there is no DB
+trigger — merely *looking* at a timeline moved it to the top of the list. It also ran
+the full `saveTimelineEvents` diff (an events SELECT) and armed the browser's "Leave
+site?" prompt, both for nothing.
+
+`src/utils/timelineFingerprint.ts` provides an **exact serialisation** (never a hash —
+a collision would silently drop a real save) of precisely what each store persists.
+`useAutosave` keeps two refs:
+
+- `intendedRef` — the store holds this, *or* a write for exactly this is armed or in
+  flight. Seeded by `markClean(...)`, which `applyLoadedTimeline` calls before any
+  setter, so a load is born clean.
+- `persistedRef` — a save of exactly this is known to have completed. A backstop for
+  callers that reach `save()` without going through `handleChange`, notably the
+  back-online retry.
+
+**The baseline advances at arm time, not on save success.** This is the subtle part.
+With success-only advancement, typing a character and deleting it inside the debounce
+window reads as clean on the way back — so `handleChange` returns early, the
+already-armed write still carries the intermediate text, and it commits a character the
+user removed with nothing left to reconcile it. Advancing on arm makes the revert
+dirty, which re-arms the debounce with the correct content.
+
+A failed save nulls **both** refs: if the `timelines` UPDATE succeeded and
+`saveTimelineEvents` then threw, the store is partially written and neither ref may
+authorise a skip. The id is part of the fingerprint, so a write armed for the outgoing
+timeline (the user can keep typing during `await loadTimeline`) can never be mistaken
+for the incoming one's baseline.
+
+The guest path does the same thing in `useLocalDraft`, with two differences: the
+baseline **seeds itself from localStorage** via `getDraft(id)` — for a synchronous
+store the honest baseline is the store itself, which avoids needing a hook into all
+five hydration branches — and its fingerprint **includes `categories`**, because
+`LocalDraft` persists them where the `timelines` UPDATE does not.
+
+**Flush, don't cancel.** The debounced call holds a *snapshot* of its arguments, and
+each new call replaces them — so dropping the timer discards the pending write rather
+than deferring it. `useAutosave` exposes `flushPendingSave()` (awaited by
+`switchTimeline` before it loads, and run on unmount) so the outgoing timeline's last
+≤2 s of edits commit instead of being overwritten by the incoming timeline's
+snapshot. `cancelPendingSave()` is correct only when the target row is going away —
+`handleDeleteTimeline` calls it, since flushing there would re-insert the events it
+just deleted.
+
+### Entering the editor
+
+`/editor` → `/editor` does not remount `App`, so the route-state effect latches on
+`location.key` rather than a once-per-mount boolean. A boolean made every navigation
+after the first a silent no-op, which is what broke "Create a Timeline", "Import
+Data", and a second hand-off from AI mode. Both the route-state effect and the
+no-route-state bootstrap are gated on `authReady` from `AuthContext` — `user` is null
+both before the session lookup answers and when genuinely signed out, so without the
+gate a hard refresh ran the logged-out draft path first and cleared `location.state`
+before the signed-in path could read it. `editorSeededRef` keeps the two paths from
+both claiming the same mount.
+
+### Keeping the side panel current
+
+The panel is not remounted by navigation (`GlobalLayout` renders it outside the router
+`<Outlet />` and hides it with a transform), so nothing about it refreshes for free.
+Four distinct mechanisms keep it honest, and they cover different things:
+
+| Layer | Signed in | Guest |
+|---|---|---|
+| Row set + titles | `useTimelines` realtime on the **`timelines` table** + `loadTimelines()` on panel open | `localDrafts` re-read, keyed on `activeDraftId` *and* on the `DRAFTS_CHANGED_EVENT` the storage layer dispatches after every write |
+| Order | client-side `byUpdatedAtDesc` applied on fetch **and after every realtime merge**, so an edit moves its tile immediately | `getAllDrafts()` sorts by `savedAt`; the change event makes it live |
+| Live values for the open timeline | `activeTimelineTitle` / `activeEventCount` / `activeDominantCategoryColor` pushed from `App` | same — the overrides key off `isActive`, not `row.kind` |
+| Missing-row fallback | synthetic active row in the `rows` memo | same, via `activeDraftId` |
+| Counts + colour dots for *other* rows | `useTimelineMetadata`: write-through + explicit `refresh()` | recomputed from `localDrafts` |
+
+**Nothing subscribes to the `events` table here.** `useTimelineMetadata` fetches keyed
+on the *set* of timeline ids, so a timeline's contents changing is invisible to it by
+construction. That is why it exposes two escape hatches:
+
+- `applyLocalMetadata(id, patch)` — the panel writes the editor's live count and colour
+  into the map continuously while a timeline is open. The active tile already renders
+  from the context values directly; this exists for the moment it stops being active,
+  which is when the tile would otherwise fall back to the page-load value and the badge
+  would visibly revert. This is only safe because `applyLoadedTimeline` puts the id and
+  the contents in one commit — otherwise it could file one timeline's count under
+  another's id.
+- `refresh()` — called on panel open and from the context's `refreshTimelines`, which
+  now refreshes rows *and* metadata.
+
+A failed metadata fetch unlatches its key so the next `refresh()` retries; latching it
+before the request and never clearing it meant one transient failure froze every badge
+at `0` for the life of the page.
+
+Deliberately **not** covered: changes made in another browser tab. Guest drafts have no
+`storage` listener, and closing the signed-in half would need an `events` realtime
+subscription — `useEventUsage` has one, but RLS on `postgres_changes` for that table is
+flagged as untested in the verification runbook. Also note the realtime DELETE on
+`timelines` likely never fires: the handler reads `payload.old.id` under a `user_id`
+filter, and with default replica identity a DELETE's `old` carries only the primary key.
+Deleting from this tab works because `refreshTimelines()` is called explicitly.
+
 ### Local draft
 
-`useLocalDraft` exposes `loadAllDrafts`, `loadDraft`, `saveDraft` (debounced 500 ms), `saveDraftImmediate`, `createDraft`, `deleteDraft`, `clearAllDrafts`, `getDraftCount`. It delegates persistence to `src/utils/draftStorage.ts`; the payload type is `LocalDraft` exported from that module.
+Guests get localStorage drafts rather than Supabase rows — one key,
+`timeline_drafts`, capped at `MAX_DRAFTS = 3` (`PLAN_LIMITS.guest.timelineLimit`).
+"Create a Timeline" branches on sign-in state in `SidePanelBody.handleBuildFromScratch`
+and sends guests `{newTimeline, skipCreationScreen}`, which only the logged-out
+hydration effect in `App.tsx` consumes — a fully separate path from the signed-in
+`{timelineId}` one, and one that needs its own fixes for the same classes of bug.
+
+`useLocalDraft` exposes `loadAllDrafts`, `loadDraft`, `saveDraft` (debounced 500 ms), `saveDraftImmediate`, `flushDraftSave`, `createDraft`, `deleteDraft`, `clearAllDrafts`, `getDraftCount`. It delegates persistence to `src/utils/draftStorage.ts`; the payload type is `LocalDraft` exported from that module.
+
+**Flush applies here too.** `flushDraftSave()` runs before `handleDraftSwitch`
+replaces the editor's contents, and on unmount / `beforeunload` / `pagehide` — the
+debounced save holds a snapshot whose arguments the next edit overwrites, so without
+it a rename made within 500 ms of switching drafts or closing the tab was lost
+silently. The `beforeunload` guard in `useAutosave` does not cover this: its
+`hasUnsavedChanges` flag is only ever set on the signed-in path.
+
+**Two latches, not one.** The logged-out effect keys route-state handling on
+`location.key` (like the signed-in effect) but still gates the *no-route-state*
+bootstrap on the once-per-mount `draftHydrated` flag. Both are needed: the key latch
+is what makes a second "Create a Timeline" work from inside `/editor`, while the
+mount flag stops the `state:{}` reset — which mints a fresh key — from re-hydrating
+over the draft just created.
+
+**Making a new draft visible.** `SidePanelBody` lives in `GlobalLayout` outside the
+router `<Outlet />` and is hidden with a transform rather than unmounted, so
+navigating to `/editor` never remounts it and it has no realtime channel to lean on.
+Its `localDrafts` read therefore depends on `activeDraftId`, which changes exactly
+when the guest's draft set does, and the synthetic active-row fallback in the `rows`
+memo covers guests as well as signed-in users — otherwise a freshly created draft
+stayed invisible behind the "Sign in to save timelines" empty state until the panel
+was toggled or the page reloaded.
 
 ### Event operations
 
@@ -738,9 +895,9 @@ Hooks consumed (directly or via composition) by the timeline page.
 | Hook | File | Purpose |
 |---|---|---|
 | `useTimelineState` | `hooks/useTimelineState.ts` | Composes events, title, categories, scale, and groupByCategory into a single state hook |
-| `useTimeline` | `hooks/useTimeline.ts` | Loads / creates / saves the timeline record from Supabase; enforces plan limits before creation |
+| `useTimeline` | `hooks/useTimeline.ts` | Loads / creates timeline records in Supabase; enforces plan limits before creation. Stateless by design — returns ids rather than holding a "current timeline" pointer |
 | `useEvents` | `hooks/useEvents.ts` | Local event CRUD (add, update, batch-add with dedup, clear) |
-| `useAutosave` | `hooks/useAutosave.ts` | Debounced persistence (2000 ms), beforeunload guard, online retry |
+| `useAutosave` | `hooks/useAutosave.ts` | Debounced persistence (2000 ms), fingerprint dirty-check + `markClean`, flush/cancel controls, beforeunload guard, online retry |
 | `useTimelineScale` | `hooks/useTimelineScale.ts` | Scale toggle (`large` / `medium` / `small`) + current `TimelineScale` |
 | `useTimelineTitle` | `hooks/useTimelineTitle.ts` | Title and description state |
 | `useCategories` | `hooks/useCategories.ts` | Category config state with `DEFAULT_CATEGORIES` fallback |
@@ -749,6 +906,6 @@ Hooks consumed (directly or via composition) by the timeline page.
 | `useEventDrag` | `hooks/useEventDrag.ts` | Pointer-driven drag state machine; defines `DRAG_THRESHOLD = 5` |
 | `useLocalDraft` | `hooks/useLocalDraft.ts` | localStorage draft CRUD with 500 ms debounced save |
 | `useTimelines` | `hooks/useTimelines.ts` | List of the user's timelines with realtime subscription and retry-with-backoff |
-| `useTimelineMetadata` | `hooks/useTimelineMetadata.ts` | Per-timeline event count, year range, and dominant category color (for timeline cards) |
+| `useTimelineMetadata` | `hooks/useTimelineMetadata.ts` | Per-timeline event count, year range, and dominant category color (for timeline cards). Returns `{ metadata, applyLocalMetadata, refresh }` — the fetch is keyed on the *set* of ids, so contents changes need the write-through or an explicit refresh |
 | `useSidePanel` | `hooks/useSidePanel.ts` | Accesses `SidePanelContext` (open/close state for the event details side panel) |
-| `useAuth` | `hooks/useAuth.ts` | Accesses `AuthContext` (current user) |
+| `useAuth` | `hooks/useAuth.ts` | Accesses `AuthContext` (current user, plus `authReady` — whether the session lookup has answered yet) |

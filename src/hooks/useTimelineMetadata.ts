@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { getTimelineYearRange } from '../utils/timelineUtils';
 import { TimelineCategory } from '../types/event';
@@ -11,19 +11,78 @@ export interface TimelineMetadata {
   dominantCategoryColor: string;
 }
 
-export function useTimelineMetadata(timelineIds: string[]): Map<string, TimelineMetadata> {
+function emptyMetadata(): TimelineMetadata {
+  return {
+    eventCount: 0,
+    yearRange: new Date().getFullYear().toString(),
+    dominantCategoryColor: DEFAULT_DOT_COLOR,
+  };
+}
+
+/**
+ * Per-timeline event count, year range and dominant category colour, for the
+ * side panel's tiles.
+ *
+ * The fetch is keyed on the *set* of timeline ids, so a timeline's contents
+ * changing is invisible to it by construction — and there is deliberately no
+ * subscription to the `events` table here. Two escape hatches keep the numbers
+ * current instead:
+ *
+ * - `applyLocalMetadata` lets the editor write through what it already knows
+ *   about the timeline it has open, so those numbers survive the user switching
+ *   away from it. Without it the tile falls back to whatever was fetched when
+ *   the page loaded, and the badge visibly reverts.
+ * - `refresh` forces a real refetch, for the moments where a round trip is
+ *   warranted (the panel opening, an explicit refresh from the editor).
+ */
+export function useTimelineMetadata(timelineIds: string[]) {
   const [metadata, setMetadata] = useState<Map<string, TimelineMetadata>>(new Map());
-  const prevIdsKeyRef = useRef('');
+  const [nonce, setNonce] = useState(0);
+  const prevFetchKeyRef = useRef('');
+  const seqRef = useRef(0);
+
+  const refresh = useCallback(() => setNonce(n => n + 1), []);
+
+  const applyLocalMetadata = useCallback((id: string, patch: Partial<TimelineMetadata>) => {
+    setMetadata(prev => {
+      const existing = prev.get(id);
+      const merged = { ...(existing ?? emptyMetadata()), ...patch };
+      // Bail without allocating when nothing actually moved — this runs on
+      // every keystroke that changes the open timeline.
+      if (
+        existing &&
+        merged.eventCount === existing.eventCount &&
+        merged.yearRange === existing.yearRange &&
+        merged.dominantCategoryColor === existing.dominantCategoryColor
+      ) {
+        return prev;
+      }
+      const next = new Map(prev);
+      next.set(id, merged);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
-    const idsKey = JSON.stringify(timelineIds);
-    if (idsKey === prevIdsKeyRef.current) return;
-    prevIdsKeyRef.current = idsKey;
+    // Keyed on the *set* of ids, so the ids are sorted first — the list itself
+    // re-sorts whenever a timeline is edited, and an order-sensitive key would
+    // turn every reorder into two needless queries plus a full map replacement
+    // that discards the write-through values applyLocalMetadata just put there.
+    //
+    // `nonce` is part of the key so refresh() forces a fetch the set check
+    // would otherwise skip.
+    const fetchKey = `${nonce}:${[...timelineIds].sort().join(',')}`;
+    if (fetchKey === prevFetchKeyRef.current) return;
+    // Latched up front so `timelineIds` identity churn doesn't re-fire the
+    // request; the error path below unlatches it again.
+    prevFetchKeyRef.current = fetchKey;
 
     if (timelineIds.length === 0) {
       setMetadata(new Map());
       return;
     }
+
+    const seq = ++seqRef.current;
 
     const fetchMetadata = async () => {
       const [eventsResult, timelinesResult] = await Promise.all([
@@ -37,9 +96,24 @@ export function useTimelineMetadata(timelineIds: string[]): Map<string, Timeline
           .in('id', timelineIds),
       ]);
 
+      // A newer fetch has superseded this one. These genuinely overlap when the
+      // synthetic active row appears and then disappears, and without this the
+      // older response can land last and win.
+      if (seq !== seqRef.current) return;
+
       if (eventsResult.error) {
         console.error('Error fetching timeline metadata:', eventsResult.error);
+        // Unlatch so the next id change or refresh() retries. Leaving this
+        // latched meant a single transient failure froze every badge at 0 for
+        // the rest of the page's life.
+        prevFetchKeyRef.current = '';
         return;
+      }
+
+      if (timelinesResult.error) {
+        // Not fatal — every dot just falls back to the default palette — but it
+        // used to be swallowed silently, which made the cause impossible to see.
+        console.error('Error fetching timeline categories:', timelinesResult.error);
       }
 
       // Build a map of timeline-specific category configs
@@ -54,11 +128,7 @@ export function useTimelineMetadata(timelineIds: string[]): Map<string, Timeline
 
       // Initialize all timelines with defaults (so 0-event timelines get entries)
       for (const id of timelineIds) {
-        result.set(id, {
-          eventCount: 0,
-          yearRange: new Date().getFullYear().toString(),
-          dominantCategoryColor: DEFAULT_DOT_COLOR,
-        });
+        result.set(id, emptyMetadata());
       }
 
       // Group events by timeline_id
@@ -95,7 +165,7 @@ export function useTimelineMetadata(timelineIds: string[]): Map<string, Timeline
     };
 
     fetchMetadata();
-  }, [timelineIds]);
+  }, [timelineIds, nonce]);
 
-  return metadata;
+  return { metadata, applyLocalMetadata, refresh };
 }
