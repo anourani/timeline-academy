@@ -726,13 +726,27 @@ authorise a skip. The id is part of the fingerprint, so a write armed for the ou
 timeline (the user can keep typing during `await loadTimeline`) can never be mistaken
 for the incoming one's baseline.
 
-The signed-out path does the same thing in `useLocalDraft`, with two differences: the
+The signed-out path does the same thing in `useLocalDraft`, with one difference: the
 baseline **seeds itself from the store** via `store.getDraft(id)` — for a synchronous
 store the honest baseline is the store itself, which avoids needing a hook into all
-five hydration branches — and its fingerprint **includes `categories`**, because
-`LocalDraft` persists them where the `timelines` UPDATE does not. The baseline is
-keyed by store as well as id, since the same draft id exists in both stores across a
-migration and a baseline taken against one says nothing about the other.
+five hydration branches. The baseline is keyed by store as well as id, since the same
+draft id exists in both stores across a migration and a baseline taken against one
+says nothing about the other.
+
+**Both fingerprints include `categories`,** and both must, because both stores now
+persist them. The signed-in half writes `timelines.categories` — the same jsonb column
+`useTimelineMetadata` reads for the tile's colour dot. It used to write nothing at all
+while `loadTimeline` read a separate `timeline_categories` table that has never been
+written by anything, so a signed-in user's category edits were silently discarded on
+reload and the two halves of the app disagreed about where categories even lived.
+
+The coupling is sharp in both directions. A field the store persists but the
+fingerprint omits means edits to it never arm a write; a field the fingerprint includes
+but `markClean` isn't given means **every load looks dirty and writes itself back**,
+which is exactly how opening a timeline used to reorder the side panel. So
+`applyLoadedTimeline` resolves `categories` to `DEFAULT_CATEGORIES` itself rather than
+leaving `undefined` for `updateCategories`' own fallback to handle — the baseline has
+to record what will actually be in state a moment later, not what arrived.
 
 **Flush, don't cancel.** The debounced call holds a *snapshot* of its arguments, and
 each new call replaces them — so dropping the timer discards the pending write rather
@@ -764,7 +778,7 @@ Four distinct mechanisms keep it honest, and they cover different things:
 | Layer | Signed in | Guest |
 |---|---|---|
 | Row set + titles | `useTimelines` realtime on the **`timelines` table** + `loadTimelines()` on panel open | `localDrafts` re-read, keyed on `activeDraftId` *and* on the `DRAFTS_CHANGED_EVENT` the storage layer dispatches after every write |
-| Order | client-side `byUpdatedAtDesc` applied on fetch **and after every realtime merge**, so an edit moves its tile immediately | `getAllDrafts()` sorts by `savedAt`; the change event makes it live |
+| Order | client-side `byUpdatedAtDesc` applied on fetch, on the **`TIMELINE_SAVED_EVENT` echo** the write layer dispatches after every save, and after every realtime merge | `getAllDrafts()` sorts by `savedAt`; the change event makes it live |
 | Live values for the open timeline | `activeTimelineTitle` / `activeEventCount` / `activeDominantCategoryColor` pushed from `App` | same — the overrides key off `isActive`, not `row.kind` |
 | Missing-row fallback | synthetic active row in the `rows` memo | same, via `activeDraftId` |
 | Counts + colour dots for *other* rows | `useTimelineMetadata`: write-through + explicit `refresh()` | recomputed from `localDrafts` |
@@ -787,7 +801,38 @@ A failed metadata fetch unlatches its key so the next `refresh()` retries; latch
 before the request and never clearing it meant one transient failure froze every badge
 at `0` for the life of the page.
 
-Deliberately **not** covered: changes made in another browser tab. Guest drafts have no
+#### Ordering must not depend on realtime
+
+`useAutosave` dispatches `TIMELINE_SAVED_EVENT` (`src/utils/timelineSaved.ts`) with the
+`updated_at` it read back from the write, and `useTimelines` merges and re-sorts on it.
+That echo — not realtime — is what makes an edit move its tile.
+
+It has to be that way round. `public.timelines` is added to the `supabase_realtime`
+publication by `20260808000000_timeline_ordering.sql` and by nothing else, and that
+migration is applied by hand like all the others. Before it existed the subscription was
+the *only* thing that re-sorted a signed-in user's list, so wherever the publication was
+off, the panel rendered in the right order on load and then silently froze — a
+`CHANNEL_ERROR` is invisible whenever the list is non-empty, and the only other refresh
+is keyed on `[isOpen, user]`, which for anyone leaving the panel open fires once per
+mount and never again. Realtime is now strictly the cross-tab bonus.
+
+Two guards make the echo safe against the fetch it races:
+
+- **`seqRef`** rejects a `loadTimelines` response that a newer request superseded — the
+  guard `useTimelineMetadata` always had and this hook never did. It also fires on
+  sign-out, so a fetch in flight for the previous account can't repopulate the panel.
+- **`savedFloorRef`** covers what `seqRef` structurally cannot: a *single* fetch whose
+  response was generated before the write and resolves after it. There is no second
+  request for the sequence to reject, so without the floor that stale array replaces the
+  freshly sorted one wholesale and the tile drops back down. The floor is applied as
+  rows are mapped in, and deletes itself once the server catches up.
+
+An echo for an id that isn't in the list is a no-op, not a stub row — the synthetic
+active row already covers that case with the editor's live title, and a stub would
+suppress it and render `Name your timeline` over the top.
+
+Deliberately **not** covered: *counts and colour dots* changed in another browser tab
+(ordering is covered, by realtime, wherever the publication is on). Guest drafts have no
 `storage` listener, and closing the signed-in half would need an `events` realtime
 subscription — `useEventUsage` has one, but RLS on `postgres_changes` for that table is
 flagged as untested in the verification runbook. Also note the realtime DELETE on
