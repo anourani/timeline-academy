@@ -8,7 +8,7 @@ interface ModalProps {
   onClose: () => void;
   children: React.ReactNode;
   title: string;
-  size?: 'default' | 'large';
+  size?: 'compact' | 'default' | 'large';
 }
 
 export function Modal({ isOpen, onClose, children, title, size = 'default' }: ModalProps) {
@@ -23,6 +23,9 @@ export function Modal({ isOpen, onClose, children, title, size = 'default' }: Mo
   if (typeof document === 'undefined') return null;
 
   const sizeClasses = {
+    // Narrow column for short, single-purpose forms. Every variant keeps the
+    // viewport cap so the modal still shrinks on small screens.
+    compact: 'w-[420px] max-w-[90vw]',
     default: 'w-[550px] max-w-[90vw]',
     large: 'w-[960px] max-w-[95vw] min-h-[600px]'
   };

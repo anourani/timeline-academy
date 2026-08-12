@@ -45,10 +45,10 @@ export function PrivacyPolicyPage() {
           <strong>Netlify</strong> — hosts and serves the website.
         </li>
         <li>
-          <strong>Anthropic</strong> (and, as a fallback, <strong>OpenAI</strong>)
-          — when you generate a timeline or event description with AI, the
-          subject or event title you typed (plus dates and the timeline's
-          title) is sent to the AI provider. We never include your email,
+          <strong>Anthropic</strong> and <strong>OpenAI</strong> — when you
+          generate a timeline or event description with AI, the subject or
+          event title you typed (plus dates and the timeline's title) is sent
+          to whichever provider is in use. We never include your email,
           account ID, or any other identifier in these requests.
         </li>
         <li>
@@ -59,20 +59,27 @@ export function PrivacyPolicyPage() {
         </li>
       </ul>
 
-      <h2>If you use your own Anthropic API key</h2>
+      <h2>If you use your own API key</h2>
       <p>
-        In bring-your-own-key mode, your key is stored only in your browser's
-        local storage — it is never sent to our servers. AI requests then go
-        directly from your browser to Anthropic, which means Anthropic sees
-        your IP address for those requests. Anyone with access to your device
-        and browser profile could read the stored key; remove it in Settings
-        any time.
+        You can bring your own OpenAI or Anthropic API key. It is stored only
+        in your browser's local storage — it is never sent to our servers. AI
+        requests then go directly from your browser to the provider whose key
+        you supplied, which means that provider sees your IP address for those
+        requests, and bills the usage to your account with them rather than to
+        us. Anyone with access to your device and browser profile could read
+        the stored key; remove it in Settings any time.
+      </p>
+      <p>
+        Requests we send to OpenAI on your behalf are marked not to be stored,
+        so they do not accumulate in your OpenAI dashboard. If you save keys
+        for both providers, you choose which one is used by default, and only
+        that provider receives your requests.
       </p>
 
       <h2>What we store in your browser</h2>
       <p>
         Local storage on your device may hold: unsaved timeline drafts, your
-        optional Anthropic API key, AI-generated content for shared timelines
+        optional OpenAI or Anthropic API keys, AI-generated content for shared timelines
         you've viewed, your session sign-in token, and interface preferences.
         Clearing your browser's site data removes all of it.
       </p>

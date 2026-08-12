@@ -25,7 +25,8 @@ src/
 ├── hooks/            # Custom React hooks (useTimeline, useEvents, useAutosave, useAIMode, etc.)
 ├── contexts/         # React Context providers (AuthContext, SidePanelContext)
 ├── services/         # AI generation + external APIs:
-│                     #   aiTimeline, anthropicDirect (BYOK), eventEnrichment,
+│                     #   aiTimeline, anthropicDirect + openaiDirect (BYOK),
+│                     #   llmShared (provider-neutral), eventEnrichment,
 │                     #   llmPrompts, userApiKey, viewerEventCache,
 │                     #   wikipediaSearch, wikipediaImage
 ├── utils/            # Helpers (csvParser, excelSheet/excelExport, dateUtils,
@@ -105,7 +106,7 @@ Each of these was learned the expensive way. See `docs/2026-08-05-security-revie
 
 That sentence is the whole model. Everything below is how it is enforced.
 
-- **Four states, three of them tiers.** `useAccountTier()` (`src/hooks/useAccountTier.ts`) is the single source of truth, derived from two independent axes — is there an account, is there an Anthropic key:
+- **Four states, three of them tiers.** `useAccountTier()` (`src/hooks/useAccountTier.ts`) is the single source of truth, derived from two independent axes — is there an account, is there a BYOK key (OpenAI *or* Anthropic; limits are identical either way, so the provider is deliberately not a third axis):
 
   | State | Signed in | Key | Storage | Limits |
   |---|---|---|---|---|
@@ -117,7 +118,8 @@ That sentence is the whole model. Everything below is how it is enforced.
   **Trial is deliberately not a fourth plan.** It is absent from `PLAN_LIMITS`, has no row in the tier table, and costs nothing to host — so there is nothing to meter. `Plan` in `src/constants/plans.ts` holds only the three durable tiers.
 
 - **`useAccountTier` must be consumed with its `'loading'` state respected.** `user` is null both before the session lookup answers and when genuinely signed out; answering `trial` in that window points a signed-in user's editor at the wrong store. Same trap `authReady` exists to close.
-- **Server-funded AI requires sign-in.** Anonymous visitors hitting Generate get a gate offering email sign-in or their own Anthropic key. BYOK runs browser-direct (`services/anthropicDirect.ts`) and never touches our servers.
+- **Server-funded AI requires sign-in.** Anonymous visitors hitting Generate get a gate offering email sign-in or their own OpenAI or Anthropic key. BYOK runs browser-direct (`services/anthropicDirect.ts`, `services/openaiDirect.ts`) and never touches our servers. When both keys are saved, `getActiveCredential()` in `services/userApiKey.ts` resolves which one is used — and when exactly one key exists it wins regardless of the stored preference, which is what keeps the tier logic and the routing logic from disagreeing.
+- **`connect-src` in `netlify.toml` must list every provider host the browser calls directly.** A missing entry fails *only* in production — the dev server sends no CSP and `npm run preview` doesn't apply the header file — and it surfaces as a generic "Failed to fetch", which reads like an app bug rather than a blocked request.
 - **Storage reconciliation promotes upward only** (`App.tsx`). Content in a store below the current tier is moved up on mount — never on a transition watcher, because the identity change usually happens while the editor is unmounted (the key gate lives on `/`, sign-in can start from the side panel anywhere). Removing a key drops you to trial and must leave localStorage drafts exactly where they are: dormant, not deleted.
 - **The only gate on trial work** is starting something new while the single slot is occupied. Everything else already autosaves, so navigating away and refreshing were never lossy.
 - **Identity is email-only** — passwordless OTP, 6-digit codes, custom SMTP via Resend from `timeline.academy`. Supabase's Email OTP Length setting must stay at 6 to match the UI.

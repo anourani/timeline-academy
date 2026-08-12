@@ -6,7 +6,8 @@ import { AuthModal } from '@/components/Auth/AuthModal'
 import { ApiKeyModal } from '@/components/Modal/ApiKeyModal'
 import { useAIMode } from '@/hooks/useAIMode'
 import { useAuth } from '@/hooks/useAuth'
-import { getAnthropicKey } from '@/services/userApiKey'
+import { hasAnyKey } from '@/services/userApiKey'
+import type { ByokProvider } from '@/types/ai'
 
 export function AIModePage() {
   const navigate = useNavigate()
@@ -17,21 +18,31 @@ export function AIModePage() {
     classifiedType,
     categoryLabels,
     error,
+    retryProvider,
     classifyAndGenerate,
     abort,
   } = useAIMode()
 
   // Server-funded generation requires sign-in; anonymous visitors can instead
-  // add their own Anthropic key (browser-direct, never touches our servers).
-  // When a signed-out, keyless visitor hits Generate we stash the subject,
-  // open the gate, and resume once either path completes.
+  // add their own OpenAI or Anthropic key. When a signed-out, keyless visitor
+  // hits Generate we stash the subject, open the gate, and resume once either
+  // path completes.
   const [showApiKeyModal, setShowApiKeyModal] = useState(false)
   const [showAuthModal, setShowAuthModal] = useState(false)
   const pendingSubjectRef = useRef<string | null>(null)
+  // The last subject actually attempted, so a retry against the other
+  // provider knows what to re-run. `pendingSubjectRef` can't serve here — it
+  // is cleared as soon as the gate resolves.
+  const lastSubjectRef = useRef<string | null>(null)
 
-  const runGeneration = async (subject: string) => {
+  const runGeneration = async (
+    subject: string,
+    providerOverride?: ByokProvider,
+  ) => {
+    lastSubjectRef.current = subject
     try {
-      const { title, description, events, categories } = await classifyAndGenerate(subject)
+      const { title, description, events, categories } =
+        await classifyAndGenerate(subject, providerOverride)
       navigate('/editor', {
         state: {
           aiGenerated: { title, description, events, categories },
@@ -43,7 +54,7 @@ export function AIModePage() {
   }
 
   const handleAIGenerate = async (subject: string) => {
-    if (!user && !getAnthropicKey()) {
+    if (!user && !hasAnyKey()) {
       pendingSubjectRef.current = subject
       setShowApiKeyModal(true)
       return
@@ -86,6 +97,11 @@ export function AIModePage() {
         classifiedType={classifiedType}
         categoryLabels={categoryLabels}
         error={error}
+        retryProvider={retryProvider}
+        onRetryWithProvider={(provider) => {
+          const subject = lastSubjectRef.current
+          if (subject) void runGeneration(subject, provider)
+        }}
       />
       <ApiKeyModal
         isOpen={showApiKeyModal}

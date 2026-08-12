@@ -175,12 +175,22 @@ Deno.serve(async (req: Request) => {
               "anthropic-version": "2023-06-01",
             },
             body: JSON.stringify({
-              model: "claude-sonnet-4-6",
-              max_tokens: 1024,
+              model: "claude-sonnet-5",
+              // Sonnet 5 runs adaptive thinking by default and max_tokens caps
+              // thinking PLUS response text, so the old 1024 — sized for the
+              // description alone — would now truncate mid-sentence.
+              //
+              // Thinking stays on rather than being disabled to reclaim the
+              // budget: with it off, Sonnet 5 reaches for tools noticeably
+              // less often, and this call is only worth making if web_search
+              // actually fires. max_tokens is a ceiling, not a charge.
+              max_tokens: 4096,
               system: SYSTEM_PROMPT,
               tools: [
                 {
-                  type: "web_search_20250305",
+                  // Dynamic filtering — results are filtered before entering
+                  // the context window, which is where this call's cost lives.
+                  type: "web_search_20260209",
                   name: "web_search",
                   max_uses: 3,
                 },

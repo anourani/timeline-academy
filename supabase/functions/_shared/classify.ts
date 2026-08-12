@@ -30,7 +30,11 @@ async function classifyWithClaude(
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "claude-haiku-4-5-20251001",
+      // Alias, not a dated snapshot — the ID is complete as written.
+      // Haiku 4.5 still supports assistant prefill and `temperature`; the
+      // Sonnet-tier models reject both, so this call must stay on Haiku
+      // unless the prefill below is replaced with structured output.
+      model: "claude-haiku-4-5",
       max_tokens: 32,
       messages: [
         {
@@ -77,7 +81,12 @@ async function classifyWithOpenAI(
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: "gpt-4o-mini",
+      // Cheapest tier of the current family. NOTE: this path is only reached
+      // when ANTHROPIC_API_KEY is unset, so it is rarely exercised — confirm
+      // the parameter contract against live OpenAI docs before relying on it
+      // (reasoning-capable models have historically renamed `max_tokens` and
+      // tightened sampling parameters).
+      model: "gpt-5.6-luna",
       response_format: { type: "json_object" },
       messages: [
         {
@@ -85,7 +94,8 @@ async function classifyWithOpenAI(
           content: CLASSIFICATION_PROMPT.replace("{subject}", subject),
         },
       ],
-      temperature: 0,
+      // No `temperature`: newer reasoning-capable models reject non-default
+      // sampling parameters, and it bought nothing on a four-way enum.
       max_tokens: 32,
     }),
   });

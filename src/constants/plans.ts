@@ -13,7 +13,7 @@ export interface PlanLimits {
 }
 
 export const PLAN_LIMITS: Record<Plan, PlanLimits> = {
-  // Has an Anthropic key but no account: browser-only localStorage drafts.
+  // Has a BYOK key (either provider) but no account: browser-only drafts.
   'byok-anon': { eventLimit: 150, timelineLimit: 3 },
   free: { eventLimit: 300, timelineLimit: 10 },
   byok: { eventLimit: 1200, timelineLimit: 25 },
