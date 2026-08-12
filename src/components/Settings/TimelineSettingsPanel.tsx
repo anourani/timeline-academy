@@ -9,6 +9,9 @@ import { ScaleSelector } from './ScaleSelector';
 import { VerticalScaleSelector } from './VerticalScaleSelector';
 import { ApiKeySection } from './ApiKeySection';
 import { SidePanelActionButton } from '../SidePanel/SidePanelActionButton';
+import { PanelResizeHandle } from '../ui/PanelResizeHandle';
+import { usePanelWidth } from '../../hooks/usePanelWidth';
+import { SETTINGS_PANEL_DEFAULT_WIDTH } from '../../constants/panels';
 import { DEFAULT_TIMELINE_DESCRIPTION } from '../../constants/defaults';
 import {
   isInstructionRow,
@@ -61,8 +64,16 @@ export function TimelineSettingsPanel({
   onDeleteTimeline,
 }: TimelineSettingsPanelProps) {
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const maxDescriptionLength = 260;
+
+  // Settings is the widest panel by default — its scale selectors and BYOK key
+  // rows were cramped at the 314px card the other panels use.
+  const { width, setWidth, resetWidth } = usePanelWidth(
+    'settings_panel_width',
+    SETTINGS_PANEL_DEFAULT_WIDTH
+  );
 
   useEffect(() => {
     if (isOpen && !timelineDescription) {
@@ -159,12 +170,23 @@ export function TimelineSettingsPanel({
             aria-hidden="true"
           />
           <aside
-            className={`fixed inset-y-0 right-0 z-50 w-[320px] pr-[6px] py-[6px] transition-transform duration-300 ease-out ${
-              isOpen ? 'translate-x-0' : 'translate-x-full'
-            }`}
+            className={`fixed inset-y-0 right-0 z-50 pr-[6px] py-[6px] ${
+              isResizing ? '' : 'transition-[transform,width] duration-300 ease-out'
+            } ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
+            style={{ width: `${width}px` }}
             aria-hidden={!isOpen}
             aria-label="Settings side panel"
           >
+            {isOpen && (
+              <PanelResizeHandle
+                side="right"
+                width={width}
+                onWidthChange={setWidth}
+                onResizeStateChange={setIsResizing}
+                onReset={resetWidth}
+                label="Resize settings panel"
+              />
+            )}
             <div className="h-full w-full bg-[#171717] rounded-[6px] border border-[#262626] flex flex-col overflow-hidden">
               {/* Header */}
               <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-2 border-b border-[#404040] shrink-0">

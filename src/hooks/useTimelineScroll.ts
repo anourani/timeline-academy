@@ -54,18 +54,27 @@ export function useTimelineScroll(
     const debouncedScroll = debounce(handleScroll, 16); // ~60fps
 
     const container = scrollContainerRef.current;
+    let observer: ResizeObserver | undefined;
+
     if (container) {
       container.addEventListener('scroll', debouncedScroll);
       // Initial calculation
       handleScroll();
       // Recalculate on resize
       window.addEventListener('resize', debouncedScroll);
+      // The window listener alone is not enough: resizing the side panel
+      // changes this container's width (it is a push layout) without firing a
+      // window resize, which would leave containerWidth — and so the sticky
+      // year indicator driven by visibleRange — stale until the next scroll.
+      observer = new ResizeObserver(debouncedScroll);
+      observer.observe(container);
     }
 
     return () => {
       if (container) {
         container.removeEventListener('scroll', debouncedScroll);
         window.removeEventListener('resize', debouncedScroll);
+        observer?.disconnect();
       }
     };
   }, [scrollContainerRef, totalMonths]);

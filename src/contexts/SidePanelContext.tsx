@@ -1,5 +1,7 @@
 import { createContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { usePanelWidth } from '@/hooks/usePanelWidth'
+import { PANEL_DEFAULT_WIDTH } from '@/constants/panels'
 
 type TimelineSelectHandler = (timelineId: string) => void
 type DraftSelectHandler = (draftId: string) => void
@@ -11,6 +13,17 @@ interface SidePanelContextValue {
   open: () => void
   close: () => void
   toggle: () => void
+  /**
+   * Panel footprint in px, gap included. Lives here rather than in
+   * `GlobalLayout` because the push layout has two other readers: the content
+   * wrapper's `padding-left` and `FloatingToolbar`'s recentering.
+   */
+  width: number
+  setWidth: (width: number) => void
+  resetWidth: () => void
+  /** True mid-drag, so readers can drop their width transitions and track the cursor. */
+  isResizing: boolean
+  setIsResizing: (isResizing: boolean) => void
   onTimelineSelect: TimelineSelectHandler
   setOnTimelineSelect: (handler: TimelineSelectHandler | null) => void
   onDraftSelect: DraftSelectHandler
@@ -39,6 +52,7 @@ interface SidePanelContextValue {
 export const SidePanelContext = createContext<SidePanelContextValue | null>(null)
 
 const STORAGE_KEY = 'side_panel_open'
+const WIDTH_STORAGE_KEY = 'side_panel_width'
 
 function readStoredIsOpen(): boolean {
   try {
@@ -52,6 +66,8 @@ function readStoredIsOpen(): boolean {
 
 export function SidePanelProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(readStoredIsOpen)
+  const { width, setWidth, resetWidth } = usePanelWidth(WIDTH_STORAGE_KEY, PANEL_DEFAULT_WIDTH)
+  const [isResizing, setIsResizing] = useState(false)
   const [activeTimelineId, setActiveTimelineId] = useState<string | null>(null)
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null)
   const [activeTimelineTitle, setActiveTimelineTitle] = useState<string | null>(null)
@@ -120,6 +136,11 @@ export function SidePanelProvider({ children }: { children: ReactNode }) {
     open,
     close,
     toggle,
+    width,
+    setWidth,
+    resetWidth,
+    isResizing,
+    setIsResizing,
     onTimelineSelect,
     setOnTimelineSelect,
     onDraftSelect,
@@ -138,7 +159,7 @@ export function SidePanelProvider({ children }: { children: ReactNode }) {
     setActiveEventCount,
     activeDominantCategoryColor,
     setActiveDominantCategoryColor,
-  }), [isOpen, open, close, toggle, onTimelineSelect, setOnTimelineSelect, onDraftSelect, setOnDraftSelect, refreshTimelines, setRefreshTimelines, onOpenSettings, setOnOpenSettings, activeTimelineId, activeDraftId, activeTimelineTitle, activeEventCount, activeDominantCategoryColor])
+  }), [isOpen, open, close, toggle, width, setWidth, resetWidth, isResizing, onTimelineSelect, setOnTimelineSelect, onDraftSelect, setOnDraftSelect, refreshTimelines, setRefreshTimelines, onOpenSettings, setOnOpenSettings, activeTimelineId, activeDraftId, activeTimelineTitle, activeEventCount, activeDominantCategoryColor])
 
   return (
     <SidePanelContext.Provider value={value}>

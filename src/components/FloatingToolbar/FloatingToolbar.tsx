@@ -9,36 +9,37 @@ interface FloatingToolbarProps {
   activePanel: 'events' | 'settings' | null
 }
 
-// Width of the floating side panel (matches GlobalLayout). The desktop pill
-// recenters over the timeline area by shifting half this distance to the right
-// when the panel is open.
-const SIDE_PANEL_WIDTH = 320
-
 export function FloatingToolbar({
   onAddEventClick,
   onEventsClick,
   onSettingsClick,
   activePanel,
 }: FloatingToolbarProps) {
-  const { isOpen: isSidePanelOpen } = useSidePanel()
+  // The pill is centered on the viewport, then shifted by half the side
+  // panel's width to recenter over the visible timeline area. The width is
+  // user-resizable, so it has to be read live — a local copy of the constant
+  // would drift silently on the first drag.
+  const { isOpen: isSidePanelOpen, width: sidePanelWidth, isResizing } = useSidePanel()
   const desktopTranslateX = isSidePanelOpen
-    ? `calc(-50% + ${SIDE_PANEL_WIDTH / 2}px)`
+    ? `calc(-50% + ${sidePanelWidth / 2}px)`
     : '-50%'
 
   return (
     <>
       {/* Desktop: floating pill, centered over the visible timeline area.
-          Animates with the side panel's push transition (300ms ease-out). */}
+          Animates with the side panel's push transition (300ms ease-out), but
+          tracks the drag directly while the panel is being resized. */}
       <div
-        className="
+        className={`
           hidden md:flex
           fixed bottom-6 left-1/2 z-30
           flex-row items-start gap-1.5 p-2
           w-[373px] h-[58px]
           bg-[rgba(23,23,23,0.8)] border border-[#262626] backdrop-blur-[2px]
           rounded-[20px]
-          transition-transform duration-300 ease-out will-change-transform
-        "
+          will-change-transform
+          ${isResizing ? '' : 'transition-transform duration-300 ease-out'}
+        `}
         style={{ transform: `translateX(${desktopTranslateX})` }}
       >
         <Button variant="glass" size="none" onClick={onAddEventClick}>
