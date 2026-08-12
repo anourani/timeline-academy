@@ -112,7 +112,12 @@ export function ApiKeyModal({
   const firstEmpty = PROVIDER_ORDER.find((provider) => !stored[provider])
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Generate with AI">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Generate with AI"
+      size="compact"
+    >
       <div className="space-y-4">
         <p className="body-m text-[#c9ced4] m-0">
           Timeline Academy uses AI to generate event details and timelines. Add
