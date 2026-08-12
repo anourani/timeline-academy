@@ -13,23 +13,26 @@
  * width again.
  */
 
-/** Gap between a panel's card and the viewport edge. */
-export const PANEL_GAP = 6
-
 /**
- * Narrowest a panel may be dragged. Below roughly 250px the usage table in
- * `SidePanel/UsageLimits.tsx` (a 140px wrapper around two 65px columns)
- * overflows its row, so this leaves a little margin above that floor.
+ * Narrowest a panel may be dragged. A deliberate floor rather than a content
+ * limit — the panels stay usable below this, but not usefully so. Desktop
+ * only; see `clampPanelWidth`.
  */
-export const PANEL_MIN_WIDTH = 260
+export const PANEL_MIN_WIDTH = 300
 
-/** Widest a panel may be dragged, before the viewport clamp below applies. */
-export const PANEL_MAX_WIDTH = 640
+/** Widest a panel may be dragged. */
+export const PANEL_MAX_WIDTH = 400
 
 /**
- * Content that must stay visible beside a panel. Small enough that phones keep
- * roughly the full-width panel they have today, large enough that a panel can
- * never swallow the viewport outright.
+ * Matches the `md:` breakpoint the resize handles appear at
+ * (`ui/PanelResizeHandle.tsx` is `hidden md:block`). Tailwind's default —
+ * `tailwind.config.js` does not override `theme.screens`.
+ */
+export const PANEL_RESIZE_BREAKPOINT = 768
+
+/**
+ * Content that must stay visible beside a panel below the breakpoint, so a
+ * stored desktop width can't leave a phone with nothing but panel.
  */
 export const MIN_CONTENT_GUTTER = 64
 
@@ -37,28 +40,26 @@ export const MIN_CONTENT_GUTTER = 64
 export const PANEL_DEFAULT_WIDTH = 320
 
 /**
- * Settings runs wider than its siblings — the scale selectors and the BYOK key
- * rows were cramped at 314px.
+ * Settings opens wider than its siblings — the scale selectors and the BYOK
+ * key rows were cramped at the 314px card. Kept below `PANEL_MAX_WIDTH` so it
+ * has room to move in both directions.
  */
-export const SETTINGS_PANEL_DEFAULT_WIDTH = 400
-
-/**
- * Widest a panel may actually go right now. `PANEL_MAX_WIDTH` is the ceiling;
- * on a narrow viewport the gutter wins instead, which is what keeps the 400px
- * Settings default from overflowing a ~390px phone.
- */
-export function maxPanelWidth(viewportWidth: number): number {
-  return Math.max(
-    PANEL_MIN_WIDTH,
-    Math.min(PANEL_MAX_WIDTH, viewportWidth - MIN_CONTENT_GUTTER)
-  )
-}
+export const SETTINGS_PANEL_DEFAULT_WIDTH = 360
 
 /**
  * Clamp a width into range. Applied to every source of one — a value read back
  * from storage, a live drag, and a window resize — so no path can strand a
- * panel wider than its viewport.
+ * panel outside its bounds.
  */
 export function clampPanelWidth(width: number, viewportWidth: number): number {
-  return Math.min(Math.max(width, PANEL_MIN_WIDTH), maxPanelWidth(viewportWidth))
+  // Below the breakpoint the handles are hidden, so there is no user-chosen
+  // width to honour and only the viewport fit matters. Applying the desktop
+  // floor here would force 300px onto a 320px phone.
+  if (viewportWidth < PANEL_RESIZE_BREAKPOINT) {
+    return Math.min(width, Math.max(0, viewportWidth - MIN_CONTENT_GUTTER))
+  }
+  // At or above the breakpoint the viewport always allows at least
+  // 768 - 64 = 704px, comfortably more than PANEL_MAX_WIDTH, so the gutter can
+  // never bind here and the bounds are the whole rule.
+  return Math.min(Math.max(width, PANEL_MIN_WIDTH), PANEL_MAX_WIDTH)
 }
