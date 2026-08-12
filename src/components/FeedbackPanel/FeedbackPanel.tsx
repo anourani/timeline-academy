@@ -1,7 +1,10 @@
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { createPortal } from "react-dom"
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { PanelResizeHandle } from "@/components/ui/PanelResizeHandle"
+import { usePanelWidth } from "@/hooks/usePanelWidth"
+import { PANEL_DEFAULT_WIDTH } from "@/constants/panels"
 
 interface FeedbackPanelProps {
   open: boolean
@@ -9,6 +12,12 @@ interface FeedbackPanelProps {
 }
 
 export function FeedbackPanel({ open, onOpenChange }: FeedbackPanelProps) {
+  const [isResizing, setIsResizing] = useState(false)
+  const { width, setWidth, resetWidth } = usePanelWidth(
+    "feedback_panel_width",
+    PANEL_DEFAULT_WIDTH
+  )
+
   const handleEmailClick = () => {
     const mailtoLink =
       "mailto:alex@timeline.academy?subject=" +
@@ -39,12 +48,23 @@ export function FeedbackPanel({ open, onOpenChange }: FeedbackPanelProps) {
         aria-hidden="true"
       />
       <aside
-        className={`fixed inset-y-0 right-0 z-50 w-[320px] pr-[6px] py-[6px] transition-transform duration-300 ease-out ${
-          open ? "translate-x-0" : "translate-x-full"
-        }`}
+        className={`fixed inset-y-0 right-0 z-50 pr-[6px] py-[6px] ${
+          isResizing ? "" : "transition-[transform,width] duration-300 ease-out"
+        } ${open ? "translate-x-0" : "translate-x-full"}`}
+        style={{ width: `${width}px` }}
         aria-hidden={!open}
         aria-label="Feedback side panel"
       >
+      {open && (
+        <PanelResizeHandle
+          side="right"
+          width={width}
+          onWidthChange={setWidth}
+          onResizeStateChange={setIsResizing}
+          onReset={resetWidth}
+          label="Resize feedback panel"
+        />
+      )}
       <div className="h-full w-full bg-[#171717] rounded-[6px] border border-[#262626] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-2 border-b border-[#404040] shrink-0">

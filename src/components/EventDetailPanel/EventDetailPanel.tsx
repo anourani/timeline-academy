@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { ConfirmationModal } from '../Modal/ConfirmationModal'
+import { PanelResizeHandle } from '../ui/PanelResizeHandle'
+import { usePanelWidth } from '@/hooks/usePanelWidth'
+import { PANEL_DEFAULT_WIDTH } from '@/constants/panels'
 import { formatDateLong } from '@/utils/dateUtils'
 import {
   enrichEvent,
@@ -49,6 +52,14 @@ export function EventDetailPanel({
   const [errorProvider, setErrorProvider] = useState<ByokProvider | null>(null)
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false)
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false)
+  const [isResizing, setIsResizing] = useState(false)
+
+  // Shared by the editor and the viewer — this is one component mounted from
+  // two routes, so a resize on either follows the reader everywhere.
+  const { width, setWidth, resetWidth } = usePanelWidth(
+    'event_panel_width',
+    PANEL_DEFAULT_WIDTH
+  )
 
   // The other provider, offered only when the user has a key for it. No
   // automatic failover — spending on an account the user didn't pick for this
@@ -265,12 +276,26 @@ export function EventDetailPanel({
 
       <aside
         ref={panelRef}
-        className={`fixed inset-0 md:inset-y-0 md:right-0 md:left-auto md:w-[326px] md:pr-[6px] md:py-[6px] z-50 transition-transform duration-300 ease-out ${
-          open ? 'translate-x-0' : 'translate-x-full'
-        }`}
+        // Width goes through a custom property rather than an inline `width`
+        // so it stays behind the `md:` prefix — below that breakpoint the
+        // panel is full-screen off `inset-0` and must not be constrained.
+        style={{ '--event-panel-width': `${width}px` } as React.CSSProperties}
+        className={`fixed inset-0 md:inset-y-0 md:right-0 md:left-auto md:w-[var(--event-panel-width)] md:pr-[6px] md:py-[6px] z-50 ${
+          isResizing ? '' : 'transition-[transform,width] duration-300 ease-out'
+        } ${open ? 'translate-x-0' : 'translate-x-full'}`}
         aria-hidden={!open}
         aria-label="Event details"
       >
+        {open && (
+          <PanelResizeHandle
+            side="right"
+            width={width}
+            onWidthChange={setWidth}
+            onResizeStateChange={setIsResizing}
+            onReset={resetWidth}
+            label="Resize event details panel"
+          />
+        )}
         <div className="h-full w-full bg-[#171717] flex flex-col overflow-hidden border-0 md:border md:border-[#262626] rounded-none md:rounded-[6px]">
           <div className="flex flex-col items-stretch p-[24px_20px] gap-[16px] overflow-y-auto flex-1 min-h-0">
             {event && (
@@ -289,9 +314,10 @@ export function EventDetailPanel({
                   </button>
                 </div>
 
-                {/* Photo frame */}
+                {/* Photo frame. Fluid rather than a fixed 274px so it follows
+                    a resized panel; the 274/205 ratio is preserved. */}
                 <div
-                  className={`w-full md:w-[274px] aspect-[274/205] bg-[#0A0A0A] border border-[#525252] rounded-[8px] overflow-hidden ${
+                  className={`w-full aspect-[274/205] bg-[#0A0A0A] border border-[#525252] rounded-[8px] overflow-hidden ${
                     state === 'generating' && !displayImageUrl ? 'animate-pulse' : ''
                   }`}
                 >
