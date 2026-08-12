@@ -46,13 +46,24 @@ class OpenAIClient implements LLMClient {
         Authorization: `Bearer ${this.apiKey}`,
       },
       body: JSON.stringify({
-        model: "gpt-4o",
+        // Mid-tier of the current family — deliberately not the frontier
+        // model, which costs several times as much for bounded JSON output.
+        // NOTE: this path only runs when DEFAULT_LLM_PROVIDER is "openai", so
+        // it is rarely exercised; confirm the parameter contract against live
+        // OpenAI docs before relying on it.
+        model: "gpt-5.6-terra",
+        // `response_format: json_object` requires the literal word "JSON" to
+        // appear somewhere in the messages. getSystemPrompt() satisfies that
+        // incidentally ("JSON ONLY", "RESPONSE SCHEMA") — an edit to the
+        // prompt that drops the word would 400 every OpenAI generation while
+        // the Claude path kept working.
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: getSystemPrompt() },
           { role: "user", content: userPrompt },
         ],
-        temperature: 0.4,
+        // No `temperature`: newer reasoning-capable models reject non-default
+        // sampling parameters.
         max_tokens: 4096,
       }),
     });
@@ -97,13 +108,20 @@ class ClaudeClient implements LLMClient {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-6",
+        model: "claude-sonnet-5",
         max_tokens: 4096,
         system: getSystemPrompt(),
         messages: [
           { role: "user", content: userPrompt },
         ],
-        temperature: 0.4,
+        // No `temperature`: Sonnet 5 rejects a non-default value with a 400.
+        // This is the default server-funded path, so leaving the old 0.4 in
+        // place would have broken generation for every free-tier user.
+        //
+        // Thinking off: this call emits a fixed JSON schema with no tools, and
+        // Sonnet 5 otherwise spends part of the same max_tokens budget on
+        // reasoning the JSON does not need.
+        thinking: { type: "disabled" },
       }),
     });
 

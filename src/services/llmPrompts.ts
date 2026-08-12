@@ -1,6 +1,17 @@
-// Browser-direct mirror of supabase/functions/_shared/prompts.ts.
-// Keep these two files identical so the BYOK client and the edge function
-// produce equivalent outputs. Source of truth: _shared/prompts.ts.
+// Prompts shared by both browser-direct BYOK clients.
+//
+// The timeline prompts below (getSystemPrompt / getUserPrompt) mirror
+// supabase/functions/_shared/prompts.ts — keep those identical so the BYOK
+// client and the edge function produce equivalent output. Source of truth:
+// _shared/prompts.ts.
+//
+// The classification and enrichment prompts are NOT part of that mirror:
+// CLASSIFICATION_PROMPT is duplicated in _shared/classify.ts, and the enrich
+// prompts below are duplicated in supabase/functions/enrich-event/index.ts.
+// The prompts are provider-neutral prose — no tool schemas, no provider-
+// specific structure — so both direct clients use them unchanged.
+
+import type { TimelineEvent } from '@/types/event'
 
 export interface CategoryDefinition {
   id: string
@@ -70,3 +81,29 @@ Types:
 Subject: "{subject}"
 
 Return ONLY valid JSON: {"type": "<type>"}`
+
+// ---------------------------------------------------------------------------
+// Event enrichment — mirrors supabase/functions/enrich-event/index.ts
+// ---------------------------------------------------------------------------
+
+export const ENRICH_SYSTEM_PROMPT = `You are writing a 1-2 paragraph description of a historical event for an educational timeline. Use the web_search tool to find authoritative sources before writing. Keep the description concise (max ~150 words for simple events, two short paragraphs for complex ones). Use a neutral encyclopedic tone. Do not include inline citations or footnotes — sources are listed separately. Do not invent facts that aren't in the search results.`
+
+export function buildEnrichUserPrompt(
+  event: TimelineEvent,
+  timelineTitle: string,
+): string {
+  const lines: string[] = []
+  lines.push(`Write a description for this event: "${event.title}"`)
+  if (event.startDate || event.endDate) {
+    if (event.startDate && event.endDate && event.startDate !== event.endDate) {
+      lines.push(`Date range: ${event.startDate} to ${event.endDate}`)
+    } else if (event.startDate) {
+      lines.push(`Date: ${event.startDate}`)
+    }
+  }
+  if (timelineTitle) lines.push(`Timeline context: ${timelineTitle}`)
+  lines.push(
+    'Use the web_search tool to find sources, then write the description. Output only the description text — no headings, no source lists.',
+  )
+  return lines.join('\n')
+}

@@ -1,6 +1,9 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import { classifySubject, generateTimeline } from '../services/aiTimeline';
+import { ProviderError } from '../services/llmShared';
+import { getKey } from '../services/userApiKey';
 import { TimelineEvent, CategoryConfig } from '../types/event';
+import type { ByokProvider } from '../types/ai';
 import { PILL_DEFINITIONS } from '../constants/pillDefinitions';
 import { DEFAULT_CATEGORIES } from '../constants/categories';
 import type { SubjectType } from '../constants/pillDefinitions';
@@ -25,12 +28,29 @@ export function useAIMode() {
   const [classifiedType, setClassifiedType] = useState<SubjectType | null>(null);
   const [categoryLabels, setCategoryLabels] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // Which BYOK provider produced the current error, when one did. Drives the
+  // "retry with the other provider" affordance.
+  const [errorProvider, setErrorProvider] = useState<ByokProvider | null>(null);
   const abortedRef = useRef(false);
 
-  const classifyAndGenerate = useCallback(async (subject: string): Promise<GenerateResult> => {
+  // The other provider, offered only when the user actually has a key for it.
+  // No automatic failover: spending on an account the user didn't pick for
+  // this request is a surprise, and it hides the fact that a key is broken.
+  const retryProvider = useMemo<ByokProvider | null>(() => {
+    if (!errorProvider) return null;
+    const other: ByokProvider =
+      errorProvider === 'openai' ? 'anthropic' : 'openai';
+    return getKey(other) ? other : null;
+  }, [errorProvider]);
+
+  const classifyAndGenerate = useCallback(async (
+    subject: string,
+    providerOverride?: ByokProvider
+  ): Promise<GenerateResult> => {
     abortedRef.current = false;
     setIsClassifying(true);
     setError(null);
+    setErrorProvider(null);
     setClassifiedType(null);
     setCategoryLabels([]);
 
@@ -64,7 +84,7 @@ export function useAIMode() {
 
     let type: SubjectType;
     try {
-      const result = await classifySubject(subject);
+      const result = await classifySubject(subject, providerOverride);
       if (abortedRef.current) throw new Error('Cancelled');
       type = result.type;
       setClassifiedType(type);
@@ -78,6 +98,7 @@ export function useAIMode() {
       }
       const msg = err instanceof Error ? err.message : 'Failed to classify subject';
       setError(msg);
+      setErrorProvider(err instanceof ProviderError ? err.provider : null);
       setIsClassifying(false);
       throw err;
     }
@@ -87,7 +108,12 @@ export function useAIMode() {
 
     try {
       const pills = PILL_DEFINITIONS[type];
-      const result = await generateTimeline(subject, type, pills);
+      const result = await generateTimeline(
+        subject,
+        type,
+        pills,
+        providerOverride
+      );
       if (abortedRef.current) throw new Error('Cancelled');
 
       const events: TimelineEvent[] = result.events.map((e) => ({
@@ -120,6 +146,7 @@ export function useAIMode() {
       }
       const msg = err instanceof Error ? err.message : 'Something went wrong';
       setError(msg);
+      setErrorProvider(err instanceof ProviderError ? err.provider : null);
       throw err;
     } finally {
       setIsGenerating(false);
@@ -133,12 +160,14 @@ export function useAIMode() {
     setClassifiedType(null);
     setCategoryLabels([]);
     setError(null);
+    setErrorProvider(null);
   }, []);
 
   const resetClassification = useCallback(() => {
     setClassifiedType(null);
     setCategoryLabels([]);
     setError(null);
+    setErrorProvider(null);
   }, []);
 
   return {
@@ -147,6 +176,7 @@ export function useAIMode() {
     classifiedType,
     categoryLabels,
     error,
+    retryProvider,
     classifyAndGenerate,
     abort,
     resetClassification,

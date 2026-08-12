@@ -3,6 +3,8 @@ import type { SubjectType } from '@/constants/pillDefinitions'
 import { SubjectSuggestions } from '@/components/AIMode/SubjectSuggestions'
 import { GeneratingIndicator } from '@/components/NewTimeline/GeneratingIndicator'
 import { useSubjectSuggestions } from '@/hooks/useSubjectSuggestions'
+import { PROVIDER_META } from '@/constants/byokProviders'
+import type { ByokProvider } from '@/types/ai'
 
 interface NewTimelineScreenProps {
   onAIGenerate: (subject: string) => void
@@ -12,6 +14,11 @@ interface NewTimelineScreenProps {
   classifiedType: SubjectType | null
   categoryLabels: string[]
   error: string | null
+  /** Set when the failure came from one BYOK provider and the user has a key
+   *  for the other one. Null otherwise — including on the server-funded path,
+   *  which has no alternative to offer. */
+  retryProvider?: ByokProvider | null
+  onRetryWithProvider?: (provider: ByokProvider) => void
 }
 
 const PLACEHOLDER_NAMES = [
@@ -114,6 +121,8 @@ export function NewTimelineScreen({
   isClassifying,
   categoryLabels,
   error,
+  retryProvider,
+  onRetryWithProvider,
 }: NewTimelineScreenProps) {
   const [name, setName] = useState('')
   const [placeholderText, setPlaceholderText] = useState('')
@@ -277,7 +286,18 @@ export function NewTimelineScreen({
             )}
 
             {!isWorking && error && (
-              <p className="mt-[16px] text-sm text-red-400">{error}</p>
+              <div className="mt-[16px] flex flex-wrap items-baseline gap-2">
+                <p className="text-sm text-red-400 m-0">{error}</p>
+                {retryProvider && onRetryWithProvider && (
+                  <button
+                    type="button"
+                    onClick={() => onRetryWithProvider(retryProvider)}
+                    className="text-sm text-[#9B9EA3] underline hover:text-[#DADEE5] transition-colors"
+                  >
+                    Retry with {PROVIDER_META[retryProvider].label}
+                  </button>
+                )}
+              </div>
             )}
           </form>
         </div>

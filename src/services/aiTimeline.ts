@@ -1,27 +1,39 @@
 import { supabase } from '../lib/supabase';
-import { getAnthropicKey } from './userApiKey';
+import { getActiveCredential, getCredentialFor } from './userApiKey';
 import {
   classifySubjectDirect,
   generateTimelineDirect,
 } from './anthropicDirect';
-import { TimelineCategory } from '../types/event';
+import {
+  classifySubjectOpenAIDirect,
+  generateTimelineOpenAIDirect,
+} from './openaiDirect';
+import { ProviderError } from './llmShared';
 import type { SubjectType, PillDefinition } from '../constants/pillDefinitions';
+import type {
+  ByokCredential,
+  ByokProvider,
+  ClassificationResult,
+  GeneratedTimeline,
+} from '@/types/ai';
 
-export interface GeneratedTimeline {
-  timelineTitle: string;
-  timelineDescription: string;
-  categoryMapping?: Record<string, string>;
-  events: Array<{
-    title: string;
-    startDate: string;
-    endDate: string;
-    category: TimelineCategory;
-  }>;
+/**
+ * Which BYOK credential this call should use, or null for the server path.
+ *
+ * `override` exists for the retry-with-the-other-provider action: it targets
+ * one provider for a single call without touching the stored default, so a
+ * one-off retry never silently redefines which provider the user is on.
+ */
+function resolveCredential(
+  override?: ByokProvider
+): ByokCredential | null {
+  return override ? getCredentialFor(override) : getActiveCredential();
 }
 
-export interface ClassificationResult {
-  type: SubjectType;
-}
+// Moved to @/types/ai so llmShared.ts can reference GeneratedTimeline without
+// importing this module (which imports the direct clients, which import
+// llmShared). Re-exported so existing importers keep working.
+export type { ClassificationResult, GeneratedTimeline } from '@/types/ai';
 
 /**
  * Classify a subject into a type. Uses the cheapest/fastest model.
@@ -31,13 +43,24 @@ export interface ClassificationResult {
  * session JWT automatically).
  */
 export async function classifySubject(
-  subject: string
+  subject: string,
+  providerOverride?: ByokProvider
 ): Promise<ClassificationResult> {
   const validTypes: SubjectType[] = ['person', 'event', 'topic', 'organization'];
 
-  const byokKey = getAnthropicKey();
-  if (byokKey) {
-    const type = await classifySubjectDirect(subject, byokKey);
+  const credential = resolveCredential(providerOverride);
+  if (credential) {
+    let type: string;
+    try {
+      type =
+        credential.provider === 'openai'
+          ? await classifySubjectOpenAIDirect(subject, credential.key)
+          : await classifySubjectDirect(subject, credential.key);
+    } catch (err) {
+      // Wrapped here rather than inside each client so there is one wrap site
+      // per call, and so the UI knows which provider to offer a retry against.
+      throw new ProviderError((err as Error).message, credential.provider);
+    }
     return {
       type: validTypes.includes(type as SubjectType)
         ? (type as SubjectType)
@@ -79,10 +102,11 @@ export async function classifySubject(
 export async function generateTimeline(
   subject: string,
   subjectType?: SubjectType,
-  categories?: PillDefinition[]
+  categories?: PillDefinition[],
+  providerOverride?: ByokProvider
 ): Promise<GeneratedTimeline> {
-  const byokKey = getAnthropicKey();
-  if (byokKey) {
+  const credential = resolveCredential(providerOverride);
+  if (credential) {
     const categoryDefs =
       categories && categories.length > 0
         ? categories.map((c) => ({
@@ -91,7 +115,17 @@ export async function generateTimeline(
             promptSnippet: c.promptSnippet,
           }))
         : undefined;
-    return generateTimelineDirect(subject, categoryDefs, byokKey);
+    try {
+      return credential.provider === 'openai'
+        ? await generateTimelineOpenAIDirect(
+            subject,
+            categoryDefs,
+            credential.key
+          )
+        : await generateTimelineDirect(subject, categoryDefs, credential.key);
+    } catch (err) {
+      throw new ProviderError((err as Error).message, credential.provider);
+    }
   }
 
   const body: Record<string, unknown> = { subject };

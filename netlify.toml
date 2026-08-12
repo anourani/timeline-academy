@@ -11,9 +11,15 @@
     # Fonts for Aleo/IBM Plex Mono/JetBrains Mono, cdnfonts for Avenir);
     # 'unsafe-inline' is for React's inline style attributes. connect-src
     # covers Supabase (REST + realtime websocket), browser-direct BYOK calls
-    # to Anthropic, and browser-direct Wikipedia lookups. img-src covers
-    # Wikimedia event thumbnails.
-    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.cdnfonts.com; img-src 'self' data: https://*.wikimedia.org; font-src 'self' data: https://fonts.gstatic.com https://fonts.cdnfonts.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com https://en.wikipedia.org; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+    # to Anthropic and OpenAI, and browser-direct Wikipedia lookups. img-src
+    # covers Wikimedia event thumbnails.
+    #
+    # connect-src must list EVERY provider host the browser calls directly.
+    # A missing entry fails only in production — the dev server sends no CSP
+    # and `npm run preview` does not apply these headers — and it surfaces as
+    # a generic "Failed to fetch", which reads like a broken app rather than a
+    # blocked request.
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.cdnfonts.com; img-src 'self' data: https://*.wikimedia.org; font-src 'self' data: https://fonts.gstatic.com https://fonts.cdnfonts.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.anthropic.com https://api.openai.com https://en.wikipedia.org; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
     # Keep /view/<uuid> share URLs (the access capability) out of Referer
     # headers sent to external hosts.
     Referrer-Policy = "strict-origin-when-cross-origin"

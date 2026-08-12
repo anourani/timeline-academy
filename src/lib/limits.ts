@@ -1,5 +1,5 @@
 import { PLAN_LIMITS, type Plan, type PlanLimits } from '@/constants/plans'
-import { getAnthropicKey } from '@/services/userApiKey'
+import { hasAnyKey } from '@/services/userApiKey'
 import { supabase } from './supabase'
 
 export type LimitKind = 'event' | 'timeline'
@@ -33,7 +33,7 @@ async function refreshPlan(): Promise<void> {
     cachedPlan = 'byok-anon'
     return
   }
-  cachedPlan = getAnthropicKey() ? 'byok' : 'free'
+  cachedPlan = hasAnyKey() ? 'byok' : 'free'
 }
 
 void refreshPlan()

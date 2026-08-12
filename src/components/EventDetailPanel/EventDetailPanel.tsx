@@ -8,6 +8,9 @@ import {
   fetchEventImage,
 } from '@/services/eventEnrichment'
 import type { EventSource, TimelineEvent } from '@/types/event'
+import type { ByokProvider } from '@/types/ai'
+import { PROVIDER_META } from '@/constants/byokProviders'
+import { getKey } from '@/services/userApiKey'
 
 interface EventDetailPanelProps {
   open: boolean
@@ -43,7 +46,20 @@ export function EventDetailPanel({
   const [imageAttribution, setImageAttribution] = useState<string | null>(null)
   const [sources, setSources] = useState<EventSource[]>([])
   const [errorMessage, setErrorMessage] = useState('')
+  const [errorProvider, setErrorProvider] = useState<ByokProvider | null>(null)
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false)
+  const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false)
+
+  // The other provider, offered only when the user has a key for it. No
+  // automatic failover — spending on an account the user didn't pick for this
+  // request is a surprise, and it hides that a key is broken.
+  const retryProvider: ByokProvider | null = errorProvider
+    ? (() => {
+        const other: ByokProvider =
+          errorProvider === 'openai' ? 'anthropic' : 'openai'
+        return getKey(other) ? other : null
+      })()
+    : null
   const abortRef = useRef<AbortController | null>(null)
   const panelRef = useRef<HTMLElement | null>(null)
 
@@ -77,6 +93,7 @@ export function EventDetailPanel({
     setImageAttribution(null)
     setSources([])
     setErrorMessage('')
+    setErrorProvider(null)
 
     runGeneration(event, false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -92,15 +109,15 @@ export function EventDetailPanel({
   // Escape closes the panel. Click outside the panel also closes it (desktop
   // has no visible backdrop so the timeline behind stays visible, but a click
   // anywhere off-panel should still dismiss the way Cancel would). Suppress
-  // outside-click while the destructive Remove confirmation modal is open so
-  // clicking the modal's overlay doesn't also dismiss the panel.
+  // outside-click while a confirmation modal is open so clicking the modal's
+  // overlay doesn't also dismiss the panel underneath it.
   useEffect(() => {
     if (!open) return
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
     const handleMouseDown = (e: MouseEvent) => {
-      if (showRemoveConfirm) return
+      if (showRemoveConfirm || showRegenerateConfirm) return
       const node = panelRef.current
       if (!node) return
       const target = e.target as Node | null
@@ -116,9 +133,13 @@ export function EventDetailPanel({
       document.removeEventListener('keydown', handleKey)
       document.removeEventListener('mousedown', handleMouseDown)
     }
-  }, [open, onClose, showRemoveConfirm])
+  }, [open, onClose, showRemoveConfirm, showRegenerateConfirm])
 
-  function runGeneration(currentEvent: TimelineEvent, preserveImage: boolean) {
+  function runGeneration(
+    currentEvent: TimelineEvent,
+    preserveImage: boolean,
+    providerOverride?: ByokProvider,
+  ) {
     // Abort any prior in-flight generation
     if (abortRef.current) abortRef.current.abort()
     const ctrl = new AbortController()
@@ -132,6 +153,7 @@ export function EventDetailPanel({
     }
     setSources([])
     setErrorMessage('')
+    setErrorProvider(null)
 
     let descBuffer = ''
     let collectedSources: EventSource[] = []
@@ -181,20 +203,32 @@ export function EventDetailPanel({
           })
           setState('loaded')
         },
-        onError: (message) => {
+        onError: (message, provider) => {
           if (ctrl.signal.aborted) return
           setErrorMessage(message)
+          setErrorProvider(provider ?? null)
           setState('error')
         },
       },
       ctrl.signal,
+      providerOverride,
     )
   }
 
-  function handleRegenerate() {
+  /** Run generation immediately, no confirmation. Used for error recovery,
+   *  where the previous attempt produced nothing to protect. */
+  function regenerateNow(providerOverride?: ByokProvider) {
     if (!event) return
     // Preserve image only if we already have one.
-    runGeneration(event, !!imageUrl)
+    runGeneration(event, !!imageUrl, providerOverride)
+  }
+
+  /** Footer "Regenerate", which replaces a description that already worked.
+   *  Confirmed because each run is a fresh billed call — on a BYOK key that
+   *  is the user's own money, and nothing else in the product caps it. */
+  function handleRegenerate() {
+    if (!event) return
+    setShowRegenerateConfirm(true)
   }
 
   function handleRemove() {
@@ -298,12 +332,22 @@ export function EventDetailPanel({
                     <p className="body-m text-[#9B9EA3] m-0">
                       Couldn't generate details. {errorMessage ? `(${errorMessage})` : ''}
                     </p>
-                    <button
-                      onClick={handleRegenerate}
-                      className="self-start font-['Avenir',sans-serif] text-[14px] leading-[20px] text-[#DADEE5] underline hover:text-white"
-                    >
-                      Try again
-                    </button>
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        onClick={() => regenerateNow()}
+                        className="font-['Avenir',sans-serif] text-[14px] leading-[20px] text-[#DADEE5] underline hover:text-white"
+                      >
+                        Try again
+                      </button>
+                      {retryProvider && (
+                        <button
+                          onClick={() => regenerateNow(retryProvider)}
+                          className="font-['Avenir',sans-serif] text-[14px] leading-[20px] text-[#9B9EA3] underline hover:text-[#DADEE5]"
+                        >
+                          Retry with {PROVIDER_META[retryProvider].label}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ) : (
                   description &&
@@ -358,6 +402,16 @@ export function EventDetailPanel({
         title="Remove event details"
         message="This will clear the description, image, and sources for this event. The event itself will not be deleted."
         confirmLabel="Remove"
+        cancelLabel="Cancel"
+      />
+
+      <ConfirmationModal
+        isOpen={showRegenerateConfirm}
+        onClose={() => setShowRegenerateConfirm(false)}
+        onConfirm={() => regenerateNow()}
+        title="Regenerate description?"
+        message="This replaces the current description and runs a new AI request, including a fresh web search. If you're using your own API key, it will be billed to that account."
+        confirmLabel="Regenerate"
         cancelLabel="Cancel"
       />
     </>,
