@@ -50,6 +50,7 @@ part of the system that has historically drifted.
 | Delete Account | Stays in the menu, below a divider, on `text-destructive` | Where it was asked for. Separation and colour carry the weight the current text link does not |
 | Account modal surface | Radix Dialog, 720×560, with a **full-height rail** flush to its edges | Settings-dialog layout rather than the Events modal's inset card. Same 20px shell and `#171717` surface, so the two still read as one family |
 | Rail below 640px | Horizontal scrolling tab strip; modal goes full-screen | A 200px rail plus content plus padding needs ~570px. 640 rather than `PANEL_RESIZE_BREAKPOINT` (768) because that constant governs a different element |
+| Desktop centring | `inset-0 m-auto`, never a −50% translate | A transform-based centre is overwritten by `tailwindcss-animate`'s keyframe and drifts the modal in from a corner. See section 6b |
 | Reflow mechanism | CSS grid, one DOM order, two placements | The header moves from beside the rail to above it — an L-shape flex cannot express. Duplicating it behind `sm:hidden` would mean two `DialogPrimitive.Title` ids |
 | Reordering on mobile | Off | The drag sensor activates at 5px, which is the scroll gesture. `restrictToHorizontalAxis` makes the two identical rather than distinguishing them |
 | Menu modality | `modal={false}` | Every item opens another Radix layer, and a modal menu strands `pointer-events: none` on `<body>` when that layer unmounts. See section 7 |
@@ -275,6 +276,43 @@ that opens this modal — pre-existing, and not something these modals control.
 
 ---
 
+## 6b. Why these modals are centred with auto margins
+
+Both modals opened by sliding diagonally in from the bottom-right and closed the same way. Worth
+recording, because the cause is invisible in the class list — the classes that *prevent* it are the ones
+that look redundant.
+
+`tailwindcss-animate` builds one keyframe pair whose `from` sets the **entire** transform
+(`tailwindcss-animate/index.js:170-182`):
+
+```
+@keyframes enter { from {
+  opacity: var(--tw-enter-opacity, 1);
+  transform: translate3d(var(--tw-enter-translate-x, 0), var(--tw-enter-translate-y, 0), 0)
+             scale3d(var(--tw-enter-scale, 1), …) rotate(var(--tw-enter-rotate, 0));
+} }
+```
+
+The `slide-in-from-*` utilities do nothing except set those two custom properties. Without them both
+default to `0`, so frame 0 is `translate3d(0,0,0) scale(.95)` — and since animations outrank normal
+declarations, that **replaces** a static `translate(-50%,-50%)` centring for the animation's duration. A
+modal anchored at `left:50% top:50%` therefore starts with its top-left corner at the viewport centre,
+displaced by half its own size, and travels up-left into place.
+
+Shadcn's stock `ui/dialog.tsx` and `ui/alert-dialog.tsx` mask this by shipping `slide-in-from-left-1/2`
+and `slide-in-from-top-[48%]`, which re-supply the offsets. Those files are unaffected and unchanged.
+
+**These two modals centre with `inset-0 m-auto` instead.** Auto margins centre on both axes inside a
+fixed `inset-0` containing block when width and height are definite, which both have. With no static
+transform there is nothing for the keyframe to overwrite, `zoom-in-95` scales about the element's own
+centre, and no slide utilities are needed at all. Restoring them would also have worked, but they would
+exist purely to cancel a slide — one tidy-up away from bringing the drift back, which is exactly how it
+arrived.
+
+Mobile was never affected: below `sm` both are `inset-0` full-screen with no transform.
+
+---
+
 ## 7. What changes
 
 **New.** `ui/dropdown-menu.tsx` (the shadcn primitive, re-themed per section 5).
@@ -313,7 +351,7 @@ alignment is the point.
 
 Following the convention in `2026-08-07-verification-runbook.md`: shipped is not the same as verified.
 
-**Verified in a real browser** against `npm run dev`, driven by Playwright — 80 assertions across two viewports and four
+**Verified in a real browser** against `npm run dev`, driven by Playwright — 96 assertions across two viewports and five
 suites, all passing:
 
 - **The menu escapes the panel.** At both ends of the resizable range — `PANEL_MIN_WIDTH` (300) and
@@ -339,6 +377,12 @@ suites, all passing:
   from the content column, and no corner radius. The close X sits in the content column's top-right and
   there is no footer button.
 - **The heading tracks the rail**, and is the dialog's accessible name.
+- **Neither modal drifts when opening or closing** (16 assertions). Sampling the bounding box every
+  frame across the transition, the centre holds to 0.0px on both axes, on open and on close, and the
+  frame-0 transform is a pure scale with no offset — while opacity still runs 0.11 → 1 and the width
+  still runs 688 → 720, so the drift is gone without flattening the animation. These assertions were
+  confirmed to fail against the pre-fix code (319px and 480px of drift), which matters: every other
+  geometry check in the suite measures at rest and passes happily on a modal that flies in from a corner.
 
 **Verified at 375×667** (29 further assertions): the account modal fills the viewport with no radius; the
 rail is a 57px band spanning the full width with the heading above it, inverting the desktop

@@ -94,10 +94,27 @@ export function AccountDetailsModal({
           `p-0` and `overflow-hidden` let the rail run edge to edge, and the
           height lives here rather than on an inner wrapper: a full-height rail
           needs the dialog itself to have a height to fill.
+
+          Centred with `inset-0 m-auto`, deliberately NOT `left-1/2 top-1/2`
+          plus a −50% translate. `tailwindcss-animate` builds one keyframe whose
+          `from` sets the entire transform — translate, scale and rotate
+          together — so with `zoom-in-95` and no `slide-in-from-*` to re-supply
+          the offsets, frame 0 is `translate3d(0,0,0) scale(.95)`. Animations
+          outrank normal declarations, so that *replaces* the centring translate
+          and the modal starts with its top-left corner at the viewport centre,
+          then travels up and left into place — a diagonal drift in from the
+          bottom right, and back out the same way.
+
+          Auto margins centre it without a transform (both axes, because the
+          width and height here are definite), leaving the keyframe nothing to
+          clobber. `zoom-in-95` then scales about the element's own centre,
+          which is the whole intent. Restoring the slide utilities would also
+          work, but they would exist solely to cancel a slide — one tidy-up away
+          from bringing this back.
         */}
         <DialogPrimitive.Content
           aria-describedby={undefined}
-          className="fixed z-50 inset-0 w-screen h-[100dvh] max-w-none rounded-none border-0 grid grid-cols-1 grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden bg-[#171717] shadow-lg duration-200 sm:inset-auto sm:left-[50%] sm:top-[50%] sm:w-full sm:max-w-[720px] sm:h-[min(560px,calc(100vh-120px))] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:grid-cols-[200px_minmax(0,1fr)] sm:grid-rows-[auto_minmax(0,1fr)] sm:rounded-[20px] sm:border sm:border-[rgba(210,210,210,0.2)] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95"
+          className="fixed z-50 inset-0 w-screen h-[100dvh] max-w-none rounded-none border-0 grid grid-cols-1 grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden bg-[#171717] shadow-lg duration-200 sm:w-full sm:max-w-[720px] sm:h-[min(560px,calc(100vh-120px))] sm:m-auto sm:grid-cols-[200px_minmax(0,1fr)] sm:grid-rows-[auto_minmax(0,1fr)] sm:rounded-[20px] sm:border sm:border-[rgba(210,210,210,0.2)] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95"
         >
           <div className="sm:col-start-2 sm:row-start-1 flex items-start justify-between gap-4 px-6 pt-5 pb-4">
             {/*

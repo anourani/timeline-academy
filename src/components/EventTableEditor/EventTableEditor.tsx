@@ -571,11 +571,13 @@ export function EventTableEditor({
         <DialogOverlay />
         {/*
           Same grid shell as `AccountDetailsModal` — see the comment there for
-          why the two layouts cannot be expressed with flex from one DOM order.
-          One extra row here, because this modal keeps a Cancel/Save footer.
+          why the two layouts cannot be expressed with flex from one DOM order,
+          and for why centring is `inset-0 m-auto` rather than a −50% translate
+          (the translate fights `zoom-in-95` and drifts the modal in from the
+          bottom-right corner). One extra row here, for the Cancel/Save footer.
         */}
         <DialogPrimitive.Content
-          className="fixed z-50 inset-0 w-screen h-[100dvh] max-w-none rounded-none border-0 grid grid-cols-1 grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden bg-[#171717] shadow-lg duration-200 sm:inset-auto sm:left-[50%] sm:top-[50%] sm:w-full sm:max-w-[960px] sm:h-[min(640px,calc(100vh-120px))] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:grid-cols-[200px_minmax(0,1fr)] sm:grid-rows-[auto_minmax(0,1fr)_auto] sm:rounded-[20px] sm:border sm:border-[rgba(210,210,210,0.2)] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95"
+          className="fixed z-50 inset-0 w-screen h-[100dvh] max-w-none rounded-none border-0 grid grid-cols-1 grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden bg-[#171717] shadow-lg duration-200 sm:w-full sm:max-w-[960px] sm:h-[min(640px,calc(100vh-120px))] sm:m-auto sm:grid-cols-[200px_minmax(0,1fr)] sm:grid-rows-[auto_minmax(0,1fr)_auto] sm:rounded-[20px] sm:border sm:border-[rgba(210,210,210,0.2)] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95"
         >
           {/* The active page name, where the centred glass-pill tab band used to
               sit. The tabs themselves are in the rail now. */}
