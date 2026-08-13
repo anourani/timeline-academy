@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
 import { useAccountTier } from '@/hooks/useAccountTier'
 import { getCurrentLimits } from '@/lib/limits'
 import { byokAnonDraftStore, trialDraftStore, type DraftStore } from '@/utils/draftStorage'
+import { onUsageChanged } from '@/utils/usageChanged'
 
 interface EventUsage {
   eventCount: number
@@ -60,6 +61,29 @@ export function useEventUsage(): EventUsage {
       setIsLoading(false)
     }
   }, [user, localStore])
+
+  /**
+   * Recount when this tab writes something that changes the counts.
+   *
+   * This is what actually keeps the card current. Realtime below is the
+   * cross-tab bonus, and it cannot carry a delete at all — see
+   * `utils/usageChanged.ts` for why both channels miss it. Before this, the
+   * card refreshed once per page load: it renders outside the router's
+   * `<Outlet/>` in an always-mounted `<aside>`, so nothing remounted the hook.
+   *
+   * Deliberately its own effect with empty deps, NOT folded into the
+   * subscription below. That one re-runs on every `user` object identity
+   * change, and AuthContext mints a fresh one on each TOKEN_REFRESHED — this
+   * listener would be torn down and rebuilt roughly hourly, with a window in
+   * which an emit lands on nothing. `useTimelines` avoids the same trap the
+   * same way. The ref is what lets the deps stay empty while `refetch` (which
+   * closes over `user` and `localStore`) stays current.
+   *
+   * No `user` gate: signed out, `refetch` reads the local draft store.
+   */
+  const refetchRef = useRef(refetch)
+  useEffect(() => { refetchRef.current = refetch }, [refetch])
+  useEffect(() => onUsageChanged(() => { refetchRef.current() }), [])
 
   useEffect(() => {
     refetch()

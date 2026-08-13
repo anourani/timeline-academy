@@ -29,6 +29,7 @@ import {
   MAX_DRAFTS,
   type LocalDraft,
 } from '@/utils/draftStorage'
+import { notifyUsageChanged } from '@/utils/usageChanged'
 import { exportEventsToExcel } from '@/utils/excelExport'
 import { downloadTemplate } from '@/utils/excelSheet'
 import type { TimelineEvent } from '@/types/event'
@@ -354,6 +355,9 @@ export function SidePanelBody() {
           .eq('id', pendingDeleteId)
         if (deleteError) throw deleteError
         loadTimelines()
+        // The row set changed, so the usage counts did too. Realtime cannot
+        // report a delete on either table — see `utils/usageChanged.ts`.
+        notifyUsageChanged()
       } else {
         byokAnonDraftStore.deleteDraft(pendingDeleteId)
         setLocalDrafts(byokAnonDraftStore.getAllDrafts())
@@ -534,6 +538,7 @@ export function SidePanelBody() {
       }
 
       loadTimelines()
+      notifyUsageChanged()
     } catch (err) {
       console.error('Error duplicating timeline:', err)
       alert('Failed to duplicate timeline. Please try again.')

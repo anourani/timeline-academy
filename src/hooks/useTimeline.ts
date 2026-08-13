@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { TimelineEvent, CategoryConfig } from '../types/event';
 import { useAuth } from './useAuth';
 import { DEFAULT_TIMELINE_TITLE } from '../constants/defaults';
+import { notifyUsageChanged } from '../utils/usageChanged';
 import {
   LimitReachedError,
   getCurrentLimits,
@@ -115,6 +116,9 @@ export function useTimeline() {
 
       if (createError) throw createError;
 
+      // One more row against the timeline cap.
+      notifyUsageChanged();
+
       return {
         id: newTimeline.id,
         title: DEFAULT_TIMELINE_TITLE,
@@ -218,6 +222,9 @@ export function useTimeline() {
 
       if (eventsError) throw eventsError;
     }
+
+    // After both writes, so one recount covers the new timeline and its events.
+    notifyUsageChanged();
 
     return timeline.id;
   }, [user]);
