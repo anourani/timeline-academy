@@ -1,8 +1,9 @@
 # The account menu — redesigning the bottom of the left panel — 13 August 2026
 
 Product requirements for replacing the side panel's footer strip with a single account row and a menu,
-modelled on the pattern Claude uses in the same position. Written before the implementation rather than
-alongside it, so section 8 is a list of things to prove rather than a record of things proven.
+modelled on the pattern Claude uses in the same position. Written before the implementation and then kept
+current through it, so section 8 records what was actually proven — including the two places the spec was
+wrong and what replaced it.
 
 ---
 
@@ -46,7 +47,8 @@ part of the system that has historically drifted.
 | Menu width | Wider than the panel, overlapping the canvas | Matches the reference. A menu capped at the panel's own width wraps its labels at `PANEL_MIN_WIDTH` |
 | Legal links | New tab, with an `↗` affordance | `/privacy` and `/terms` render *outside* the layout — an in-tab link destroys editor state |
 | Delete Account | Stays in the menu, below a divider, on `text-destructive` | Where it was asked for. Separation and colour carry the weight the current text link does not |
-| Account Details surface | **Modal**, on the existing `Modal` shell | It is a read-mostly summary, not a workspace, and the shell already portals and locks scroll |
+| Account Details surface | **Modal**, on the `EventTableEditor` shell with a section rail | A modal because it is a read-mostly summary, not a workspace; that shell because the product should not grow a second full-size modal design |
+| Menu modality | `modal={false}` | Every item opens another Radix layer, and a modal menu strands `pointer-events: none` on `<body>` when that layer unmounts. See section 7 |
 | Settings item | Existing `onOpenSettings()`; the panel is unchanged | No new surface and no edit to `TimelineSettingsPanel` |
 | Settings visibility | Hidden wherever no handler is registered | `SidePanelContext.tsx:126-128` calls through a ref only the editor registers. A present item that silently does nothing is worse than an absent one |
 | Signed-out row | Renders, with a reduced menu | `byok-anon` has drafts and limits, and the panel is its only sign-in entry point |
@@ -173,34 +175,36 @@ subtly and inexplicably blue against the panel unless it is overridden.
 
 ## 6. Account Details
 
-A **modal**, built on `src/components/Modal/Modal.tsx` — the shell `ApiKeyModal` and `TrialGateModal`
-already use. It portals to body, locks scroll via `lockScroll`/`unlockScroll`, renders a titled header with
-a close button, and offers three widths; `compact` (420px) or `default` (550px) both fit this content.
+A **modal on the `EventTableEditor` shell** — Radix Dialog rather than the `Modal` wrapper, 720px wide,
+20px radius on `#171717`, an Aleo 24px header band, a 200px left rail of sections, and a glass-button
+footer. The two full-size modals in the product should read as one surface, so the button and tab styles
+live in `ui/glassButton.ts` and `EventTableEditor` imports them rather than keeping its own copies.
 
-Four sections:
+The rail carries three sections — **Account details**, **Account usage**, **Account management** — and
+reopening always lands on the first, since the menu item that opens it is called "Account Details" and
+arriving on the delete screen is not what that promised.
 
-**Identity** — the email address, and how it authenticates: passwordless email OTP, six-digit codes. Worth
-stating plainly, because "there is no password" is a question this modal should answer before it is asked.
+Their contents:
 
-**Tier** — which state the visitor is in and what it grants, using the same strings as the row.
+**Account details** — the email address, how it authenticates (passwordless, a six-digit code each time —
+worth stating plainly, because "there is no password" is a question this pane should answer before it is
+asked), and the join date from `user.created_at`.
 
-**Usage** — events and timelines against their caps. `useEventUsage()` already returns
-`{eventCount, eventLimit, timelineCount, timelineLimit, isLoading, refetch}`, and `PLAN_LIMITS`
-(`plans.ts:15-20`) already holds the caps.
+There is **no name field**, and the pane does not pretend otherwise. Identity here is email-only by design:
+sign-up collects an address and nothing else, so a "Name" row would either sit permanently empty or invent
+a value the account does not have.
 
-**API key** — status only: which provider is active, the masked key, and a pointer to Settings. The
-management UI itself stays in `TimelineSettingsPanel:262` and is not moved or duplicated. `maskKey` and
-`useByokCredential` in `services/userApiKey` supply everything this section needs.
+**Account usage** — the tier and what it grants, using the same strings as the row; events and timelines
+against their caps; and API key *status* — which provider is active and the masked key. `useEventUsage()`
+supplies the counts and `PLAN_LIMITS` (`plans.ts:15-20`) the caps. Key management itself stays in
+`TimelineSettingsPanel:262`; this pane links to it rather than duplicating it.
 
-Delete Account repeats here as a destructive footer, below a rule. Two entry points to a destructive action
-is not redundancy — the menu item is for someone who knows what they want, the modal footer for someone who
-arrived to read what deletion means first.
+**Account management** — Delete Account, with room for the full warning the menu item cannot carry: what
+is lost, that it cannot be undone, and where to export first. Two entry points to a destructive action is
+not redundancy — the menu item is for someone who knows what they want, this pane for someone who arrived
+to read what deletion means.
 
 Every value on this modal already exists. **There is no new query, no new table and no new hook.**
-
-One note for implementation, not a requirement: the `Modal` shell's palette (`bg-gray-800`,
-`border-gray-700`) predates the current tokens and does not match the panel. Whether to bring it in line
-here or leave it consistent with the other two modals is a judgement call at build time.
 
 ---
 
@@ -208,7 +212,15 @@ here or leave it consistent with the other two modals is a judgement call at bui
 
 **New.** `ui/dropdown-menu.tsx` (the shadcn primitive, re-themed per section 5).
 `SidePanel/AccountRow.tsx` and `SidePanel/AccountMenu.tsx`. `Modal/AccountDetailsModal.tsx`. One constants
-module for the tier display strings.
+module for the tier display strings, and `ui/glassButton.ts` for the modal-shell button and rail styles
+shared with `EventTableEditor`.
+
+**One non-obvious requirement.** The account menu must be `modal={false}`. As a modal layer a Radix
+DropdownMenu writes `pointer-events: none` onto `<body>` while open, and every item in this menu opens a
+second Radix layer — the Account Details dialog, or a `ConfirmationModal` for Log Out and Delete Account.
+When that second layer unmounts it restores the style it found on mount, which is the menu's `none`: the
+page then looks normal and silently ignores every click. Non-modal means the menu never writes the style,
+so there is nothing stale to restore. Only inerting the page behind a small account menu is given up.
 
 **Modified.** `SidePanelBody.tsx`: the footer at 669-702 is deleted and replaced by the row. The three
 `ConfirmationModal`s at 704-735 and their handlers at 374-406 are **kept and re-pointed** — the copy in
@@ -233,7 +245,7 @@ alignment is the point.
 
 Following the convention in `2026-08-07-verification-runbook.md`: shipped is not the same as verified.
 
-**Verified in a real browser** against `npm run dev`, driven by Playwright — 55 assertions across two
+**Verified in a real browser** against `npm run dev`, driven by Playwright — 86 assertions across three
 suites, all passing:
 
 - **The menu escapes the panel.** At both ends of the resizable range — `PANEL_MIN_WIDTH` (300) and
@@ -257,8 +269,15 @@ suites, all passing:
   its job in both directions.
 - **Account Details** shows the email, the passwordless explanation, the plan, usage, key status and the
   destructive footer; on `byok` it names Anthropic and masks the key to `sk-ant-v…0000`.
-- **No layer leak.** Closing the modal leaves `body` at `pointer-events: auto` and the menu reopens — the
-  failure mode when a Radix menu and a dialog hand off badly.
+- **No layer leak, on all three paths.** Closing Account Details, and cancelling either the Log Out or the
+  Delete Account confirmation, each leave `body` at `pointer-events: auto` and the menu reopens
+  afterwards. This did fail before `modal={false}` — the page went inert with nothing on screen to
+  explain it — so it is asserted rather than assumed.
+- **Account Details** opens on its first section every time, and the three rail sections show what they
+  should: email / sign-in method / join date, tier / usage / key status, and the delete warning with a
+  destructive button. Usage reflects the tier's real caps (25 and 1200 on `byok`, 10 and 300 on `free`).
+- **`EventTableEditor` still renders with no page error** after its button styles moved to
+  `ui/glassButton.ts`.
 
 **Verified by the toolchain**: `npx tsc --noEmit -p tsconfig.app.json` reports 16 errors, the
 pre-existing count, none in any file this change touches. `npm run lint` is clean.

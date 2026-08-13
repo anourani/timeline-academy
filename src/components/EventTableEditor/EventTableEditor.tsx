@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { glassButtonClass, primaryGlassButtonClass } from '@/components/ui/glassButton'
 import { Calendar } from '@/components/ui/calendar'
 import {
   DndContext,
@@ -307,15 +308,6 @@ function ColorBar({
     </button>
   )
 }
-
-// Glass button used in category rows
-const glassButtonClass = `
-  relative min-w-[80px] px-[11px] py-[6px] rounded-[10px]
-  backdrop-blur-[12px] bg-white/10 border border-white/[0.15]
-  shadow-[0px_8px_32px_rgba(0,0,0,0.4),inset_0px_1px_0px_rgba(255,255,255,0.1)]
-  font-['Avenir',sans-serif] font-medium text-[14px] text-[#c9ced4]
-  hover:bg-white/20 hover:text-[#dadee5] transition-all
-`
 
 export function EventTableEditor({
   isOpen,
@@ -805,14 +797,7 @@ export function EventTableEditor({
               <button
                 onClick={handleApplyChanges}
                 disabled={!canApplyChanges}
-                className="
-                  relative min-w-[80px] px-[11px] py-[6px] rounded-[10px]
-                  backdrop-blur-[12px] bg-[rgba(37,99,235,0.8)] border border-white/[0.15]
-                  shadow-[0px_8px_32px_rgba(0,0,0,0.4),inset_0px_1px_0px_rgba(255,255,255,0.1)]
-                  font-['Avenir',sans-serif] font-medium text-[14px] text-[#dadee5]
-                  hover:bg-[rgba(37,99,235,0.9)] transition-all
-                  disabled:opacity-50 disabled:pointer-events-none
-                "
+                className={`${primaryGlassButtonClass} disabled:opacity-50 disabled:pointer-events-none`}
               >
                 Save
               </button>

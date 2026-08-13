@@ -53,7 +53,22 @@ export function AccountMenu({
   const hasTopGroup = Boolean(user) || showSettings
 
   return (
-    <DropdownMenu>
+    /*
+      `modal={false}` is load bearing, not a preference.
+
+      As a modal layer the menu writes `pointer-events: none` onto <body> while
+      open. Every item here opens another Radix layer — the Account Details
+      dialog, or a ConfirmationModal for Log Out and Delete Account — and when
+      that second layer tears down it restores the style it found on mount,
+      which is the menu's `none`. The page then looks fine and ignores every
+      click, with nothing on screen to explain why.
+
+      Turning the menu non-modal means it never writes the style, so there is
+      nothing stale to restore. Click-outside and Escape still dismiss it; the
+      only thing given up is inerting the page behind a small account menu,
+      which was never worth having.
+    */
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
       {/*
         Wider than the row by a fixed overhang, so the menu overlaps the canvas
