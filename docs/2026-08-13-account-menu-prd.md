@@ -219,7 +219,13 @@ tell whether the Settings item has anywhere to go. `package.json` gains one depe
 **Fixed.** `handleSignOut` switches to `AuthContext.signOut()`, so `clearAllCachedEvents()` runs. See
 section 3.
 
-**Untouched, by decision.** `TimelineSettingsPanel.tsx`, `ApiKeySection.tsx`, `UsageLimits.tsx`.
+**Untouched, by decision.** `TimelineSettingsPanel.tsx`, `ApiKeySection.tsx`.
+
+`UsageLimits.tsx` keeps its structure and every tier variant — the phase 2 in section 9 is still
+outstanding — but its two numeric styles moved from JetBrains Mono to Avenir, so the counts read as part
+of the labels beside them rather than as a second typeface inside one card. Monospace stays wherever a
+key is shown: `ApiKeySection`, `ApiKeyModal` and the masked key in Account Details, where character
+alignment is the point.
 
 ---
 

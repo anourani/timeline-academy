@@ -164,7 +164,7 @@ function UsageRow({
   return (
     <div className="flex items-center justify-between gap-2">
       <span className="text-[13px] leading-[18px] text-[#c9ced4]">{label}</span>
-      <span className="font-['JetBrains_Mono',monospace] text-[13px] leading-[18px] text-[#9b9ea3]">
+      <span className="font-['Avenir',sans-serif] text-[13px] leading-[18px] text-[#9b9ea3]">
         {count}
         {limit == null ? '' : ` / ${limit}`}
       </span>
