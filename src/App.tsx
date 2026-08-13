@@ -13,6 +13,7 @@ import { TrialGateModal } from './components/Modal/TrialGateModal';
 import { ApiKeyModal } from './components/Modal/ApiKeyModal';
 import { AuthModal } from './components/Auth/AuthModal';
 import { exportEventsToExcel } from './utils/excelExport';
+import { notifyUsageChanged } from './utils/usageChanged';
 import { EventDetailPanel } from './components/EventDetailPanel/EventDetailPanel';
 import { useLocalDraft } from './hooks/useLocalDraft';
 import { useAccountTier, type AccountTier } from './hooks/useAccountTier';
@@ -898,6 +899,9 @@ export function App() {
     // realtime DELETE event isn't fast enough to rely on here.
     setActiveTimelineId(null);
     refreshTimelines();
+    // Refreshes rows and tile metadata but never the usage counts, and realtime
+    // cannot report a delete — see `utils/usageChanged.ts`.
+    notifyUsageChanged();
 
     setTitle(DEFAULT_TIMELINE_TITLE);
     setDescription('');

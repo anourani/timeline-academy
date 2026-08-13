@@ -9,6 +9,7 @@ import {
   type Fingerprint,
 } from '../utils/timelineFingerprint';
 import { notifyTimelineSaved } from '../utils/timelineSaved';
+import { notifyUsageChanged } from '../utils/usageChanged';
 import type { SaveStatus } from '../components/SaveStatusIndicator/SaveStatusIndicator';
 import type { TimelineEvent, CategoryConfig } from '../types/event';
 
@@ -127,6 +128,10 @@ export function useAutosave(timelineData: TimelineData) {
 
       // Diff-based event save
       await saveTimelineEvents(data.id, data.events);
+
+      // After the event save, not beside the bump above: this one reports how
+      // many events now exist, and above they had not been written yet.
+      notifyUsageChanged();
 
       // This payload's fingerprint, not the editor's current one — a newer
       // edit that landed mid-flight has already armed its own write.

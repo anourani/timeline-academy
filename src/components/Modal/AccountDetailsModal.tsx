@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useAccountTier } from '@/hooks/useAccountTier'
 import { useEventUsage } from '@/hooks/useEventUsage'
 import { useSidePanel } from '@/hooks/useSidePanel'
+import { UsageMeter } from '@/components/ui/UsageMeter'
 import { maskKey, useByokCredential } from '@/services/userApiKey'
 import { PLAN_LIMITS } from '@/constants/plans'
 import { PROVIDER_META } from '@/constants/byokProviders'
@@ -201,7 +202,7 @@ function UsagePane() {
   // reads a module-level cache refreshed by an async `auth.getUser()`; it lags
   // an auth or key transition by a frame and holds its 'byok-anon' initial
   // value if that call never lands.
-  const { eventCount, timelineCount } = useEventUsage()
+  const { eventCount, timelineCount, isLoading } = useEventUsage()
   const credential = useByokCredential()
   const { onOpenSettings, hasSettingsHandler } = useSidePanel()
 
@@ -218,8 +219,28 @@ function UsagePane() {
         <div>
           <FieldLabel>Usage</FieldLabel>
           <div className="flex flex-col gap-1.5 mt-1.5">
-            <UsageRow label="Timelines" count={timelineCount} limit={caps.timelineLimit} />
-            <UsageRow label="Events" count={eventCount} limit={caps.eventLimit} />
+            {/* Same meter the side panel's Usage Limits card uses. The track
+                tone differs because the surfaces nest in opposite directions:
+                these rows are recessed to #0A0A0A inside a #171717 modal, so
+                the panel's near-black track would vanish here. */}
+            <UsageMeter
+              label="Timelines"
+              count={timelineCount}
+              limit={caps.timelineLimit}
+              size="md"
+              pending={isLoading}
+              trackClass="bg-[#262626]"
+              className="bg-[#0A0A0A] rounded-md px-3 py-1.5"
+            />
+            <UsageMeter
+              label="Events"
+              count={eventCount}
+              limit={caps.eventLimit}
+              size="md"
+              pending={isLoading}
+              trackClass="bg-[#262626]"
+              className="bg-[#0A0A0A] rounded-md px-3 py-1.5"
+            />
           </div>
         </div>
       )}
@@ -317,28 +338,6 @@ function Field({
       <FieldLabel>{label}</FieldLabel>
       <p className="mt-1 text-[14px] leading-[20px] text-[#dadee5] break-all">{value}</p>
       {hint && <p className="text-[12px] leading-[18px] text-[#6b6e73] mt-1">{hint}</p>}
-    </div>
-  )
-}
-
-function UsageRow({
-  label,
-  count,
-  limit,
-}: {
-  label: string
-  count: number
-  limit: number | null
-}) {
-  return (
-    <div className="flex items-center justify-between gap-2 bg-[#0A0A0A] rounded-md px-3 py-1.5">
-      <span className="font-['Avenir',sans-serif] text-[13px] leading-[18px] text-[#c9ced4]">
-        {label}
-      </span>
-      <span className="font-['Avenir',sans-serif] text-[13px] leading-[18px] text-[#9b9ea3]">
-        {count}
-        {limit == null ? '' : ` / ${limit}`}
-      </span>
     </div>
   )
 }
