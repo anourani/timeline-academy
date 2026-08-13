@@ -10,11 +10,11 @@ import type { AccountTier } from '@/hooks/useAccountTier'
 const STAT_TILE_LABEL_CLASS =
   "font-['Avenir',sans-serif] text-[12px] leading-[140%] font-medium text-[#9B9EA3]"
 const STAT_TILE_VALUE_CLASS =
-  "font-['JetBrains_Mono',monospace] text-[14px] leading-[140%] font-normal text-right text-[#9B9EA3] flex-1"
+  "font-['Avenir',sans-serif] text-[14px] leading-[140%] font-normal text-right text-[#9B9EA3] flex-1"
 const TIER_ROW_LABEL_CLASS =
   "font-['Avenir',sans-serif] text-[12px] leading-[18px] font-normal text-[#C9CED4]"
 const TIER_ROW_NUM_CLASS =
-  "font-['JetBrains_Mono',monospace] text-[12px] leading-[140%] font-normal text-[#C9CED4] text-center"
+  "font-['Avenir',sans-serif] text-[12px] leading-[140%] font-normal text-[#C9CED4] text-center"
 const COL_HEADER_CLASS =
   "font-['Avenir',sans-serif] text-[12px] leading-[140%] font-medium text-[#9B9EA3]"
 

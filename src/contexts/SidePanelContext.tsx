@@ -34,6 +34,13 @@ interface SidePanelContextValue {
   /** Open the Settings panel. Registered by the editor route; no-op elsewhere. */
   onOpenSettings: OpenSettingsHandler
   setOnOpenSettings: (handler: OpenSettingsHandler | null) => void
+  /**
+   * Whether `onOpenSettings` currently has somewhere to go. State rather than a
+   * read of the ref, because a ref write does not re-render the account menu
+   * that needs to know — and a Settings item that is visibly present and does
+   * nothing is worse than one that isn't there.
+   */
+  hasSettingsHandler: boolean
   activeTimelineId: string | null
   setActiveTimelineId: (id: string | null) => void
   activeDraftId: string | null
@@ -73,6 +80,7 @@ export function SidePanelProvider({ children }: { children: ReactNode }) {
   const [activeTimelineTitle, setActiveTimelineTitle] = useState<string | null>(null)
   const [activeEventCount, setActiveEventCount] = useState<number | null>(null)
   const [activeDominantCategoryColor, setActiveDominantCategoryColor] = useState<string | null>(null)
+  const [hasSettingsHandler, setHasSettingsHandler] = useState(false)
   const navigate = useNavigate()
   const customHandlerRef = useRef<TimelineSelectHandler | null>(null)
   const customDraftHandlerRef = useRef<DraftSelectHandler | null>(null)
@@ -129,6 +137,7 @@ export function SidePanelProvider({ children }: { children: ReactNode }) {
 
   const setOnOpenSettings = useCallback((handler: OpenSettingsHandler | null) => {
     customOpenSettingsRef.current = handler
+    setHasSettingsHandler(Boolean(handler))
   }, [])
 
   const value = useMemo<SidePanelContextValue>(() => ({
@@ -149,6 +158,7 @@ export function SidePanelProvider({ children }: { children: ReactNode }) {
     setRefreshTimelines,
     onOpenSettings,
     setOnOpenSettings,
+    hasSettingsHandler,
     activeTimelineId,
     setActiveTimelineId,
     activeDraftId,
@@ -159,7 +169,7 @@ export function SidePanelProvider({ children }: { children: ReactNode }) {
     setActiveEventCount,
     activeDominantCategoryColor,
     setActiveDominantCategoryColor,
-  }), [isOpen, open, close, toggle, width, setWidth, resetWidth, isResizing, onTimelineSelect, setOnTimelineSelect, onDraftSelect, setOnDraftSelect, refreshTimelines, setRefreshTimelines, onOpenSettings, setOnOpenSettings, activeTimelineId, activeDraftId, activeTimelineTitle, activeEventCount, activeDominantCategoryColor])
+  }), [isOpen, open, close, toggle, width, setWidth, resetWidth, isResizing, onTimelineSelect, setOnTimelineSelect, onDraftSelect, setOnDraftSelect, refreshTimelines, setRefreshTimelines, onOpenSettings, setOnOpenSettings, hasSettingsHandler, activeTimelineId, activeDraftId, activeTimelineTitle, activeEventCount, activeDominantCategoryColor])
 
   return (
     <SidePanelContext.Provider value={value}>

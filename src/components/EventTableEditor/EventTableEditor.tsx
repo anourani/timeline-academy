@@ -16,6 +16,15 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  glassButtonClass,
+  modalRailClass,
+  modalRailDividerClass,
+  modalRailGroupClass,
+  modalSidebarTabClass,
+  primaryGlassButtonClass,
+} from '@/components/ui/glassButton'
+import { useIsNarrow } from '@/hooks/useIsNarrow'
 import { Calendar } from '@/components/ui/calendar'
 import {
   DndContext,
@@ -25,7 +34,11 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core'
-import type { DragEndEvent } from '@dnd-kit/core'
+import type {
+  DragEndEvent,
+  DraggableAttributes,
+  DraggableSyntheticListeners,
+} from '@dnd-kit/core'
 import {
   arrayMove,
   SortableContext,
@@ -47,6 +60,73 @@ interface EventTableEditorProps {
 
 interface DraftEvent extends Omit<TimelineEvent, 'id'> {
   id: string
+}
+
+// The tab itself, with no dragging in it.
+//
+// Split out from `SortableTab` because `useSortable` is a hook and therefore
+// cannot be skipped conditionally — and below `sm` these render outside any
+// `SortableContext`, where calling it would be an error rather than a no-op.
+//
+// Width is `auto` in the horizontal strip and `full` in the vertical rail, for
+// the reason `modalSidebarTabClass` documents: a strip tab that fills its
+// container, or shrinks to fit, cannot overflow, and overflow is what makes the
+// strip scroll.
+function CategoryTab({
+  category,
+  isActive,
+  onClick,
+  innerRef,
+  style,
+  attributes,
+  listeners,
+  isDragging,
+}: {
+  category: CategoryConfig
+  isActive: boolean
+  onClick: () => void
+  innerRef?: (node: HTMLElement | null) => void
+  style?: React.CSSProperties
+  attributes?: DraggableAttributes
+  listeners?: DraggableSyntheticListeners
+  isDragging?: boolean
+}) {
+  return (
+    <button
+      ref={innerRef}
+      style={style}
+      onClick={onClick}
+      aria-current={isActive ? 'page' : undefined}
+      className={`
+        group relative flex items-center justify-between gap-1
+        w-auto shrink-0 whitespace-nowrap sm:w-full sm:min-w-[184px]
+        py-[9px] pl-[11px] pr-[3px] rounded-[10px] text-left
+        font-['Avenir',sans-serif] font-medium text-[14px] leading-[20px] transition-colors
+        border border-transparent
+        ${isActive
+          ? 'bg-[rgba(37,99,235,0.4)] text-[#dadee5]'
+          : 'bg-transparent text-[#c9ced4] hover:border-[rgba(255,255,255,0.15)] hover:bg-[rgba(255,255,255,0.1)] hover:text-[#dadee5]'
+        }
+        ${isDragging ? 'shadow-[0px_12px_40px_rgba(0,0,0,0.6)]' : ''}
+      `}
+      {...attributes}
+    >
+      <span className="sm:truncate">{category.label}</span>
+      {listeners && (
+        <span
+          {...listeners}
+          className={`
+            hidden sm:flex items-center justify-center w-[18px] h-[18px] cursor-grab active:cursor-grabbing
+            opacity-0 group-hover:opacity-100 transition-opacity
+            ${isDragging ? 'opacity-100' : ''}
+          `}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <GripVertical size={18} className="text-[#9b9ea3]" />
+        </span>
+      )}
+    </button>
+  )
 }
 
 // Sortable Tab component
@@ -75,35 +155,16 @@ function SortableTab({
   }
 
   return (
-    <button
-      ref={setNodeRef}
-      style={style}
+    <CategoryTab
+      category={category}
+      isActive={isActive}
       onClick={onClick}
-      className={`
-        group relative flex items-center justify-between w-full min-w-[184px] py-[9px] pl-[11px] pr-[3px] rounded-[10px]
-        text-left
-        font-['Avenir',sans-serif] font-medium text-[14px] leading-[20px] transition-colors
-        ${isActive
-          ? 'border border-transparent bg-[rgba(37,99,235,0.4)] text-[#dadee5]'
-          : 'border border-transparent bg-transparent text-[#c9ced4] hover:border-[rgba(255,255,255,0.15)] hover:bg-[rgba(255,255,255,0.1)] hover:text-[#dadee5]'
-        }
-        ${isDragging ? 'shadow-[0px_12px_40px_rgba(0,0,0,0.6)]' : ''}
-      `}
-      {...attributes}
-    >
-      <span className="truncate">{category.label}</span>
-      <span
-        {...listeners}
-        className={`
-          flex items-center justify-center w-[18px] h-[18px] cursor-grab active:cursor-grabbing
-          opacity-0 group-hover:opacity-100 transition-opacity
-          ${isDragging ? 'opacity-100' : ''}
-        `}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <GripVertical size={18} className="text-[#9b9ea3]" />
-      </span>
-    </button>
+      innerRef={setNodeRef}
+      style={style}
+      attributes={attributes}
+      listeners={listeners}
+      isDragging={isDragging}
+    />
   )
 }
 
@@ -308,15 +369,6 @@ function ColorBar({
   )
 }
 
-// Glass button used in category rows
-const glassButtonClass = `
-  relative min-w-[80px] px-[11px] py-[6px] rounded-[10px]
-  backdrop-blur-[12px] bg-white/10 border border-white/[0.15]
-  shadow-[0px_8px_32px_rgba(0,0,0,0.4),inset_0px_1px_0px_rgba(255,255,255,0.1)]
-  font-['Avenir',sans-serif] font-medium text-[14px] text-[#c9ced4]
-  hover:bg-white/20 hover:text-[#dadee5] transition-all
-`
-
 export function EventTableEditor({
   isOpen,
   onClose,
@@ -412,6 +464,10 @@ export function EventTableEditor({
     onCategoriesChange(draftCategories)
     onClose()
   }
+
+  // The one thing the `sm:` breakpoint cannot express: dnd-kit's sorting
+  // strategy and modifiers are props, not classes.
+  const isNarrow = useIsNarrow()
 
   // Drag-to-reorder sensors
   const sensors = useSensors(
@@ -513,92 +569,110 @@ export function EventTableEditor({
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogPortal>
         <DialogOverlay />
+        {/*
+          Same grid shell as `AccountDetailsModal` — see the comment there for
+          why the two layouts cannot be expressed with flex from one DOM order,
+          and for why centring is `inset-0 m-auto` rather than a −50% translate
+          (the translate fights `zoom-in-95` and drifts the modal in from the
+          bottom-right corner). One extra row here, for the Cancel/Save footer.
+        */}
         <DialogPrimitive.Content
-          className="fixed left-[50%] top-[50%] z-50 w-full max-w-[960px] translate-x-[-50%] translate-y-[-50%] bg-[#171717] border border-[rgba(210,210,210,0.2)] rounded-[20px] p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]"
+          className="fixed z-50 inset-0 w-screen h-[100dvh] max-w-none rounded-none border-0 grid grid-cols-1 grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden bg-[#171717] shadow-lg duration-200 sm:w-full sm:max-w-[960px] sm:h-[min(640px,calc(100vh-120px))] sm:m-auto sm:grid-cols-[200px_minmax(0,1fr)] sm:grid-rows-[auto_minmax(0,1fr)_auto] sm:rounded-[20px] sm:border sm:border-[rgba(210,210,210,0.2)] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95"
         >
-          {/* Accessible title (sr-only) */}
-          <DialogPrimitive.Title className="sr-only">Events</DialogPrimitive.Title>
+          {/* The active page name, where the centred glass-pill tab band used to
+              sit. The tabs themselves are in the rail now. */}
+          <div className="sm:col-start-2 sm:row-start-1 flex items-start justify-between gap-4 px-6 pt-5 pb-4">
+            <DialogPrimitive.Title className="m-0 font-['Aleo',serif] font-normal text-[20px] leading-[1.4] text-[#dadee5]">
+              {activePageTab === 'events' ? 'Events' : 'Categories'}
+            </DialogPrimitive.Title>
+          </div>
 
-          {/* Page Tabs */}
-          <div className="flex items-center justify-center h-[48px]">
-            <div className="relative flex items-center">
-              {/* Glass pill indicator */}
-              <div
-                className="absolute top-1/2 -translate-y-1/2 h-[44px] border border-[rgba(255,255,255,0.15)] rounded-[12px] shadow-[0px_8px_32px_rgba(0,0,0,0.4)] pointer-events-none"
-                style={{
-                  left: activePageTab === 'events' ? '0px' : '99px',
-                  width: activePageTab === 'events' ? '99px' : '139px',
-                  transition: 'left 320ms ease-out, width 320ms ease-out',
-                }}
-              >
-                <div className="absolute inset-0 backdrop-blur-[12px] bg-[rgba(255,255,255,0.1)] rounded-[12px]" />
-                <div className="absolute inset-0 rounded-[inherit] shadow-[inset_0px_1px_0px_rgba(255,255,255,0.1)]" />
-              </div>
+          {/* Rail: pages on top, then the category filter — which belongs to the
+              Events page and is absent on the Categories one. */}
+          <nav
+            aria-label="Editor sections"
+            className={`sm:col-start-1 sm:row-start-1 sm:row-span-3 ${modalRailClass}`}
+          >
+            <div className={modalRailGroupClass}>
               <button
                 onClick={() => setActivePageTab('events')}
-                className="relative flex items-start h-[44px] px-[12px] py-[5px] rounded-[4px]"
+                aria-current={activePageTab === 'events' ? 'page' : undefined}
+                className={modalSidebarTabClass(activePageTab === 'events')}
               >
-                <span className={`font-['Aleo',serif] font-normal text-[24px] leading-[1.4] whitespace-nowrap transition-colors ${activePageTab === 'events' ? 'text-[#dadee5]' : 'text-[#9b9ea3]'}`}>
-                  Events
-                </span>
+                Events
               </button>
               <button
                 onClick={() => setActivePageTab('categories')}
-                className="relative flex items-start h-[44px] px-[12px] py-[5px] rounded-[4px] cursor-pointer"
+                aria-current={activePageTab === 'categories' ? 'page' : undefined}
+                className={modalSidebarTabClass(activePageTab === 'categories')}
               >
-                <span className={`font-['Aleo',serif] font-normal text-[24px] leading-[1.4] whitespace-nowrap transition-colors ${activePageTab === 'categories' ? 'text-[#dadee5]' : 'text-[#9b9ea3]'}`}>
-                  Categories
-                </span>
+                Categories
               </button>
             </div>
-          </div>
 
-          {/* Content Area */}
-          <div className="mt-8" style={{ height: 'min(520px, calc(100vh - 280px))' }}>
-            {activePageTab === 'events' ? (
-              /* Events Tab Content */
-              <div className="flex gap-[16px] h-full">
-                {/* Category Sidebar */}
-                <div className="w-[200px] shrink-0 bg-[#242526] rounded-[12px] p-2 flex flex-col gap-[2px] overflow-y-auto">
-                  {/* All Categories tab (pinned, not draggable) */}
+            {activePageTab === 'events' && (
+              <>
+                <div className={modalRailDividerClass} />
+                <div className={`${modalRailGroupClass} border-t border-[rgba(210,210,210,0.12)] sm:border-t-0`}>
                   <button
                     onClick={() => setActiveCategory(null)}
-                    className={`
-                      w-full min-w-[184px] py-[9px] pl-[11px] pr-[3px] rounded-[10px]
-                      text-left
-                      font-['Avenir',sans-serif] font-medium text-[14px] leading-[20px] transition-colors
-                      ${activeCategory === null
-                        ? 'border border-transparent bg-[rgba(37,99,235,0.4)] text-[#dadee5]'
-                        : 'border border-transparent bg-transparent text-[#c9ced4] hover:border-[rgba(255,255,255,0.15)] hover:bg-[rgba(255,255,255,0.1)] hover:text-[#dadee5]'
-                      }
-                    `}
+                    aria-current={activeCategory === null ? 'page' : undefined}
+                    className={modalSidebarTabClass(activeCategory === null)}
                   >
                     All Categories
                   </button>
 
-                  {/* Draggable category tabs */}
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleDragEnd}
-                    modifiers={[restrictToVerticalAxis, restrictToParentElement]}
-                  >
-                    <SortableContext
-                      items={draftCategories.map(c => c.id)}
-                      strategy={verticalListSortingStrategy}
+                  {/*
+                    Reordering is a pointer gesture on a list that is a
+                    horizontally scrolling strip below `sm`. The PointerSensor
+                    activates after 5px of movement — the same 5px that means
+                    "scroll this strip" on a touch screen — so on narrow
+                    viewports the tabs render as plain buttons and the swipe
+                    scrolls. Switching to `restrictToHorizontalAxis` would not
+                    help: it makes the two gestures identical rather than
+                    distinguishing them.
+                  */}
+                  {isNarrow ? (
+                    draftCategories.map(cat => (
+                      <CategoryTab
+                        key={cat.id}
+                        category={cat}
+                        isActive={activeCategory === cat.id}
+                        onClick={() => setActiveCategory(cat.id)}
+                      />
+                    ))
+                  ) : (
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={handleDragEnd}
+                      modifiers={[restrictToVerticalAxis, restrictToParentElement]}
                     >
-                      {draftCategories.map(cat => (
-                        <SortableTab
-                          key={cat.id}
-                          category={cat}
-                          isActive={activeCategory === cat.id}
-                          onClick={() => setActiveCategory(cat.id)}
-                        />
-                      ))}
-                    </SortableContext>
-                  </DndContext>
+                      <SortableContext
+                        items={draftCategories.map(c => c.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {draftCategories.map(cat => (
+                          <SortableTab
+                            key={cat.id}
+                            category={cat}
+                            isActive={activeCategory === cat.id}
+                            onClick={() => setActiveCategory(cat.id)}
+                          />
+                        ))}
+                      </SortableContext>
+                    </DndContext>
+                  )}
                 </div>
+              </>
+            )}
+          </nav>
 
+          {/* Content Area */}
+          <div className="sm:col-start-2 sm:row-start-2 min-w-0 min-h-0 px-6 pb-2 overflow-hidden">
+            {activePageTab === 'events' ? (
+              /* Events Tab Content */
+              <div className="flex h-full">
                 {/* Table Area */}
                 <div className="flex-1 flex flex-col min-w-0">
                   {/* Header Row */}
@@ -776,7 +850,7 @@ export function EventTableEditor({
           </div>
 
           {/* Footer */}
-          <div className="flex justify-between items-center mt-8">
+          <div className="sm:col-start-2 sm:row-start-3 flex justify-between items-center gap-3 px-6 pt-2 pb-5">
             {/* Add button (left) — context-dependent */}
             {activePageTab === 'events' ? (
               <button
@@ -805,14 +879,7 @@ export function EventTableEditor({
               <button
                 onClick={handleApplyChanges}
                 disabled={!canApplyChanges}
-                className="
-                  relative min-w-[80px] px-[11px] py-[6px] rounded-[10px]
-                  backdrop-blur-[12px] bg-[rgba(37,99,235,0.8)] border border-white/[0.15]
-                  shadow-[0px_8px_32px_rgba(0,0,0,0.4),inset_0px_1px_0px_rgba(255,255,255,0.1)]
-                  font-['Avenir',sans-serif] font-medium text-[14px] text-[#dadee5]
-                  hover:bg-[rgba(37,99,235,0.9)] transition-all
-                  disabled:opacity-50 disabled:pointer-events-none
-                "
+                className={`${primaryGlassButtonClass} disabled:opacity-50 disabled:pointer-events-none`}
               >
                 Save
               </button>

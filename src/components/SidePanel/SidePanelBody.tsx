@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import {
   CirclePlus,
   Copy,
   Download,
   FileDown,
   FileSpreadsheet,
-  LogOut,
   MoreVertical,
   PanelLeft,
   Share2,
@@ -33,8 +32,10 @@ import {
 import { exportEventsToExcel } from '@/utils/excelExport'
 import { downloadTemplate } from '@/utils/excelSheet'
 import type { TimelineEvent } from '@/types/event'
+import { AccountDetailsModal } from '@/components/Modal/AccountDetailsModal'
 import { UsageLimits } from './UsageLimits'
 import { SidePanelActionButton } from './SidePanelActionButton'
+import { AccountRow } from './AccountRow'
 
 interface TileRow {
   id: string
@@ -152,7 +153,7 @@ function TileMenuButton({
 
 export function SidePanelBody() {
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, signOut } = useAuth()
   const tier = useAccountTier()
   const { isOpen, close, onTimelineSelect, onDraftSelect, setRefreshTimelines, activeTimelineId, activeDraftId, activeTimelineTitle, activeEventCount, activeDominantCategoryColor } = useSidePanel()
   const { timelines, isLoading, error, loadTimelines } = useTimelines()
@@ -164,6 +165,7 @@ export function SidePanelBody() {
   const [isDeletingAccount, setIsDeletingAccount] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
+  const [isAccountDetailsOpen, setIsAccountDetailsOpen] = useState(false)
 
   // `activeDraftId` is in the deps because it is the only signal this component
   // gets that the guest's draft list changed. This panel lives outside the
@@ -373,7 +375,12 @@ export function SidePanelBody() {
 
   const handleSignOut = async () => {
     try {
-      await supabase.auth.signOut()
+      // Through AuthContext rather than `supabase.auth.signOut()` directly:
+      // the context wraps the same call in a `finally` that runs
+      // `clearAllCachedEvents()`. Calling the client straight left events from
+      // viewed shared timelines cached in the browser after sign-out — but only
+      // for a sign-out taken from this panel, which is why nobody noticed.
+      await signOut()
       close()
     } catch (err) {
       console.error('Error signing out:', err)
@@ -667,39 +674,12 @@ export function SidePanelBody() {
       </div>
 
       {/* Footer */}
-      <div className="border-t border-[#404040] px-5 pt-3 pb-4 shrink-0">
-        {user && (
-          <div className="flex items-center justify-between gap-2 py-1.5">
-            <p className="flex-1 min-w-0 font-['Avenir',sans-serif] text-[16px] leading-[24px] text-[#9b9ea3] truncate">
-              {user.email}
-            </p>
-            <button
-              onClick={() => setShowSignOutConfirm(true)}
-              className="shrink-0 p-1 text-[#9b9ea3] hover:text-[#dadee5] rounded transition-colors"
-              aria-label="Sign out"
-              title="Sign out"
-            >
-              <LogOut size={16} />
-            </button>
-          </div>
-        )}
-        <div className="flex items-center gap-3 pt-1 text-[12px] text-[#6b6e73]">
-          <Link to="/privacy" className="hover:text-[#9b9ea3] transition-colors">
-            Privacy
-          </Link>
-          <Link to="/terms" className="hover:text-[#9b9ea3] transition-colors">
-            Terms
-          </Link>
-          {user && (
-            <button
-              onClick={() => setShowDeleteAccountConfirm(true)}
-              className="ml-auto hover:text-destructive transition-colors"
-            >
-              Delete account
-            </button>
-          )}
-        </div>
-      </div>
+      <AccountRow
+        onOpenSettings={() => setIsAccountDetailsOpen(true)}
+        onSignIn={() => setIsAuthModalOpen(true)}
+        onSignOut={() => setShowSignOutConfirm(true)}
+        onDeleteAccount={() => setShowDeleteAccountConfirm(true)}
+      />
 
       <ConfirmationModal
         isOpen={pendingDeleteId !== null}
@@ -741,6 +721,12 @@ export function SidePanelBody() {
       />
 
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+
+      <AccountDetailsModal
+        isOpen={isAccountDetailsOpen}
+        onClose={() => setIsAccountDetailsOpen(false)}
+        onDeleteAccount={() => setShowDeleteAccountConfirm(true)}
+      />
     </>
   )
 }
