@@ -226,40 +226,75 @@ section 3.
 ## 8. Verified vs. unverified
 
 Following the convention in `2026-08-07-verification-runbook.md`: shipped is not the same as verified.
-This is a PRD, so everything below is unverified by definition. The list is what the implementation pass has
-to prove.
 
-1. **The menu escapes the panel.** At both ends of the resizable range — `PANEL_MIN_WIDTH` (300) and
-   `PANEL_MAX_WIDTH` (400), so cards of 294px and 394px once the 6px float gap is taken out — the menu
-   renders wider than the panel and overlaps the canvas without clipping. This is the single most likely
-   thing to be wrong, because it fails only visually and the `overflow-hidden` causing it is three files
-   away from the menu.
-2. **The submenu opens sideways and stays open** while the pointer crosses the gap to it.
-3. **Keyboard traversal end to end**: open with Enter, arrow through items, into and out of the submenu,
-   Escape closes one level at a time, focus returns to the row.
-4. **The `loading` window never renders "Guest".** Hard-reload as a signed-in user on a throttled connection
-   and watch the row. This is the failure that looks like a logout bug.
-5. **Legal links open new tabs with editor state intact** — make an unsaved edit, open Privacy, return to
-   the original tab, confirm the edit is still there.
-6. **Sign-out clears the viewer cache.** View a shared timeline, sign out from the menu, confirm the cached
-   events are gone.
-7. **All four tier states render the right row and the right menu**, including `byok-anon`, which is the
-   state most easily forgotten because it requires a key and no account.
+**Verified in a real browser** against `npm run dev`, driven by Playwright — 55 assertions across two
+suites, all passing:
 
-**A correction to carry forward.** `CLAUDE.md` lists account deletion among paths "deployed but never
+- **The menu escapes the panel.** At both ends of the resizable range — `PANEL_MIN_WIDTH` (300) and
+  `PANEL_MAX_WIDTH` (400), cards of 294px and 394px once the 6px float gap is out — the menu renders
+  312px and 411px wide respectively and its right edge clears the panel's. This was the flagged risk and
+  it did fail first time round, though not in the predicted direction: nothing was clipped, the menu was
+  simply *narrower* than the card. See the width note below.
+- **The submenu opens sideways** on hover, holds while the pointer crosses the gap, and its own right edge
+  (x=569) clears the panel by a wide margin — the portal works at both levels.
+- **Keyboard traversal**: Enter opens, ArrowDown moves onto the first item, Escape closes, and focus
+  returns to the row.
+- **Legal links are real new tabs.** Both carry `target="_blank" rel="noopener noreferrer"`; opening
+  Privacy loads `/privacy` in a second tab, renders its heading, and leaves the original tab on its
+  route.
+- **All four tier states** render the right row and the right menu: `trial` → "Guest · Not saved" with
+  Sign in and no account items; `byok-anon` → "Guest · Your API key", still offering Sign in;
+  `free` → "nourani1alex · Free" with Account Details, Log Out and Delete Account; `byok` → "· Your API
+  key". Local-parts are left unprettified — `a.o-brien@example.com` renders as `a.o-brien`.
+- **Delete Account is visually distinct**: `rgb(174, 41, 41)` against Log Out's `rgb(201, 206, 212)`.
+- **The Settings item appears on `/editor` and is absent on `/`**, which is `hasSettingsHandler` doing
+  its job in both directions.
+- **Account Details** shows the email, the passwordless explanation, the plan, usage, key status and the
+  destructive footer; on `byok` it names Anthropic and masks the key to `sk-ant-v…0000`.
+- **No layer leak.** Closing the modal leaves `body` at `pointer-events: auto` and the menu reopens — the
+  failure mode when a Radix menu and a dialog hand off badly.
+
+**Verified by the toolchain**: `npx tsc --noEmit -p tsconfig.app.json` reports 16 errors, the
+pre-existing count, none in any file this change touches. `npm run lint` is clean.
+
+**Two things the implementation changed from this spec, both for the better:**
+
+1. **The menu width is `calc(var(--radix-dropdown-menu-trigger-width) + 48px)`, not a literal.** A fixed
+   width cannot satisfy "wider than the panel" across a 300–400px resize range — 260px was narrower than
+   the 314px default card, and any number large enough for the top of the range is oversized at the
+   bottom. Measuring off the trigger keeps the overhang constant instead.
+2. **Account Details reads its caps from `PLAN_LIMITS[tier]`, not from `useEventUsage`.** The hook sources
+   limits from `getCurrentLimits()`, a module-level cache refreshed by an async `auth.getUser()`; it lags
+   auth and key transitions by a frame and holds its `'byok-anon'` initial value if that call never lands,
+   which is exactly what surfaced in testing — the modal showed a `byok` account 3 and 150 while the card
+   beside it showed 25. Counts still come from the hook. This is the split `UsageLimits.tsx:45-49` already
+   makes, and for the reason its comment gives.
+
+**NOT verified — do these before trusting the feature:**
+
+1. **The `loading` window never renders "Guest".** Needs a real session against a reachable Supabase;
+   the stub environment resolves auth too fast to observe the window. Hard-reload as a signed-in user on
+   a throttled connection and watch the row. This is the failure that looks like a logout bug.
+2. **Sign-out clears the viewer cache.** The `AuthContext.signOut()` switch is verified by reading, not by
+   running: view a shared timeline, sign out from the menu, confirm the cached events are gone.
+3. **Delete Account end to end from the new entry point.** The function itself is verified (below); what
+   is unexercised is this menu item reaching it.
+4. **Unsaved editor state surviving a legal-link click.** Verified that the original tab keeps its route;
+   not verified with actual unsaved work in the editor, which needs a working backend.
+
+**A note on Delete Account.** `CLAUDE.md` lists account deletion among paths "deployed but never
 exercised". **That is stale.** `2026-08-07-verification-runbook.md` records `delete-account` as **VERIFIED
 end-to-end on 7 August**, against a real account: eight columns confirmed at zero afterwards, both cascades
 observed firing, and the `timeline_categories` row inserted by hand beforehand precisely so the test was
 real rather than an empty table matching an empty table. So the function is not the risk here.
 
 What *is* thin is the reporting around it. `handleDeleteAccount` announces both success and failure through
-`alert()` (`SidePanelBody.tsx:398,401`) — browser chrome standing in for the confirmation of an irreversible
-action. Making that action more discoverable is a reason to improve the reporting, not a reason to hide the
-action.
+`alert()` — browser chrome standing in for the confirmation of an irreversible action. Making that action
+more discoverable is a reason to improve the reporting, not a reason to hide the action.
 
 **The type-check gate.** `npm run build` is `vite build` alone and does not type-check.
-`npx tsc --noEmit -p tsconfig.app.json` is the real gate. There are 16 pre-existing errors in the
-repository; none should be in files this change touches.
+`npx tsc --noEmit -p tsconfig.app.json` is the real gate — which is how the 16-error baseline above was
+established.
 
 ---
 
