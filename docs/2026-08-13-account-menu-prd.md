@@ -49,6 +49,9 @@ part of the system that has historically drifted.
 | Legal links | New tab, with an `↗` affordance | `/privacy` and `/terms` render *outside* the layout — an in-tab link destroys editor state |
 | Delete Account | Stays in the menu, below a divider, on `text-destructive` | Where it was asked for. Separation and colour carry the weight the current text link does not |
 | Account modal surface | Radix Dialog, 720×560, with a **full-height rail** flush to its edges | Settings-dialog layout rather than the Events modal's inset card. Same 20px shell and `#171717` surface, so the two still read as one family |
+| Rail below 640px | Horizontal scrolling tab strip; modal goes full-screen | A 200px rail plus content plus padding needs ~570px. 640 rather than `PANEL_RESIZE_BREAKPOINT` (768) because that constant governs a different element |
+| Reflow mechanism | CSS grid, one DOM order, two placements | The header moves from beside the rail to above it — an L-shape flex cannot express. Duplicating it behind `sm:hidden` would mean two `DialogPrimitive.Title` ids |
+| Reordering on mobile | Off | The drag sensor activates at 5px, which is the scroll gesture. `restrictToHorizontalAxis` makes the two identical rather than distinguishing them |
 | Menu modality | `modal={false}` | Every item opens another Radix layer, and a modal menu strands `pointer-events: none` on `<body>` when that layer unmounts. See section 7 |
 | Settings item | **One entry**, opening the account modal | Was two adjacent entries — Settings (the editor's timeline panel) and Account Details. Merged; the modal's usage section links on to the timeline panel |
 | Settings visibility | Signed in only | The destination is an account modal, so it appears exactly when there is an account. This is where Account Details already sat |
@@ -192,6 +195,24 @@ shell — but laid out the way a settings dialog is rather than the way the Even
 
 The tab style lives in `ui/glassButton.ts` so the two modals' rails cannot drift apart.
 
+**Below `sm` (640px) the rail becomes a horizontal tab strip** under the heading, scrolling sideways, and
+the modal goes full-screen — edge to edge, no radius. 640 rather than the side panel's
+`PANEL_RESIZE_BREAKPOINT` (768) because that is where *this* layout stops fitting: a 200px rail plus
+~320px of content plus padding needs roughly 570px.
+
+That reflow is an L-shape — the header moves from beside the rail to above it — which flex cannot express
+from one DOM order. The Content is therefore a **grid**, placed one way below `sm` and another above it.
+Duplicating the header behind `sm:hidden` was the alternative and is worse: two `DialogPrimitive.Title`
+elements means two copies of the id Radix points `aria-labelledby` at.
+
+**Discoverability.** The strip uses the existing `.scrollbar-hide` utility, and
+`TIMELINE_ARCHITECTURE.md` §Discoverability already records what goes wrong when a hidden scrollbar is
+the only signal that more content exists. Here it is not: the strip is deliberately not padded to fit, so
+an overflowing tab stays visibly clipped — the reference's own affordance. On top of that, changing
+section scrolls the active tab into view, so selection moving without a click never strands it off-screen.
+
+`EventTableEditor` gets the same shell, plus the rail restructure in section 6a.
+
 The rail carries three sections — **Account details**, **Account usage**, **Account management** — and
 the active one's name *is* the `DialogPrimitive.Title`, so the dialog's accessible name always equals the
 heading on screen. Reopening always lands on the first section: a stale selection would otherwise open
@@ -221,12 +242,46 @@ Every value on this modal already exists. **There is no new query, no new table 
 
 ---
 
+## 6a. The Events modal, brought into line
+
+`EventTableEditor` had the same 200px inset rail and the same mobile problem, and its page navigation sat
+somewhere else entirely — a centred glass-pill band with an animated indicator, above the content.
+
+- **Its rail is now full-height and flush** on the same shell as the account modal, and responsive in the
+  same way.
+- **The Events / Categories page tabs moved into the top of that rail**, above a divider, with the
+  category filter below them. The pill band is gone; the content column shows the active page name where
+  it used to sit. On mobile the two groups are **two stacked strips**, not one flattened row —
+  collapsing them would imply they are the same kind of choice.
+- **No close X**, unlike the account modal: this one keeps its Cancel/Save footer, and an X that silently
+  discards edits is a worse affordance than the Cancel already there.
+
+**Drag-to-reorder stops below `sm`.** The category tabs use a `PointerSensor` with
+`activationConstraint: { distance: 5 }` — and in a horizontal strip those same 5px are the scroll
+gesture. `restrictToHorizontalAxis` does not resolve that; it makes the two gestures identical. So on
+narrow viewports the tabs render as plain buttons outside any `DndContext`, and the swipe scrolls.
+Reordering is a desktop refinement; scrolling is what a phone needs.
+
+This is the one place a CSS breakpoint is not enough — dnd-kit's strategy and modifiers are props, not
+classes — hence `useIsNarrow()` (`src/hooks/useIsNarrow.ts`), which follows the viewport-read pattern in
+`usePanelWidth.ts`. It also forced splitting `SortableTab` into a presentational `CategoryTab` plus a
+sortable wrapper, because `useSortable` is a hook and cannot be skipped conditionally.
+
+**A limitation worth stating rather than papering over**: the Events table's columns are fixed-width
+(240/90/90px plus selects) and total well over a phone's width. This work makes the modal's *navigation*
+usable on mobile; the table inside it still scrolls horizontally and is cramped. Separately, the side
+panel is 320px wide and open by default, so on a 375px viewport it covers the editor and the toolbar
+that opens this modal — pre-existing, and not something these modals control.
+
+---
+
 ## 7. What changes
 
 **New.** `ui/dropdown-menu.tsx` (the shadcn primitive, re-themed per section 5).
 `SidePanel/AccountRow.tsx` and `SidePanel/AccountMenu.tsx`. `Modal/AccountDetailsModal.tsx`. One constants
-module for the tier display strings, and `ui/glassButton.ts` for the modal-shell button and rail styles
-shared with `EventTableEditor`.
+module for the tier display strings; `ui/glassButton.ts` for the modal-shell button, rail and tab styles
+shared with `EventTableEditor`; and `hooks/useIsNarrow.ts` for the single case a media query cannot
+reach.
 
 **One non-obvious requirement.** The account menu must be `modal={false}`. As a modal layer a Radix
 DropdownMenu writes `pointer-events: none` onto `<body>` while open, and every item in this menu opens a
@@ -258,7 +313,7 @@ alignment is the point.
 
 Following the convention in `2026-08-07-verification-runbook.md`: shipped is not the same as verified.
 
-**Verified in a real browser** against `npm run dev`, driven by Playwright — 106 assertions across three
+**Verified in a real browser** against `npm run dev`, driven by Playwright — 80 assertions across two viewports and four
 suites, all passing:
 
 - **The menu escapes the panel.** At both ends of the resizable range — `PANEL_MIN_WIDTH` (300) and
@@ -284,6 +339,15 @@ suites, all passing:
   from the content column, and no corner radius. The close X sits in the content column's top-right and
   there is no footer button.
 - **The heading tracks the rail**, and is the dialog's accessible name.
+
+**Verified at 375×667** (29 further assertions): the account modal fills the viewport with no radius; the
+rail is a 57px band spanning the full width with the heading above it, inverting the desktop
+relationship; the strip overflows (424px of tabs in 375px), scrolls, keeps its tabs on one row rather
+than wrapping, and scrolls the active tab into view on selection. The Events modal fills the viewport,
+its rail is a 114px band of **two** stacked scrolling strips, and no drag handles render in it. On
+desktop the Events rail is full-height and flush, carries Events/Categories above the category filter,
+switches pages from the rail, hides the category filter on the Categories page, keeps its four drag
+handles, and the old pill band is gone.
 - **Account Details** shows the email, the passwordless explanation, the plan, usage, key status and the
   destructive footer; on `byok` it names Anthropic and masks the key to `sk-ant-v…0000`.
 - **No layer leak, on all three paths.** Closing Account Details, and cancelling either the Log Out or the

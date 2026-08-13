@@ -1,9 +1,11 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { X } from 'lucide-react'
 import { Dialog, DialogOverlay, DialogPortal } from '@/components/ui/dialog'
 import {
   destructiveGlassButtonClass,
+  modalRailClass,
+  modalRailGroupClass,
   modalSidebarTabClass,
 } from '@/components/ui/glassButton'
 import { useAuth } from '@/hooks/useAuth'
@@ -51,6 +53,17 @@ export function AccountDetailsModal({
   const { user } = useAuth()
   const tier = useAccountTier()
   const [section, setSection] = useState<SectionId>('details')
+  const railRef = useRef<HTMLElement | null>(null)
+
+  // Keep the active tab visible in the horizontal strip. The scrollbar is
+  // hidden there, so a tab scrolled off the edge has no affordance saying where
+  // it went — and selection can move without a click (reopening resets to the
+  // first section, and arrow keys move focus). Inert on the vertical rail,
+  // where nothing overflows.
+  useEffect(() => {
+    const active = railRef.current?.querySelector(`[data-section="${section}"]`)
+    active?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [section, isOpen])
 
   // Reopening lands on the first section rather than wherever the last visit
   // ended. The section name doubles as the dialog's heading, so a stale
@@ -67,65 +80,77 @@ export function AccountDetailsModal({
       <DialogPortal>
         <DialogOverlay />
         {/*
-          `p-0` and `overflow-hidden` are what let the rail run edge to edge and
-          clip to the 20px radius, and the height lives here rather than on an
-          inner wrapper — a full-height rail needs the dialog itself to have a
-          height to fill.
+          A grid rather than a flex row, because the two layouts are an L-shape
+          reflow of each other:
+
+            below sm   header / strip / body stacked in one column
+            sm and up  rail down the left spanning both rows, header and body
+                       stacked to its right
+
+          Flex cannot express that from one DOM order, and duplicating the
+          header behind `sm:hidden` would mean two `DialogPrimitive.Title`
+          elements — two copies of the id Radix points `aria-labelledby` at.
+
+          `p-0` and `overflow-hidden` let the rail run edge to edge, and the
+          height lives here rather than on an inner wrapper: a full-height rail
+          needs the dialog itself to have a height to fill.
         */}
         <DialogPrimitive.Content
           aria-describedby={undefined}
-          className="fixed left-[50%] top-[50%] z-50 w-full max-w-[720px] h-[min(560px,calc(100vh-120px))] translate-x-[-50%] translate-y-[-50%] flex overflow-hidden bg-[#171717] border border-[rgba(210,210,210,0.2)] rounded-[20px] shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]"
+          className="fixed z-50 inset-0 w-screen h-[100dvh] max-w-none rounded-none border-0 grid grid-cols-1 grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden bg-[#171717] shadow-lg duration-200 sm:inset-auto sm:left-[50%] sm:top-[50%] sm:w-full sm:max-w-[720px] sm:h-[min(560px,calc(100vh-120px))] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:grid-cols-[200px_minmax(0,1fr)] sm:grid-rows-[auto_minmax(0,1fr)] sm:rounded-[20px] sm:border sm:border-[rgba(210,210,210,0.2)] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95"
         >
-          {/* Full-height rail: flush to the modal's edges, its own surface, and
-              a divider instead of a gap. */}
+          <div className="sm:col-start-2 sm:row-start-1 flex items-start justify-between gap-4 px-6 pt-5 pb-4">
+            {/*
+              The section name *is* the dialog's title, so the accessible name
+              always matches the heading on screen. It changes as you move
+              through the rail, which is what the reference does too.
+            */}
+            <DialogPrimitive.Title className="m-0 font-['Aleo',serif] font-normal text-[20px] leading-[1.4] text-[#dadee5]">
+              {SECTIONS.find(s => s.id === section)?.label}
+            </DialogPrimitive.Title>
+            <DialogPrimitive.Close
+              aria-label="Close"
+              className="shrink-0 -mr-1 -mt-0.5 p-1 rounded text-[#9b9ea3] hover:text-[#dadee5] outline-none focus-visible:ring-1 focus-visible:ring-white/40 transition-colors"
+            >
+              <X size={20} />
+            </DialogPrimitive.Close>
+          </div>
+
+          {/* Full-height rail at sm and up; a horizontally scrolling strip below
+              it. Both orientations come from `modalRailClass`. */}
           <nav
+            ref={railRef}
             aria-label="Account sections"
-            className="w-[200px] shrink-0 h-full bg-[#141415] border-r border-[rgba(210,210,210,0.2)] p-3 flex flex-col gap-[2px] overflow-y-auto"
+            className={`sm:col-start-1 sm:row-start-1 sm:row-span-2 ${modalRailClass}`}
           >
-            {SECTIONS.map(s => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => setSection(s.id)}
-                aria-current={section === s.id ? 'page' : undefined}
-                className={modalSidebarTabClass(section === s.id)}
-              >
-                {s.label}
-              </button>
-            ))}
+            <div className={modalRailGroupClass}>
+              {SECTIONS.map(s => (
+                <button
+                  key={s.id}
+                  type="button"
+                  data-section={s.id}
+                  onClick={() => setSection(s.id)}
+                  aria-current={section === s.id ? 'page' : undefined}
+                  className={modalSidebarTabClass(section === s.id)}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
           </nav>
 
-          <div className="flex-1 min-w-0 flex flex-col">
-            <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-4">
-              {/*
-                The section name *is* the dialog's title, so the accessible name
-                always matches the heading on screen. It changes as you move
-                through the rail, which is what the reference does too.
-              */}
-              <DialogPrimitive.Title className="m-0 font-['Aleo',serif] font-normal text-[20px] leading-[1.4] text-[#dadee5]">
-                {SECTIONS.find(s => s.id === section)?.label}
-              </DialogPrimitive.Title>
-              <DialogPrimitive.Close
-                aria-label="Close"
-                className="shrink-0 -mr-1 -mt-0.5 p-1 rounded text-[#9b9ea3] hover:text-[#dadee5] outline-none focus-visible:ring-1 focus-visible:ring-white/40 transition-colors"
-              >
-                <X size={20} />
-              </DialogPrimitive.Close>
-            </div>
-
-            <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-6">
-              {section === 'details' && <DetailsPane />}
-              {section === 'usage' && <UsagePane />}
-              {section === 'management' && (
-                <ManagementPane
-                  onDelete={() => {
-                    onClose()
-                    onDeleteAccount()
-                  }}
-                  signedIn={Boolean(user)}
-                />
-              )}
-            </div>
+          <div className="sm:col-start-2 sm:row-start-2 min-w-0 min-h-0 overflow-y-auto px-6 pb-6">
+            {section === 'details' && <DetailsPane />}
+            {section === 'usage' && <UsagePane />}
+            {section === 'management' && (
+              <ManagementPane
+                onDelete={() => {
+                  onClose()
+                  onDeleteAccount()
+                }}
+                signedIn={Boolean(user)}
+              />
+            )}
           </div>
         </DialogPrimitive.Content>
       </DialogPortal>
