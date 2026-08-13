@@ -10,7 +10,7 @@ import {
 import { AccountMenu } from './AccountMenu'
 
 interface AccountRowProps {
-  onOpenAccountDetails: () => void
+  onOpenSettings: () => void
   onSignIn: () => void
   onSignOut: () => void
   onDeleteAccount: () => void
@@ -26,7 +26,7 @@ interface AccountRowProps {
  * link to the privacy policy.
  */
 export function AccountRow({
-  onOpenAccountDetails,
+  onOpenSettings,
   onSignIn,
   onSignOut,
   onDeleteAccount,
@@ -55,7 +55,7 @@ export function AccountRow({
   return (
     <div className="border-t border-[#404040] px-3 py-3 shrink-0">
       <AccountMenu
-        onOpenAccountDetails={onOpenAccountDetails}
+        onOpenSettings={onOpenSettings}
         onSignIn={onSignIn}
         onSignOut={onSignOut}
         onDeleteAccount={onDeleteAccount}

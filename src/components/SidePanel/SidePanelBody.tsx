@@ -675,7 +675,7 @@ export function SidePanelBody() {
 
       {/* Footer */}
       <AccountRow
-        onOpenAccountDetails={() => setIsAccountDetailsOpen(true)}
+        onOpenSettings={() => setIsAccountDetailsOpen(true)}
         onSignIn={() => setIsAuthModalOpen(true)}
         onSignOut={() => setShowSignOutConfirm(true)}
         onDeleteAccount={() => setShowDeleteAccountConfirm(true)}

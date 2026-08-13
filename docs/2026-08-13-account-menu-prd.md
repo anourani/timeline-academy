@@ -26,13 +26,14 @@ Three problems, in descending order of how much they matter:
   user says nothing about what they are on.
 
 What replaces it: **one row, pinned to the bottom**, showing an avatar, the user's name and their tier,
-and a chevron. Clicking it opens a menu upward carrying **Settings**, **Account Details**, **Learn more**
-(a submenu holding Privacy Policy and Terms & Conditions), **Log Out** and **Delete Account**. The row
-renders for signed-out visitors too, with a reduced menu, because `byok-anon` is a real tier with real
-drafts and the panel is its only route to sign-in.
+and a chevron. Clicking it opens a menu upward carrying **Settings** (the account modal in section 6),
+**Learn more** (a submenu holding Privacy Policy and Terms & Conditions), **Log Out** and **Delete
+Account**. The row renders for signed-out visitors too, with a reduced menu, because `byok-anon` is a
+real tier with real drafts and the panel is its only route to sign-in.
 
-Two things this deliberately does not touch: **the Settings panel**, which keeps its current contents and
-its current entry points, and **`UsageLimits`**, which is phase 2 (section 9). The tier model is unchanged.
+Two things this deliberately does not touch: **the Settings panel**, whose contents are unchanged — it
+loses only its account-menu entry, keeping the editor's header gear and gaining a link from the account
+modal — and **`UsageLimits`**, which is phase 2 (section 9). The tier model is unchanged.
 No SQL, no migration, no edge function — which is the main reason this can land without going near the
 part of the system that has historically drifted.
 
@@ -47,10 +48,10 @@ part of the system that has historically drifted.
 | Menu width | Wider than the panel, overlapping the canvas | Matches the reference. A menu capped at the panel's own width wraps its labels at `PANEL_MIN_WIDTH` |
 | Legal links | New tab, with an `↗` affordance | `/privacy` and `/terms` render *outside* the layout — an in-tab link destroys editor state |
 | Delete Account | Stays in the menu, below a divider, on `text-destructive` | Where it was asked for. Separation and colour carry the weight the current text link does not |
-| Account Details surface | **Modal**, on the `EventTableEditor` shell with a section rail | A modal because it is a read-mostly summary, not a workspace; that shell because the product should not grow a second full-size modal design |
+| Account modal surface | Radix Dialog, 720×560, with a **full-height rail** flush to its edges | Settings-dialog layout rather than the Events modal's inset card. Same 20px shell and `#171717` surface, so the two still read as one family |
 | Menu modality | `modal={false}` | Every item opens another Radix layer, and a modal menu strands `pointer-events: none` on `<body>` when that layer unmounts. See section 7 |
-| Settings item | Existing `onOpenSettings()`; the panel is unchanged | No new surface and no edit to `TimelineSettingsPanel` |
-| Settings visibility | Hidden wherever no handler is registered | `SidePanelContext.tsx:126-128` calls through a ref only the editor registers. A present item that silently does nothing is worse than an absent one |
+| Settings item | **One entry**, opening the account modal | Was two adjacent entries — Settings (the editor's timeline panel) and Account Details. Merged; the modal's usage section links on to the timeline panel |
+| Settings visibility | Signed in only | The destination is an account modal, so it appears exactly when there is an account. This is where Account Details already sat |
 | Signed-out row | Renders, with a reduced menu | `byok-anon` has drafts and limits, and the panel is its only sign-in entry point |
 | Tier label | `·`-separated suffix on the row | The reference pattern. After identity, the tier is the most useful thing that line can say |
 | `loading` tier | Skeleton row, menu not openable | `useAccountTier` returns `'loading'` before auth answers; rendering "Guest" in that window mislabels a signed-in user |
@@ -93,7 +94,8 @@ reference.
 
 **`onOpenSettings()` is a no-op outside the editor.** `SidePanelContext.tsx:126-128` calls through a ref
 that only the editor route registers. On `/` and in the viewer the ref is null and the call does nothing,
-silently. The menu must be able to tell — hence `hasSettingsHandler` in section 7.
+silently. This is why the menu does not point at it at all, and why the account modal's "keys are managed
+in Settings" line is conditional on `hasSettingsHandler` (section 7) rather than always offered.
 
 **Sign-out from this panel skips the cache purge.** `handleSignOut` (`SidePanelBody.tsx:374-384`) calls
 `supabase.auth.signOut()` directly. `AuthContext`'s own `signOut` (`AuthContext.tsx:26-39`) wraps the same
@@ -148,17 +150,19 @@ Opens upward, anchored to the row, portalled to the body.
 | Item | Action |
 |---|---|
 | *header* — full email address | not interactive |
-| Settings | `onOpenSettings()` — hidden where unregistered |
-| Account Details | opens the modal in section 6 |
+| Settings | opens the account modal in section 6 |
 | — divider — | |
 | Learn more → | submenu: **Privacy Policy ↗**, **Terms & Conditions ↗** |
 | — divider — | |
 | Log Out | `ConfirmationModal`, then `AuthContext.signOut()` |
 | Delete Account | `ConfirmationModal`, then the `delete-account` function |
 
-**Signed out** (`trial`, `byok-anon`): Settings, Learn more, a divider, then **Sign in** in place of Log
-Out. No Account Details, no Delete Account — there is no account to detail or delete. Sign-in reuses
-`AuthModal`, already imported at `SidePanelBody.tsx:25`.
+**Signed out** (`trial`, `byok-anon`): Learn more, a divider, then **Sign in**. No Settings and no Delete
+Account — there is no account to configure or delete. Sign-in reuses `AuthModal`, already imported at
+`SidePanelBody.tsx:25`.
+
+The menu no longer changes shape by route. It used to: Settings appeared only on `/editor`, where a
+handler was registered. Now the one item it carries has a destination that exists everywhere.
 
 Both legal items are anchors with `target="_blank"` and `rel="noopener noreferrer"`, for the routing reason
 in section 3. They are the only items in the menu that leave the app, and the `↗` says so.
@@ -173,16 +177,25 @@ subtly and inexplicably blue against the panel unless it is overridden.
 
 ---
 
-## 6. Account Details
+## 6. The account modal
 
-A **modal on the `EventTableEditor` shell** — Radix Dialog rather than the `Modal` wrapper, 720px wide,
-20px radius on `#171717`, an Aleo 24px header band, a 200px left rail of sections, and a glass-button
-footer. The two full-size modals in the product should read as one surface, so the button and tab styles
-live in `ui/glassButton.ts` and `EventTableEditor` imports them rather than keeping its own copies.
+Radix Dialog rather than the `Modal` wrapper, 720×560, 20px radius on `#171717` — the `EventTableEditor`
+shell — but laid out the way a settings dialog is rather than the way the Events modal is:
+
+- **The rail spans the full height**, flush to the modal's edges, on a darker `#141415` with a 1px right
+  divider. Not an inset rounded card floating inside a gap. This requires `p-0` and `overflow-hidden` on
+  the Content and the height set there rather than on an inner wrapper — a full-height rail needs the
+  dialog itself to have a height to fill.
+- **The heading and close X live in the content column**, and there is no footer.
+- **The active item keeps the brand blue** (`rgba(37,99,235,0.4)`), tying it to the Events modal's rail
+  rather than to the reference's grey. Text labels, no icons.
+
+The tab style lives in `ui/glassButton.ts` so the two modals' rails cannot drift apart.
 
 The rail carries three sections — **Account details**, **Account usage**, **Account management** — and
-reopening always lands on the first, since the menu item that opens it is called "Account Details" and
-arriving on the delete screen is not what that promised.
+the active one's name *is* the `DialogPrimitive.Title`, so the dialog's accessible name always equals the
+heading on screen. Reopening always lands on the first section: a stale selection would otherwise open
+Settings directly on the delete screen with nothing to indicate that is unusual.
 
 Their contents:
 
@@ -245,7 +258,7 @@ alignment is the point.
 
 Following the convention in `2026-08-07-verification-runbook.md`: shipped is not the same as verified.
 
-**Verified in a real browser** against `npm run dev`, driven by Playwright — 86 assertions across three
+**Verified in a real browser** against `npm run dev`, driven by Playwright — 106 assertions across three
 suites, all passing:
 
 - **The menu escapes the panel.** At both ends of the resizable range — `PANEL_MIN_WIDTH` (300) and
@@ -262,11 +275,15 @@ suites, all passing:
   route.
 - **All four tier states** render the right row and the right menu: `trial` → "Guest · Not saved" with
   Sign in and no account items; `byok-anon` → "Guest · Your API key", still offering Sign in;
-  `free` → "nourani1alex · Free" with Account Details, Log Out and Delete Account; `byok` → "· Your API
-  key". Local-parts are left unprettified — `a.o-brien@example.com` renders as `a.o-brien`.
+  `free` → "nourani1alex · Free" with Settings, Log Out and Delete Account; `byok` → "· Your API key". Local-parts are left unprettified — `a.o-brien@example.com` renders as `a.o-brien`.
 - **Delete Account is visually distinct**: `rgb(174, 41, 41)` against Log Out's `rgb(201, 206, 212)`.
-- **The Settings item appears on `/editor` and is absent on `/`**, which is `hasSettingsHandler` doing
-  its job in both directions.
+- **The menu carries exactly one Settings item and no Account Details**, identical on `/` and `/editor`,
+  and it opens the account modal from both. Signed out, Settings is absent and Sign in remains.
+- **The rail spans the full modal height**, flush top, bottom and left to the dialog's content box
+  (558px against a 560px dialog — the 2px is its border), with a 1px right divider, a surface distinct
+  from the content column, and no corner radius. The close X sits in the content column's top-right and
+  there is no footer button.
+- **The heading tracks the rail**, and is the dialog's accessible name.
 - **Account Details** shows the email, the passwordless explanation, the plan, usage, key status and the
   destructive footer; on `byok` it names Anthropic and masks the key to `sk-ant-v…0000`.
 - **No layer leak, on all three paths.** Closing Account Details, and cancelling either the Log Out or the
