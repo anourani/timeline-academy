@@ -14,17 +14,10 @@ import {
   downloadTemplate,
   isInstructionRow,
   parseSheetRows,
-  type SheetCellValue,
+  toDateString,
 } from '@/utils/excelSheet'
 
 const MAX_TITLE_LENGTH = 55
-
-function toDateString(value: SheetCellValue | undefined): string {
-  if (value == null || String(value).trim() === '') return ''
-  const date = value instanceof Date ? value : new Date(String(value))
-  if (isNaN(date.getTime())) return ''
-  return date.toISOString().split('T')[0]
-}
 
 interface ImportCSVModalProps {
   isOpen: boolean

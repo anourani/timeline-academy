@@ -2,6 +2,7 @@ import React, { memo, useRef, useEffect, useState, useLayoutEffect } from 'react
 import { TimelineEvent as ITimelineEvent } from '../../types/event';
 import { Month, TimelineScale } from '../../types/timeline';
 import { EVENT_ROW_HEIGHT, EVENT_MIN_WIDTH } from '../../constants/timeline';
+import { findMonthIndex, parseDateParts } from '../../utils/dateUtils';
 
 interface TimelineEventProps {
   event: ITimelineEvent & { stackIndex: number };
@@ -81,26 +82,32 @@ export const TimelineEvent = memo(function TimelineEvent({
   if (!months.length) return null;
 
   // Parse dates
-  const [startYear, startMonth, startDay] = event.startDate.split('-').map(Number);
-  const [endYear, endMonth, endDay] = event.endDate.split('-').map(Number);
+  const startParts = parseDateParts(event.startDate);
+  const endParts = parseDateParts(event.endDate);
+  if (!startParts || !endParts) return null;
+
+  // `findMonthIndex` clamps to the nearest edge, so these are always valid grid
+  // lines. Deriving them arithmetically from a raw `findIndex` was the bug: a
+  // miss returns -1, and a negative CSS grid line counts from the *end* of the
+  // grid, which piled every off-range event onto the timeline's right edge.
+  const startMonthIndex = findMonthIndex(months, event.startDate);
+  const endMonthIndex = findMonthIndex(months, event.endDate);
+  if (startMonthIndex === -1 || endMonthIndex === -1) return null;
 
   // Calculate which quarter of the month the day falls into (1-8, 9-16, 17-24, 25-32)
   const getQuarter = (day: number) => Math.floor((day - 1) / 8);
 
-  const startQuarter = getQuarter(startDay);
-  const endQuarter = getQuarter(endDay);
+  const startQuarter = getQuarter(startParts.day);
+  const endQuarter = getQuarter(endParts.day);
 
-  // Find the month indices in the timeline
-  const startMonthIndex = months.findIndex(
-    m => m.year === startYear && m.month === startMonth - 1
-  );
-  const endMonthIndex = months.findIndex(
-    m => m.year === endYear && m.month === endMonth - 1
-  );
-
-  // Calculate grid columns based on month index
+  // Calculate grid columns based on month index. The end is floored one column
+  // past the start: nothing rejects an event whose endDate precedes its
+  // startDate, and a reversed `gridColumn` range renders the bar backwards.
   const startColumn = (startMonthIndex * 4) + startQuarter + 1;
-  const endColumn = (endMonthIndex * 4) + endQuarter + 2;
+  const endColumn = Math.max(
+    (endMonthIndex * 4) + endQuarter + 2,
+    startColumn + 1
+  );
 
   const isSingleDay = event.startDate === event.endDate;
   const isDraggable = !!onPointerDown;

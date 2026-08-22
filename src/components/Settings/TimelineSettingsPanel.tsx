@@ -16,15 +16,8 @@ import { DEFAULT_TIMELINE_DESCRIPTION } from '../../constants/defaults';
 import {
   isInstructionRow,
   parseSheetRows,
-  type SheetCellValue,
+  toDateString,
 } from '../../utils/excelSheet';
-
-function toDateString(value: SheetCellValue | undefined): string {
-  if (value == null || String(value).trim() === '') return '';
-  const date = value instanceof Date ? value : new Date(String(value));
-  if (isNaN(date.getTime())) return '';
-  return date.toISOString().split('T')[0];
-}
 
 interface TimelineSettingsPanelProps {
   isOpen: boolean;

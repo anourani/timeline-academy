@@ -2,33 +2,104 @@ import { TimelineEvent } from '../types/event';
 import { Month } from '../types/timeline';
 import { format } from 'date-fns';
 
-const MIN_YEAR = 1900;
+// Year 1 rather than 1900: the app charts history, and a 1900 floor silently
+// pulled every earlier event off the rendered grid. AD only — `YYYY-MM-DD`
+// strings and the `split('-')` parsing below cannot express a negative year.
+const MIN_YEAR = 1;
 const MAX_YEAR = 2100;
 const DEFAULT_START_YEAR = 2014;
 const DEFAULT_END_YEAR = 2024;
 
+export interface DateParts {
+  year: number;
+  /** 0-indexed, matching `Month.month`. */
+  month: number;
+  day: number;
+}
+
+/**
+ * Calendar parts of a `YYYY-MM-DD` string, read without going through `Date`.
+ *
+ * `new Date('1900-01-01')` parses as UTC midnight but `getFullYear()` reads back
+ * in local time, so anywhere west of UTC a January-1st date reports the
+ * *previous* year. The generator is told "year-only -> January 1", so that hit
+ * a large share of AI events and is what made the header read `1596-1899` for a
+ * timeline whose last date is 1900-01-01.
+ *
+ * Returns null for anything unparseable, so callers can skip the event rather
+ * than propagate a NaN through `Math.min`/`Math.max`.
+ */
+export function parseDateParts(dateStr: string): DateParts | null {
+  if (!dateStr) return null;
+
+  const match = /^(\d{1,4})-(\d{1,2})-(\d{1,2})$/.exec(dateStr.trim());
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  if (year < 1 || month < 1 || month > 12 || day < 1 || day > 31) return null;
+
+  return { year, month: month - 1, day };
+}
+
+/**
+ * Build a `YYYY-MM-DD` string from calendar parts (`month` 0-indexed).
+ *
+ * The year is padded to four digits: `isValidDateFormat` requires `\d{4}`, and
+ * `new Date('596-01-01T00:00:00')` is Invalid Date while `'0596-01-01T00:00:00'`
+ * parses correctly.
+ */
+export function formatYMD(year: number, month: number, day: number): string {
+  return `${String(year).padStart(4, '0')}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+/**
+ * Index of the month containing `dateStr` within `months`, clamped to the
+ * nearest edge when the date falls outside the rendered range.
+ *
+ * Returns -1 only when there are no months or the date is unparseable. Callers
+ * must never turn that into a CSS grid line: a negative grid line counts from
+ * the *end* of the grid, which is what stacked every off-grid event onto the
+ * timeline's right edge.
+ */
+export function findMonthIndex(months: Month[], dateStr: string): number {
+  if (!months.length) return -1;
+
+  const parts = parseDateParts(dateStr);
+  if (!parts) return -1;
+
+  const index = months.findIndex(
+    m => m.year === parts.year && m.month === parts.month
+  );
+  if (index !== -1) return index;
+
+  const first = months[0];
+  const beforeStart =
+    parts.year < first.year ||
+    (parts.year === first.year && parts.month < first.month);
+
+  return beforeStart ? 0 : months.length - 1;
+}
+
 function calculateTimelineRange(events: TimelineEvent[]) {
-  if (events.length === 0) {
+  const years = events
+    .flatMap(event => [event.startDate, event.endDate])
+    .map(parseDateParts)
+    .filter((parts): parts is DateParts => parts !== null)
+    .map(parts => parts.year);
+
+  // Also covers an empty timeline and one whose dates are all malformed.
+  if (years.length === 0) {
     return {
       startYear: DEFAULT_START_YEAR,
       endYear: DEFAULT_END_YEAR
     };
   }
 
-  const dates = events.flatMap(event => [
-    new Date(event.startDate),
-    new Date(event.endDate)
-  ]);
-
-  let startYear = Math.max(
-    MIN_YEAR,
-    Math.min(...dates.map(d => d.getFullYear()))
-  );
-
-  let endYear = Math.min(
-    MAX_YEAR,
-    Math.max(...dates.map(d => d.getFullYear()))
-  );
+  let startYear = Math.max(MIN_YEAR, Math.min(...years));
+  let endYear = Math.min(MAX_YEAR, Math.max(...years));
 
   // Ensure we always show at least 10 years
   if (endYear - startYear < 9) {
@@ -59,12 +130,8 @@ function generateMonthsRange(startYear: number, endYear: number): Month[] {
 // Timeline range utilities
 export function getTimelineRange(events: TimelineEvent[]) {
   const { startYear, endYear } = calculateTimelineRange(events);
-  const months = generateMonthsRange(startYear, endYear);
 
-  const startDate = new Date(startYear, 0, 1);
-  const endDate = new Date(endYear, 11, 31);
-
-  return { startDate, endDate, months };
+  return { months: generateMonthsRange(startYear, endYear) };
 }
 
 // Date parsing and formatting utilities
@@ -82,12 +149,12 @@ export function normalizeDate(dateStr: string): string | null {
     const y = parseInt(year);
     
     // Basic date validation
-    if (m < 1 || m > 12 || d < 1 || d > 31 || y < 1900) {
+    if (m < 1 || m > 12 || d < 1 || d > 31 || y < MIN_YEAR) {
       return null;
     }
     
     // Format as YYYY-MM-DD
-    return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    return formatYMD(y, m - 1, d);
   }
 
   return null;
@@ -159,12 +226,7 @@ export function shiftEventDates(
   start.setDate(start.getDate() + daysDelta);
   end.setDate(end.getDate() + daysDelta);
 
-  const fmt = (d: Date) => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  };
+  const fmt = (d: Date) => formatYMD(d.getFullYear(), d.getMonth(), d.getDate());
 
   return { startDate: fmt(start), endDate: fmt(end) };
 }

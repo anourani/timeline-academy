@@ -1,5 +1,6 @@
 import { Month } from '../types/timeline';
 import { TimelineEvent } from '../types/event';
+import { parseDateParts } from './dateUtils';
 
 export function getUniqueYears(months: Month[]): number[] {
   return Array.from(new Set(months.map(month => month.year))).sort();
@@ -63,11 +64,20 @@ export function getTimelineYearRange(events: TimelineEvent[]): string {
     return `${currentYear}`;
   }
 
-  // Get all years from events
-  const years = events.flatMap(event => [
-    new Date(event.startDate).getFullYear(),
-    new Date(event.endDate).getFullYear()
-  ]);
+  // Years come from the string, not from `new Date(str).getFullYear()`, which
+  // parses as UTC and reads back local — reporting the previous year for a
+  // January-1st date anywhere west of UTC. That mismatch is what made this
+  // label read `1596-1899` for a timeline whose last date is 1900-01-01, while
+  // the axis beside it was computed from the same dates a different way.
+  const years = events
+    .flatMap(event => [event.startDate, event.endDate])
+    .map(parseDateParts)
+    .filter((parts): parts is NonNullable<typeof parts> => parts !== null)
+    .map(parts => parts.year);
+
+  if (years.length === 0) {
+    return `${new Date().getFullYear()}`;
+  }
 
   const startYear = Math.min(...years);
   const endYear = Math.max(...years);

@@ -3,6 +3,10 @@ import { format } from 'date-fns';
 import { Month, TimelineScale } from '../../types/timeline';
 import { getMonthBorderClass } from '../../utils/timelineUtils';
 
+// Only the month name is rendered, but `new Date(y, m)` coerces a year below
+// 100 into 19xx, so the year is pinned rather than taken from the month.
+const MONTH_LABEL_REFERENCE_YEAR = 2000;
+
 interface TimelineMonthLabelsProps {
   months: Month[];
   scale: TimelineScale;
@@ -26,7 +30,7 @@ export function TimelineMonthLabels({ months, scale }: TimelineMonthLabelsProps)
         >
           {scale.value === 'large' && (
             <span className="text-[10px] text-[#9b9ea3] font-mono transition-transform duration-200 ease-in-out">
-              {format(new Date(month.year, month.month), 'MMM')}
+              {format(new Date(MONTH_LABEL_REFERENCE_YEAR, month.month), 'MMM')}
             </span>
           )}
         </div>

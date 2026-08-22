@@ -28,8 +28,9 @@ HARD RULES:
 3. EVENT QUALITY — Max 55 characters per title. Prefer specific facts over vague summaries.
    BAD:  "Had a successful career"
    GOOD: "Scored 81 points vs. Raptors"
-4. DATE FORMAT — YYYY-MM-DD. Year-only → January 1. Ranges → use startDate/endDate span. Chronological order.
-5. JSON ONLY — No markdown, no code fences, no explanation.
+4. DATE FORMAT — YYYY-MM-DD, AD years only (never a BC/BCE date). Year-only → January 1. Ranges → use startDate/endDate span. Chronological order.
+5. EVENT SPAN — Keep every event inside the subject's own span: for a person, birth to death. Express legacy and influence as events dated within that span, never as one long event reaching into later centuries.
+6. JSON ONLY — No markdown, no code fences, no explanation.
 
 RESPONSE SCHEMA:
 {
