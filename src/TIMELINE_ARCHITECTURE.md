@@ -347,9 +347,9 @@ Drag transforms take priority over FLIP transforms — the dragged event is excl
 
 ### Algorithm
 
-1. **Sort** events by `startDate` ascending (stable; same-start events keep their original order).
+1. **Sort** events by `startDate` ascending, comparing the `YYYY-MM-DD` strings directly — that ordering is chronological and cannot be shifted by the viewer's timezone (stable; same-start events keep their original order).
 2. For each event:
-   - Compute `startColumn` and `endColumn` from the start/end month indices.
+   - Compute `startColumn` and `endColumn` from the start/end month indices, via the same `findMonthIndex` the renderer uses (§21), with `end` floored at `start`.
    - Compute the title's required pixel width via canvas-based `measureTextWidth`, rounded up to whole columns:
      ```ts
      displayPx  = max(EVENT_MIN_WIDTH, textPx + TITLE_CHROME_WIDTH)
@@ -570,7 +570,7 @@ Switching scale recalculates all event positions: the grid math (§21) is unchan
 ## Date-to-Grid Math
 
 ```
-monthIndex   = months.findIndex(m => m.year === date.year && m.month === date.month - 1)
+monthIndex   = findMonthIndex(months, dateStr)       // src/utils/dateUtils.ts
 quarterIndex = Math.floor((day - 1) / 8)
                  // Day  1– 8 → 0
                  // Day  9–16 → 1
@@ -578,9 +578,30 @@ quarterIndex = Math.floor((day - 1) / 8)
                  // Day 25–31 → 3
 
 startColumn  = monthIndex * 4 + quarterIndex + 1     // CSS Grid is 1-indexed
-endColumn    = endMonthIndex * 4 + endQuarter + 2    // exclusive end for `gridColumn: start / end`
+endColumn    = max(endMonthIndex * 4 + endQuarter + 2, startColumn + 1)
 pixelX       = (column - 1) * scale.quarterWidth
 ```
+
+**Both the month index and the dates behind it come from shared helpers, and
+must.** `findMonthIndex` and `parseDateParts` (`src/utils/dateUtils.ts`) are used
+by `TimelineEvent.tsx` and by `eventStacking.ts` alike, so the renderer and the
+stacker cannot place the same event in two different months. Two rules they
+enforce that a bare `findIndex` did not:
+
+- **A month index is never negative.** A date outside the rendered range clamps
+  to the nearest edge (0 or `months.length - 1`); only an unparseable date
+  returns `-1`, and its event renders nothing. Feeding a raw `findIndex` miss
+  into the arithmetic above yields a *negative* `gridColumn`, and negative CSS
+  grid lines count from the **end** of the grid — so every off-range event
+  silently stacked against the timeline's right edge.
+- **Dates are read from the string, never via `new Date(str)`.** That parses as
+  UTC midnight and reads back in local time, so west of UTC every
+  January-1st date lands in the previous December — and the generator is
+  instructed to emit January 1 for year-only events.
+
+`endColumn` is floored one column past `startColumn` because nothing rejects an
+event whose `endDate` precedes its `startDate`, and a reversed `gridColumn`
+range renders the bar backwards.
 
 **Reverse (drag delta → date shift):**
 
@@ -598,26 +619,54 @@ Each quarter represents ~7 days. The mapping is approximate but visually consist
 `getTimelineRange(events)` in `src/utils/dateUtils.ts` decides which months to render.
 
 ```
-1. If events is empty:
-     [DEFAULT_START_YEAR, DEFAULT_END_YEAR] = [2014, 2024]
+1. Collect every event's start/end year via parseDateParts, skipping any date
+   that does not parse.
 
-2. Otherwise:
+2. If no year survives (empty timeline, or every date malformed):
+     [DEFAULT_START_YEAR, DEFAULT_END_YEAR] = [2014, 2024]   — returned as-is,
+     without the padding in step 4.
+
+3. Otherwise:
      startYear = max(MIN_YEAR, min over all event start/end years)
      endYear   = min(MAX_YEAR, max over all event start/end years)
 
-3. Ensure at least 10 years of span:
+4. Ensure at least 10 years of span:
      if (endYear - startYear < 9) {
        midYear   = floor((startYear + endYear) / 2)
        startYear = max(MIN_YEAR, midYear - 5)
        endYear   = min(MAX_YEAR, midYear + 5)
      }
 
-4. Add 3-year scroll padding on both sides (clamped to [MIN_YEAR, MAX_YEAR]).
+5. Add 3-year scroll padding on both sides (clamped to [MIN_YEAR, MAX_YEAR]).
 
-5. Generate one Month per (year, 0..11) in the range.
+6. Generate one Month per (year, 0..11) in the range.
 ```
 
-Constants: `MIN_YEAR = 1900`, `MAX_YEAR = 2100`, `DEFAULT_START_YEAR = 2014`, `DEFAULT_END_YEAR = 2024`.
+Constants: `MIN_YEAR = 1`, `MAX_YEAR = 2100`, `DEFAULT_START_YEAR = 2014`, `DEFAULT_END_YEAR = 2024`.
+
+`getTimelineRange` returns `{ months }` only. It used to also return
+`startDate` / `endDate` built with `new Date(startYear, 0, 1)`; nothing consumed
+them, and they would have started lying the moment `MIN_YEAR` dropped below 100,
+because `new Date(1, 0, 1)` means **1901**.
+
+### Why `MIN_YEAR` is 1 and not 1900
+
+`MIN_YEAR` was `1900`, which silently clamped every earlier event off the grid.
+For a timeline spanning 1596–1900 the steps above produced `startYear = 1900`,
+`endYear = 1907` — an axis on which **no event's month exists** — and each event
+then took a negative `gridColumn` and stacked against the right edge (see §21).
+A timeline entirely before 1900 was worse: the range inverted
+(`startYear 1900 > endYear`), `generateMonthsRange` returned `[]`, and the canvas
+rendered nothing at all.
+
+Year 1 is the floor because `YYYY-MM-DD` strings and the `split('-')` parsing
+throughout cannot express a negative year — **BC/BCE dates are unsupported**, and
+the generator prompt says so. The trade is span: a correct 17th-century timeline
+renders ~3,700 months rather than 96, and month granularity over a
+millennium-scale range is genuinely heavy. That is why the three arrays feeding
+it (`visibleCategories`, `visibleEvents`, `months`) are memoized in
+`Timeline.tsx` — without it the `layout` memo never hit, and the whole stacking
+pass, canvas text measurement included, re-ran on every render.
 
 ### Visibility caveat
 
@@ -989,7 +1038,7 @@ list deliberately omits, implying a saved timeline that does not exist.
 | `TITLE_CHROME_WIDTH` | `src/utils/eventStacking.ts` | `20` (px) |
 | `TRAILING_BUFFER_PX` | `src/utils/eventStacking.ts` | `24` (px) |
 | `TITLE_FONT` | `src/utils/eventStacking.ts` | `'400 16px Avenir, sans-serif'` |
-| `MIN_YEAR` / `MAX_YEAR` | `src/utils/dateUtils.ts` | `1900` / `2100` |
+| `MIN_YEAR` / `MAX_YEAR` | `src/utils/dateUtils.ts` | `1` / `2100` |
 | `DEFAULT_START_YEAR` / `DEFAULT_END_YEAR` | `src/utils/dateUtils.ts` | `2014` / `2024` |
 | `STACK_TRANSITION_MS` | `src/components/Timeline/TimelineEvent.tsx` | `220` |
 | Wheel lerp factor | `src/components/Timeline/Timeline.tsx` | `0.18` |

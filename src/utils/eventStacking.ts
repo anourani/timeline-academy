@@ -1,6 +1,7 @@
 import { TimelineEvent } from '../types/event';
 import { Month } from '../types/timeline';
 import { EVENT_MIN_WIDTH } from '../constants/timeline';
+import { findMonthIndex } from './dateUtils';
 
 export interface StackedEvent extends TimelineEvent {
   stackIndex: number;
@@ -44,21 +45,17 @@ function measureTextWidth(text: string): number {
 function getEventColumns(event: TimelineEvent, months: Month[]): { start: number; end: number } {
   if (!months?.length) return { start: 0, end: 0 };
 
-  const startDate = new Date(event.startDate);
-  const endDate = new Date(event.endDate);
+  // Shares `findMonthIndex` with TimelineEvent so the stacker and the renderer
+  // can never place the same event in two different months. They used to
+  // disagree twice over: this read years via `new Date(str).getFullYear()`
+  // (UTC parse, local read — a month early west of UTC), and it turned a miss
+  // into `start: 0, end: -1` while the renderer turned it into a negative grid
+  // column. That is why off-range events fanned into one row each on the left
+  // while rendering as a stack on the right.
+  const start = Math.max(0, findMonthIndex(months, event.startDate));
+  const end = Math.max(start, findMonthIndex(months, event.endDate));
 
-  const startIndex = months.findIndex(
-    m => m.year === startDate.getFullYear() && m.month === startDate.getMonth()
-  );
-
-  const endIndex = months.findIndex(
-    m => m.year === endDate.getFullYear() && m.month === endDate.getMonth()
-  );
-
-  return {
-    start: Math.max(0, startIndex),
-    end: Math.min(months.length - 1, endIndex)
-  };
+  return { start, end };
 }
 
 function calculateRequiredColumns(title: string, monthWidth: number): number {
@@ -81,11 +78,11 @@ export function calculateEventStacks(events: TimelineEvent[], months: Month[] = 
 
   // Sort events by start date only — earlier events get the top rows.
   // Stable sort preserves array order for equal start dates.
-  const sortedEvents = [...events].sort((a, b) => {
-    const aStart = new Date(a.startDate).getTime();
-    const bStart = new Date(b.startDate).getTime();
-    return aStart - bStart;
-  });
+  // `YYYY-MM-DD` sorts chronologically as a plain string, so this needs no Date
+  // and cannot be shifted by the viewer's timezone.
+  const sortedEvents = [...events].sort((a, b) =>
+    a.startDate.localeCompare(b.startDate)
+  );
 
   const placements: EventPlacement[] = [];
 

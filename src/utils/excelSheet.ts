@@ -5,6 +5,7 @@
 // spreadsheets in the same origin that holds the user's session.
 
 import type { CellValue } from 'exceljs'
+import { formatYMD, isValidDateFormat, normalizeDate } from './dateUtils'
 
 // exceljs is heavy; load it only when a spreadsheet is actually read or
 // written so it stays out of the main bundle.
@@ -30,6 +31,30 @@ export function templateInstructions(maxTitleLength: number): string[] {
 export type SheetCellValue = string | number | Date
 
 export type SheetRow = Record<string, SheetCellValue>
+
+/**
+ * Normalize one spreadsheet cell into the app's `YYYY-MM-DD` form, or `''`.
+ *
+ * exceljs hands back date cells as UTC midnight, so the parts are read in UTC.
+ * The previous `new Date(value).toISOString().split('T')[0]` round-tripped
+ * through local time and landed a day early east of UTC, and could not express
+ * a pre-1900 date at all. Text cells go through the same `normalizeDate` the
+ * CSV importer uses, so the two paths finally agree on what a date looks like.
+ */
+export function toDateString(value: SheetCellValue | undefined): string {
+  if (value == null) return ''
+
+  if (value instanceof Date) {
+    if (isNaN(value.getTime())) return ''
+    return formatYMD(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate())
+  }
+
+  const text = String(value).trim()
+  if (text === '') return ''
+  if (isValidDateFormat(text)) return text
+
+  return normalizeDate(text) ?? ''
+}
 
 function coerceCellValue(value: CellValue): SheetCellValue {
   if (value == null) return ''

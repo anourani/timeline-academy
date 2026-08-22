@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback, useEffect } from 'react';
+import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { TimelineHeader } from './TimelineHeader';
 import { TimelineGrid } from './TimelineGrid';
 import { TimelineVerticalLines } from './TimelineVerticalLines';
@@ -8,7 +8,7 @@ import { TimelineScrollIndicator } from './TimelineScrollIndicator';
 import { EventActionsMenu } from '../EventActionsMenu/EventActionsMenu';
 import { TimelineEvent as ITimelineEvent, CategoryConfig } from '../../types/event';
 import { TimelineScale, TimelineVerticalScale } from '../../types/timeline';
-import { getTimelineRange, shiftEventDates } from '../../utils/dateUtils';
+import { formatYMD, getTimelineRange, shiftEventDates } from '../../utils/dateUtils';
 import { calculateEventStacks, StackedEvent } from '../../utils/eventStacking';
 import { useTimelineScroll } from '../../hooks/useTimelineScroll';
 import { useEventDrag } from '../../hooks/useEventDrag';
@@ -71,13 +71,24 @@ export function Timeline({
   mode = 'edit',
 }: TimelineProps) {
   const isEditing = mode === 'edit';
-  // Filter visible categories and their events
-  const visibleCategories = categories.filter(cat => cat.visible);
-  const visibleEvents = events.filter(event =>
-    visibleCategories.some(cat => cat.id === event.category)
+  // Filter visible categories and their events. Memoized because `months` and
+  // `layout` below key off these arrays: rebuilding them every render meant the
+  // `layout` memo never hit, so the whole stacking pass — including canvas text
+  // measurement per event — re-ran on every render. That is affordable for a
+  // 96-month range and is not for the ~3,700 months a 17th-century timeline
+  // legitimately spans.
+  const visibleCategories = useMemo(
+    () => categories.filter(cat => cat.visible),
+    [categories]
+  );
+  const visibleEvents = useMemo(
+    () => events.filter(event =>
+      visibleCategories.some(cat => cat.id === event.category)
+    ),
+    [events, visibleCategories]
   );
 
-  const { months } = getTimelineRange(visibleEvents);
+  const { months } = useMemo(() => getTimelineRange(visibleEvents), [visibleEvents]);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [hoveredMonth, setHoveredMonth] = useState<number | null>(null);
   const [showEventModal, setShowEventModal] = useState(false);
@@ -222,8 +233,10 @@ export function Timeline({
 
     const clickedMonth = months[monthIndex];
     if (clickedMonth) {
-      const date = new Date(clickedMonth.year, clickedMonth.month, 1);
-      setSelectedDate(date.toISOString().split('T')[0]);
+      // Built from the parts directly: `new Date(y, m, 1).toISOString()` shifts
+      // to the previous day west of UTC, and coerces a year below 100 into
+      // 19xx.
+      setSelectedDate(formatYMD(clickedMonth.year, clickedMonth.month, 1));
       setEditingEvent(null);
       setShowEventModal(true);
     }
