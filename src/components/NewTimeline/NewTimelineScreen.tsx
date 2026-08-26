@@ -278,6 +278,10 @@ export function NewTimelineScreen({
                 field itself and covers the chips. */}
             <div className="w-full max-w-[440px] flex flex-col items-start gap-[8px]">
               <div className="relative w-full">
+                {/* Fill and border are constant by design — the component carries
+                    them on its base and varies only the shadow between resting and
+                    typed. Not duplication waiting to be folded away: those two
+                    shadows are the whole of the state difference. */}
                 <input
                   ref={inputRef}
                   type="text"
@@ -296,10 +300,10 @@ export function NewTimelineScreen({
                   autoCorrect="off"
                   spellCheck={false}
                   enterKeyHint="search"
-                  className={`w-full rounded-[8px] border outline-none transition-colors text-text-secondary focus-visible:ring-1 focus-visible:ring-white/40 disabled:opacity-70 ${SEARCH_FIELD_PADDING} ${SEARCH_FIELD_FONT} ${
+                  className={`w-full rounded-[8px] border border-[#404040] bg-surface-secondary outline-none transition-shadow text-text-secondary focus-visible:ring-1 focus-visible:ring-white/40 disabled:opacity-70 ${SEARCH_FIELD_PADDING} ${SEARCH_FIELD_FONT} ${
                     hasEngaged
-                      ? 'bg-surface-secondary border-[#404040] shadow-[0px_8px_16px_0px_rgba(155,158,163,0.04)]'
-                      : 'bg-surface-primary border-[#171717] shadow-[0px_8px_16px_0px_rgba(0,0,0,0.4)]'
+                      ? 'shadow-[0px_8px_16px_0px_rgba(155,158,163,0.04)]'
+                      : 'shadow-[0px_8px_16px_0px_rgba(0,0,0,0.4)]'
                   }`}
                   aria-label="Subject for timeline generation"
                 />
