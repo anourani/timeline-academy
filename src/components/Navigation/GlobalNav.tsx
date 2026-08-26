@@ -68,7 +68,7 @@ export function GlobalNav({
 
   return (
     <div>
-      <div className="flex h-[80px] items-start gap-5 px-6 py-[22px] relative">
+      <div className="flex h-[80px] items-start gap-5 px-4 py-[20px] md:px-6 md:py-[22px] relative">
         {/* Left cluster: panel toggle + optional timeline identity */}
         <div className="flex items-start gap-5 min-w-0">
           <div

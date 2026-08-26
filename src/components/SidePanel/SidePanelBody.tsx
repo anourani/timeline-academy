@@ -11,6 +11,7 @@ import {
   Share2,
   Telescope,
   Trash2,
+  X,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useAccountTier } from '@/hooks/useAccountTier'
@@ -32,6 +33,7 @@ import {
 import { notifyUsageChanged } from '@/utils/usageChanged'
 import { exportEventsToExcel } from '@/utils/excelExport'
 import { downloadTemplate } from '@/utils/excelSheet'
+import { isPanelOverlay } from '@/constants/panels'
 import type { TimelineEvent } from '@/types/event'
 import { AccountDetailsModal } from '@/components/Modal/AccountDetailsModal'
 import { UsageLimits } from './UsageLimits'
@@ -295,13 +297,23 @@ export function SidePanelBody() {
     })
   }, [activeTimelineId, activeEventCount, activeDominantCategoryColor, applyLocalMetadata])
 
+  /**
+   * Below `md` the panel is a full-bleed drawer over the page, so anything that
+   * navigates has to get out of the way — otherwise the tap lands you on a
+   * screen you cannot see. At desktop widths the panel pushes rather than
+   * covers, so it stays open and only the toggle closes it.
+   */
+  const dismissIfOverlay = () => {
+    if (isPanelOverlay()) close()
+  }
+
   const handleTileClick = (row: TileRow) => {
     if (row.kind === 'timeline') {
       onTimelineSelect(row.id)
     } else {
       onDraftSelect(row.id)
     }
-    // Panel stays open — it's only toggled via the panel-left button
+    dismissIfOverlay()
   }
 
   const confirmDelete = (row: TileRow) => {
@@ -417,10 +429,12 @@ export function SidePanelBody() {
   }
 
   const handleBuildWithAI = () => {
+    dismissIfOverlay()
     navigate('/')
   }
 
   const handleBuildFromScratch = () => {
+    dismissIfOverlay()
     if (user) {
       navigate('/editor', { state: { timelineId: 'new', skipCreationScreen: true } })
     } else {
@@ -429,6 +443,7 @@ export function SidePanelBody() {
   }
 
   const handleImportData = () => {
+    dismissIfOverlay()
     setIsImportOpen(true)
   }
 
@@ -437,6 +452,7 @@ export function SidePanelBody() {
   }
 
   const handleImportEvents = (events: TimelineEvent[]) => {
+    dismissIfOverlay()
     setIsImportOpen(false)
     navigate('/editor', { state: { importedEvents: events } })
   }
@@ -550,7 +566,10 @@ export function SidePanelBody() {
       {/* Header */}
       <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-2 border-b border-[#404040] shrink-0">
         <button
-          onClick={() => navigate('/')}
+          onClick={() => {
+            dismissIfOverlay()
+            navigate('/')
+          }}
           className="font-['Aleo',serif] font-normal text-[18px] leading-[1.4] text-[#c9ced4] hover:text-[#dadee5] transition-colors bg-transparent border-none p-0 cursor-pointer"
         >
           Timelines
@@ -560,7 +579,10 @@ export function SidePanelBody() {
           className="relative flex items-center justify-center p-1.5 rounded-lg border border-white/15 bg-white/10 backdrop-blur-[12px] text-[#c9ced4] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4),inset_0px_1px_0px_0px_rgba(255,255,255,0.1)] hover:bg-white/20 hover:text-[#dadee5] transition-colors"
           aria-label="Close timelines panel"
         >
-          <PanelLeft size={16} strokeWidth={1.25} />
+          {/* A full-bleed drawer is dismissed, not collapsed, so the rail icon
+              reads wrong below `md`. Same swap as `EventDetailPanel`. */}
+          <PanelLeft size={16} strokeWidth={1.25} className="hidden md:block" />
+          <X size={16} strokeWidth={1.25} className="md:hidden" />
         </button>
       </div>
 
