@@ -1,7 +1,7 @@
 import { createContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePanelWidth } from '@/hooks/usePanelWidth'
-import { PANEL_DEFAULT_WIDTH } from '@/constants/panels'
+import { PANEL_DEFAULT_WIDTH, PANEL_RESIZE_BREAKPOINT } from '@/constants/panels'
 
 type TimelineSelectHandler = (timelineId: string) => void
 type DraftSelectHandler = (draftId: string) => void
@@ -61,13 +61,25 @@ export const SidePanelContext = createContext<SidePanelContextValue | null>(null
 const STORAGE_KEY = 'side_panel_open'
 const WIDTH_STORAGE_KEY = 'side_panel_width'
 
+/**
+ * Open by default — except on a viewport too narrow to hold the panel and
+ * anything else beside it. Below `PANEL_RESIZE_BREAKPOINT` the resize handles
+ * are hidden and `clampPanelWidth` shrinks the panel to
+ * `viewportWidth - MIN_CONTENT_GUTTER`, so a first visit on a phone used to
+ * land on a 64px strip of page next to a panel nobody asked for.
+ *
+ * Only the nothing-stored case moves. A returning user's own choice still wins
+ * on every device, and at desktop widths this is the `true` it has always been.
+ */
 function readStoredIsOpen(): boolean {
+  const defaultIsOpen =
+    typeof window === 'undefined' || window.innerWidth >= PANEL_RESIZE_BREAKPOINT
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw === null) return true
+    if (raw === null) return defaultIsOpen
     return raw === 'true'
   } catch {
-    return true
+    return defaultIsOpen
   }
 }
 
