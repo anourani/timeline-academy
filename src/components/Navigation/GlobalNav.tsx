@@ -68,11 +68,13 @@ export function GlobalNav({
 
   return (
     <div>
-      <div className="flex h-[80px] items-start gap-5 px-4 py-[20px] md:px-6 md:py-[22px] relative">
-        {/* Left cluster: panel toggle + optional timeline identity */}
-        <div className="flex items-start gap-5 min-w-0">
+      <div className="flex h-[80px] items-start gap-5 px-4 pt-4 pb-3 md:px-6 md:py-[22px] relative">
+        {/* Left cluster: panel toggle + optional timeline identity.
+            Below `md` it owns the whole bar so the title can centre in it — the
+            right cluster is gone there and the toggle floats out of flow. */}
+        <div className="flex w-full items-start gap-5 min-w-0 md:w-auto">
           <div
-            className={`shrink-0 overflow-visible transition-[max-width,opacity,margin] duration-300 ease-out ${
+            className={`absolute left-4 top-4 z-10 md:static md:z-auto shrink-0 overflow-visible transition-[max-width,opacity,margin] duration-300 ease-out ${
               isPanelOpen ? 'max-w-0 opacity-0 pointer-events-none -ml-5' : 'max-w-[48px] opacity-100'
             }`}
             aria-hidden={isPanelOpen}
@@ -88,7 +90,7 @@ export function GlobalNav({
           </div>
 
           {showTitleCluster && (
-            <div className="flex flex-col gap-1 min-w-0">
+            <div className="flex flex-col gap-0 min-w-0 w-full items-center text-center px-10 md:gap-[2px] md:w-auto md:items-start md:text-left md:px-0">
               {onTimelineTitleChange && mode === 'edit' ? (
                 <input
                   type="text"
@@ -102,11 +104,14 @@ export function GlobalNav({
                   placeholder="Untitled Timeline"
                   aria-label="Timeline name"
                   size={Math.max((timelineTitle ?? '').length, 'Untitled Timeline'.length)}
-                  className="font-['Aleo',serif] font-normal text-[18px] leading-[1.4] text-text-secondary hover:text-text-primary focus:text-text-primary bg-transparent border-none outline-none caret-white min-w-0 p-0"
+                  // `fieldSizing: content` sizes the box to the text, so
+                  // without a cap a long title runs off the bar — and on mobile
+                  // straight under the floating panel toggle.
+                  className="header-small text-text-primary text-center md:text-left bg-transparent border-none outline-none caret-white min-w-0 max-w-full p-0"
                   style={{ fieldSizing: 'content' } as CSSProperties}
                 />
               ) : (
-                <p className="font-['Aleo',serif] font-normal text-[18px] leading-[1.4] text-text-secondary truncate">
+                <p className="header-small text-text-primary max-w-full truncate">
                   {timelineTitle || 'Untitled Timeline'}
                 </p>
               )}
@@ -127,8 +132,12 @@ export function GlobalNav({
           )}
         </div>
 
-        {/* Right cluster: save status + action buttons */}
-        <div className="ml-auto flex items-center gap-2">
+        {/* Right cluster: save status + action buttons. Hidden below `md` —
+            the mobile header is title-only. `mode` is unpersisted state that
+            defaults to 'edit' (App.tsx), so hiding the toggle can't strand a
+            phone in view mode, and FloatingToolbar already carries the editing
+            affordances there. */}
+        <div className="ml-auto hidden md:flex items-center gap-2">
           {/* SaveStatusIndicator hidden for now — keeping wiring in place for future reuse */}
           {SHOW_SAVE_STATUS && variant === 'timeline' && saveStatus && (
             <div className="hidden md:block mr-2">
