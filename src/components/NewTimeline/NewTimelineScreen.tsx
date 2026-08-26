@@ -273,9 +273,10 @@ export function NewTimelineScreen({
               Search for a person, era, or event
             </h2>
 
-            {/* Everything below the heading shares one column so the chips, the
-                suggestions and any error all hang off the field's left edge. */}
-            <div className="w-full max-w-[440px] flex flex-col items-start gap-[4px]">
+            {/* One column, so the chips and any error hang off the field's left
+                edge. The suggestions panel is not part of it — it anchors to the
+                field itself and covers the chips. */}
+            <div className="w-full max-w-[440px] flex flex-col items-start gap-[8px]">
               <div className="relative w-full">
                 <input
                   ref={inputRef}
@@ -315,16 +316,39 @@ export function NewTimelineScreen({
                     <span className="animate-blink-caret">|</span>
                   </div>
                 )}
+
+                {renderDropdown && (
+                  <div
+                    data-state={dropdownVisible ? 'open' : 'closed'}
+                    className="absolute left-0 right-0 top-[calc(100%+4px)] z-20 duration-150 ease-in fill-mode-forwards data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-1 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-1 data-[state=closed]:pointer-events-none"
+                  >
+                    <SubjectSuggestions
+                      query={name}
+                      suggestions={suggestions}
+                      isLoading={suggestionsLoading}
+                      onSelect={handleSelectSuggestion}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* `type="button"` is required, not tidiness: the form has no
                   submit control, so Enter works only through HTML's implicit
                   submission, and a chip left as the default `submit` would
-                  become the form's default button and silently take it over. */}
+                  become the form's default button and silently take it over.
+
+                  `invisible` rather than a fade, because it also takes the chips
+                  out of the tab order — right for controls sitting under an open
+                  panel. Keyed to `renderDropdown`, not `dropdownVisible`, so they
+                  stay hidden through the exit animation rather than reappearing
+                  under a panel that is still fading. The row keeps its space
+                  either way, so opening the panel reflows nothing. */}
               <div
                 role="group"
                 aria-label="Quick searches"
-                className="w-full flex flex-row flex-wrap items-start gap-[8px]"
+                className={`w-full flex flex-row flex-wrap items-start gap-[8px] ${
+                  renderDropdown ? 'invisible' : ''
+                }`}
               >
                 {quickSearches.map((subject) => (
                   <button
@@ -338,20 +362,6 @@ export function NewTimelineScreen({
                   </button>
                 ))}
               </div>
-
-              {renderDropdown && (
-                <div
-                  data-state={dropdownVisible ? 'open' : 'closed'}
-                  className="w-full duration-150 ease-in fill-mode-forwards data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-1 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-1 data-[state=closed]:pointer-events-none"
-                >
-                  <SubjectSuggestions
-                    query={name}
-                    suggestions={suggestions}
-                    isLoading={suggestionsLoading}
-                    onSelect={handleSelectSuggestion}
-                  />
-                </div>
-              )}
 
               {isWorking && (
                 <GeneratingIndicator
