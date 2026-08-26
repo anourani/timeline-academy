@@ -3,6 +3,11 @@ import type { SubjectType } from '@/constants/pillDefinitions'
 import { SubjectSuggestions } from '@/components/AIMode/SubjectSuggestions'
 import { GeneratingIndicator } from '@/components/NewTimeline/GeneratingIndicator'
 import { useSubjectSuggestions } from '@/hooks/useSubjectSuggestions'
+import {
+  MIN_SUGGESTION_QUERY_LENGTH,
+  pickQuickSearches,
+} from '@/constants/aiSubjectSuggestions'
+import { glassButtonClass } from '@/components/ui/glassButton'
 import { PROVIDER_META } from '@/constants/byokProviders'
 import type { ByokProvider } from '@/types/ai'
 
@@ -30,6 +35,24 @@ const PLACEHOLDER_NAMES = [
   'Civil Rights Movement',
 ]
 
+/**
+ * The field's type at each size, as one string.
+ *
+ * The real input and the typewriter ghost drawn on top of it have to resolve to
+ * identical metrics or the animated placeholder slides off the caret — so both
+ * read this rather than each carrying a copy.
+ *
+ * `.header-small` / `.header-medium` in `index.css` say the same thing, but
+ * stacking them (`header-small md:header-medium`) leaves the winner to source
+ * order between two equal-specificity utilities in the same layer, which is not
+ * a contract worth resting alignment on.
+ */
+const SEARCH_FIELD_FONT =
+  "font-['Aleo',serif] font-normal text-[24px] leading-[1.4] md:text-[32px] md:leading-[1.25]"
+
+/** Box padding. Shared with the ghost overlay, for the same reason. */
+const SEARCH_FIELD_PADDING = 'px-[11px] py-[9px] md:p-[11px]'
+
 function BackgroundGrid() {
   return (
     <div
@@ -39,7 +62,9 @@ function BackgroundGrid() {
       <div
         className="absolute top-0 bottom-0"
         style={{
-          left: '120px',
+          // Tracks the page gutter declared on this screen's root, so the
+          // first column line always lands on the content's left edge.
+          left: 'var(--page-gutter)',
           right: '0',
           backgroundImage:
             'repeating-linear-gradient(to right, rgba(210,210,210,0.1) 0 1px, transparent 1px 200px)',
@@ -131,6 +156,9 @@ export function NewTimelineScreen({
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [hasEngaged, setHasEngaged] = useState(false)
   const [renderDropdown, setRenderDropdown] = useState(false)
+  // Drawn once per mount, so the chips rotate between visits but never move
+  // under a cursor that is already reaching for one.
+  const [quickSearches] = useState(pickQuickSearches)
   const inputRef = useRef<HTMLInputElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
 
@@ -198,8 +226,26 @@ export function NewTimelineScreen({
     inputRef.current?.focus()
   }
 
+  const handleQuickSearch = (subject: string) => {
+    if (isWorking) return
+    // Seed the field before generating: `GeneratingIndicator` reads `name`, and
+    // for a signed-out visitor `onAIGenerate` opens the key/sign-in gate, which
+    // should show what they asked for rather than an empty box.
+    setName(subject)
+    setHasEngaged(true)
+    setShowSuggestions(false)
+    onAIGenerate(subject)
+  }
+
+  // The length test is not redundant with the hook's: that effect runs *after*
+  // render, so on the render where the query drops back to one character
+  // `suggestions` still holds the previous six. Without it, backspacing flashes
+  // stale rows on the way down.
   const dropdownVisible =
-    showSuggestions && !isWorking && (suggestions.length > 0 || suggestionsLoading)
+    showSuggestions &&
+    !isWorking &&
+    name.trim().length >= MIN_SUGGESTION_QUERY_LENGTH &&
+    (suggestions.length > 0 || suggestionsLoading)
 
   useEffect(() => {
     if (dropdownVisible) {
@@ -212,60 +258,91 @@ export function NewTimelineScreen({
   }, [dropdownVisible, renderDropdown])
 
   return (
-    <div className="relative min-h-screen bg-surface-primary overflow-auto">
+    <div className="relative min-h-screen bg-surface-primary overflow-auto [--page-gutter:16px] sm:[--page-gutter:40px] md:[--page-gutter:64px] lg:[--page-gutter:120px]">
       <BackgroundGrid />
       <BackgroundPattern />
       <div className="relative z-10">
-        <div
-          className="flex flex-col items-start gap-[40px]"
-          style={{ padding: '200px 120px 120px 120px' }}
-        >
+        <div className="flex flex-col items-center gap-[40px] px-[var(--page-gutter)] pt-[160px] pb-[64px] md:pt-[200px] md:pb-[120px]">
           <form
             ref={formRef}
             onSubmit={handleSubmit}
             aria-busy={isWorking}
-            className="w-[996px] max-w-full flex flex-col"
+            className="w-full flex flex-col items-center gap-[8px]"
           >
-            <h2 className="header-xsmall text-text-tertiary m-0">
+            <h2 className="header-xsmall text-text-tertiary m-0 text-center">
               Search for a person, era, or event
             </h2>
 
-            <div className="relative flex flex-row items-end gap-[10px] pt-[8px] pb-[2px] min-h-[80px]">
-              <input
-                ref={inputRef}
-                type="text"
-                value={name}
-                onChange={(e) => {
-                  setName(e.target.value)
-                  if (!isWorking) setShowSuggestions(true)
-                }}
-                onFocus={() => {
-                  setHasEngaged(true)
-                  if (!isWorking) setShowSuggestions(true)
-                }}
-                onBlur={() => {
-                  if (name.trim().length === 0) setHasEngaged(false)
-                }}
-                placeholder=""
-                disabled={isWorking}
-                className="flex-1 min-w-0 bg-transparent border-0 outline-none p-0 font-['Aleo'] text-[60px] leading-[100%] font-normal text-text-secondary disabled:opacity-70"
-                aria-label="Subject for timeline generation"
-              />
+            {/* Everything below the heading shares one column so the chips, the
+                suggestions and any error all hang off the field's left edge. */}
+            <div className="w-full max-w-[440px] flex flex-col items-start gap-[4px]">
+              <div className="relative w-full">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={name}
+                  onChange={(e) => {
+                    setName(e.target.value)
+                    if (!isWorking) setShowSuggestions(true)
+                  }}
+                  onFocus={() => setHasEngaged(true)}
+                  onBlur={() => {
+                    if (name.trim().length === 0) setHasEngaged(false)
+                  }}
+                  placeholder=""
+                  disabled={isWorking}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  enterKeyHint="search"
+                  className={`w-full rounded-[8px] border outline-none transition-colors text-text-secondary focus-visible:ring-1 focus-visible:ring-white/40 disabled:opacity-70 ${SEARCH_FIELD_PADDING} ${SEARCH_FIELD_FONT} ${
+                    hasEngaged
+                      ? 'bg-surface-secondary border-[#404040] shadow-[0px_8px_16px_0px_rgba(155,158,163,0.04)]'
+                      : 'bg-surface-primary border-[#171717] shadow-[0px_8px_16px_0px_rgba(0,0,0,0.4)]'
+                  }`}
+                  aria-label="Subject for timeline generation"
+                />
 
-              {!hasEngaged && name === '' && (
-                <div
-                  aria-hidden="true"
-                  className="pointer-events-none absolute left-0 bottom-[2px] font-['Aleo'] text-[60px] leading-[100%] font-normal text-text-tertiary select-none"
-                >
-                  {placeholderText}
-                  <span className="animate-blink-caret">|</span>
-                </div>
-              )}
+                {/* `border border-transparent` is load-bearing: the input has a
+                    1px border and an inset-0 overlay does not, so without it the
+                    ghost sits a pixel up and left of the real caret. */}
+                {!hasEngaged && name === '' && (
+                  <div
+                    aria-hidden="true"
+                    className={`pointer-events-none absolute inset-0 flex items-center border border-transparent overflow-hidden whitespace-nowrap select-none text-text-tertiary ${SEARCH_FIELD_PADDING} ${SEARCH_FIELD_FONT}`}
+                  >
+                    {placeholderText}
+                    <span className="animate-blink-caret">|</span>
+                  </div>
+                )}
+              </div>
+
+              {/* `type="button"` is required, not tidiness: the form has no
+                  submit control, so Enter works only through HTML's implicit
+                  submission, and a chip left as the default `submit` would
+                  become the form's default button and silently take it over. */}
+              <div
+                role="group"
+                aria-label="Quick searches"
+                className="w-full flex flex-row flex-wrap items-start gap-[8px]"
+              >
+                {quickSearches.map((subject) => (
+                  <button
+                    key={subject}
+                    type="button"
+                    disabled={isWorking}
+                    onClick={() => handleQuickSearch(subject)}
+                    className={`${glassButtonClass} shrink-0 whitespace-nowrap disabled:opacity-50 disabled:pointer-events-none`}
+                  >
+                    {subject}
+                  </button>
+                ))}
+              </div>
 
               {renderDropdown && (
                 <div
                   data-state={dropdownVisible ? 'open' : 'closed'}
-                  className="absolute left-0 top-[calc(100%+4px)] z-20 duration-150 ease-in fill-mode-forwards data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-1 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-1 data-[state=closed]:pointer-events-none"
+                  className="w-full duration-150 ease-in fill-mode-forwards data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-1 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-1 data-[state=closed]:pointer-events-none"
                 >
                   <SubjectSuggestions
                     query={name}
@@ -275,30 +352,30 @@ export function NewTimelineScreen({
                   />
                 </div>
               )}
+
+              {isWorking && (
+                <GeneratingIndicator
+                  subject={name}
+                  phase={isClassifying ? 'classifying' : 'generating'}
+                  categoryLabels={categoryLabels}
+                />
+              )}
+
+              {!isWorking && error && (
+                <div className="mt-[16px] flex flex-wrap items-baseline gap-2">
+                  <p className="text-sm text-red-400 m-0">{error}</p>
+                  {retryProvider && onRetryWithProvider && (
+                    <button
+                      type="button"
+                      onClick={() => onRetryWithProvider(retryProvider)}
+                      className="text-sm text-[#9B9EA3] underline hover:text-[#DADEE5] transition-colors"
+                    >
+                      Retry with {PROVIDER_META[retryProvider].label}
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
-
-            {isWorking && (
-              <GeneratingIndicator
-                subject={name}
-                phase={isClassifying ? 'classifying' : 'generating'}
-                categoryLabels={categoryLabels}
-              />
-            )}
-
-            {!isWorking && error && (
-              <div className="mt-[16px] flex flex-wrap items-baseline gap-2">
-                <p className="text-sm text-red-400 m-0">{error}</p>
-                {retryProvider && onRetryWithProvider && (
-                  <button
-                    type="button"
-                    onClick={() => onRetryWithProvider(retryProvider)}
-                    className="text-sm text-[#9B9EA3] underline hover:text-[#DADEE5] transition-colors"
-                  >
-                    Retry with {PROVIDER_META[retryProvider].label}
-                  </button>
-                )}
-              </div>
-            )}
           </form>
         </div>
       </div>

@@ -42,7 +42,7 @@ export function SubjectSuggestions({
 
   return (
     <div
-      className="flex flex-col items-start gap-[2px] min-w-[350px] w-fit h-[270px] max-w-full py-[12px] px-[8px] rounded-[8px] border border-[#262626] bg-[rgba(184,184,184,0.04)] backdrop-blur-[4px] shadow-[0px_8px_32px_0px_rgba(155,158,163,0.04)]"
+      className="flex flex-col items-start gap-[2px] w-full max-h-[270px] overflow-y-auto py-[12px] px-[8px] rounded-[8px] border border-[#262626] bg-[rgba(184,184,184,0.04)] backdrop-blur-[4px] shadow-[0px_8px_32px_0px_rgba(155,158,163,0.04)]"
       role="listbox"
       aria-busy={isLoading ? 'true' : 'false'}
     >
@@ -51,7 +51,7 @@ export function SubjectSuggestions({
             <div
               key={i}
               aria-hidden="true"
-              className="self-stretch h-[36px] px-[12px] py-[4px] rounded-[8px] flex items-center"
+              className="shrink-0 self-stretch h-[36px] px-[12px] py-[4px] rounded-[8px] flex items-center"
             >
               <div
                 className="h-[14px] rounded-[4px] bg-white/[0.08] animate-pulse"
@@ -74,13 +74,14 @@ export function SubjectSuggestions({
                   e.preventDefault()
                   onSelect(s.title)
                 }}
+                onClick={() => onSelect(s.title)}
                 onMouseEnter={() => setHighlight(i)}
                 className={[
-                  'header-xsmall text-left self-stretch h-[36px] px-[12px] py-[4px] rounded-[8px] flex items-center transition-colors',
+                  'header-xsmall text-left shrink-0 self-stretch h-[36px] px-[12px] py-[4px] rounded-[8px] flex items-center transition-colors',
                   i === highlight ? 'bg-[#262626]' : 'hover:bg-[#262626]',
                 ].join(' ')}
               >
-                <span className="whitespace-nowrap">
+                <span className="min-w-0 flex-1 truncate">
                   {matchIdx >= 0 ? (
                     <>
                       {before && <span className="text-text-tertiary">{before}</span>}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
-  DEFAULT_SUBJECT_SUGGESTIONS,
+  MIN_SUGGESTION_QUERY_LENGTH,
   type SubjectSuggestion,
 } from '@/constants/aiSubjectSuggestions'
 import { searchWikipedia } from '@/services/wikipediaSearch'
@@ -11,19 +11,15 @@ export interface UseSubjectSuggestionsResult {
 }
 
 export function useSubjectSuggestions(query: string): UseSubjectSuggestionsResult {
-  const [suggestions, setSuggestions] = useState<SubjectSuggestion[]>(DEFAULT_SUBJECT_SUGGESTIONS)
+  // Empty, not a set of defaults: the dropdown no longer opens on focus, so a
+  // query too short to search is a query with nothing to show.
+  const [suggestions, setSuggestions] = useState<SubjectSuggestion[]>([])
   const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
     const trimmed = query.trim()
 
-    if (trimmed.length === 0) {
-      setSuggestions(DEFAULT_SUBJECT_SUGGESTIONS)
-      setIsLoading(false)
-      return
-    }
-
-    if (trimmed.length === 1) {
+    if (trimmed.length < MIN_SUGGESTION_QUERY_LENGTH) {
       setSuggestions([])
       setIsLoading(false)
       return
