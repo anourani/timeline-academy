@@ -33,8 +33,27 @@ export const PANEL_RESIZE_BREAKPOINT = 768
 /**
  * Content that must stay visible beside a panel below the breakpoint, so a
  * stored desktop width can't leave a phone with nothing but panel.
+ *
+ * Applies to Settings and Feedback, which stay narrow rails at every width. The
+ * left panel and the event details panel go full-bleed below the breakpoint and
+ * ignore their width there, so for those two the clamp now only costs the
+ * stored preference — see `usePanelWidth`, which persists the clamped value.
  */
 export const MIN_CONTENT_GUTTER = 64
+
+/**
+ * True when the left panel covers the page rather than pushing it aside.
+ *
+ * Below `PANEL_RESIZE_BREAKPOINT` `GlobalLayout` renders it as a full-bleed
+ * drawer, so anything that navigates has to dismiss it first.
+ *
+ * A one-shot read rather than a hook: the answer is only wanted at the moment
+ * of a click, and a hook would re-render the panel on every viewport change to
+ * compute something nothing renders.
+ */
+export function isPanelOverlay(): boolean {
+  return typeof window !== 'undefined' && window.innerWidth < PANEL_RESIZE_BREAKPOINT
+}
 
 /** Default footprint for the left timelines panel and the event details panel. */
 export const PANEL_DEFAULT_WIDTH = 320
