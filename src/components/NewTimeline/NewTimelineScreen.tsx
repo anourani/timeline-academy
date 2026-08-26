@@ -48,7 +48,7 @@ const PLACEHOLDER_NAMES = [
  * a contract worth resting alignment on.
  */
 const SEARCH_FIELD_FONT =
-  "font-['Aleo',serif] font-normal text-[24px] leading-[1.4] md:text-[32px] md:leading-[1.25]"
+  "font-['Aleo',serif] font-normal tracking-[-0.01em] text-[24px] leading-[1.4] md:text-[32px] md:leading-[1.25]"
 
 /** Box padding. Shared with the ghost overlay, for the same reason. */
 const SEARCH_FIELD_PADDING = 'px-[11px] py-[9px] md:p-[11px]'
