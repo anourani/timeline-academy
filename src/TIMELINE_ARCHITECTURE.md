@@ -171,7 +171,9 @@ In grouped mode, each `TimelineEvent` receives `categoryOffset = band.offset` so
 
 ## Edit / View Modes
 
-The `mode` prop is `'edit' | 'view'` and defaults to `'edit'`. `Timeline.tsx` derives `const isEditing = mode === 'edit'`.
+The `mode` prop is `'edit' | 'view'` and defaults to `'edit'`. `Timeline.tsx` derives `const isEditing = mode === 'edit'`, as do `FloatingToolbar` and `EventTableEditor`.
+
+The switch itself lives in the **dock** (`FloatingToolbar/ModeTabs.tsx`), not the nav. That is why the dock renders in both modes: unmounting it in view mode would leave no way back. `GlobalNav` still takes `mode` — it decides whether the title is an input — but no longer changes it.
 
 | Affordance | Edit mode | View mode |
 |---|---|---|
@@ -179,6 +181,15 @@ The `mode` prop is `'edit' | 'view'` and defaults to `'edit'`. `Timeline.tsx` de
 | Add-Event Cursor (hover band) | Rendered when `onAddEvent` is provided. | Not rendered. |
 | Click on event | Opens `EventActionsMenu` at the click position. | Calls `onOpenDetails(event)`. |
 | Click on a month cell | Opens the `EventForm` Dialog seeded with that month's first day. | No-op (`handleMonthClick` returns early). |
+| Timeline title (`GlobalNav`) | Editable `<input>`. | Static `<p>`. |
+| Dock buttons | Add Event, Events, Settings. | Add Event and Settings collapse to zero width and fade out; Events stays. |
+| Mode tabs in the dock | Desktop only. | Desktop, plus the mobile footer — so a window narrowed while presenting can still get back. |
+| `EventDetailPanel` footer | Regenerate / Remove shown. | Hidden (`showFooter`). |
+| `EventTableEditor` | Full editor: Categories page, editable cells, row add/delete, category reorder, Cancel/Save. | Reader: Categories page absent, cells static, no delete column, no Add/Save, Cancel becomes **Close**. The rail's category *filter* stays — it is a reading affordance — but loses drag-to-reorder. |
+
+Switching to view mode closes the Settings panel and the Add Event dialog (`App.tsx`'s `onModeChange`); the Events modal is allowed to stay open, because it has a read-only form. Both closes are defensive — each of those surfaces renders a modal backdrop above the dock, so neither can actually be open at the moment the tabs are clicked.
+
+The dock's width is content-derived rather than a literal, so collapsing a button animates the pill and `translateX(-50%)` keeps it centred without a `width` transition of its own. `Collapsible` measures its child's `scrollWidth` for the open `max-width`: a hardcoded value would either clip the label or waste the start of the animation, and the labels are set in whatever sans the OS supplies since Avenir never loads.
 
 ---
 

@@ -1,15 +1,12 @@
 import { type CSSProperties } from 'react'
-import {
-  PanelLeft,
-  SquarePen,
-  SquarePlay,
-} from 'lucide-react'
+import { PanelLeft } from 'lucide-react'
 import { useSidePanel } from '@/hooks/useSidePanel'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
+import { CategoryLegend } from '@/components/Navigation/CategoryLegend'
 import { SaveStatusIndicator, type SaveStatus } from '@/components/SaveStatusIndicator/SaveStatusIndicator'
 import { getTimelineYearRange } from '@/utils/timelineUtils'
-import type { TimelineEvent } from '@/types/event'
+import type { CategoryConfig, TimelineEvent } from '@/types/event'
 
 interface GlobalNavProps {
   variant?: 'default' | 'timeline'
@@ -18,13 +15,16 @@ interface GlobalNavProps {
   timelineTitle?: string
   onTimelineTitleChange?: (title: string) => void
   events?: TimelineEvent[]
+  /** Category legend — only rendered on variant="timeline", and only with a setter */
+  categories?: CategoryConfig[]
+  onCategoriesChange?: (categories: CategoryConfig[]) => void
   timelineAccentColor?: string
   /** Save status — only rendered on variant="timeline" */
   saveStatus?: SaveStatus
   lastSavedTime?: Date
-  /** Edit/View mode toggle — only rendered on variant="timeline" */
+  /** Edit/View mode. The toggle itself lives in the dock (FloatingToolbar);
+      this only decides whether the title is editable. */
   mode?: 'edit' | 'view'
-  onModeChange?: (mode: 'edit' | 'view') => void
 }
 
 export function GlobalNav({
@@ -33,11 +33,12 @@ export function GlobalNav({
   timelineTitle,
   onTimelineTitleChange,
   events = [],
+  categories,
+  onCategoriesChange,
   timelineAccentColor = '#4196E4',
   saveStatus,
   lastSavedTime,
   mode = 'edit',
-  onModeChange,
 }: GlobalNavProps) {
   const { isOpen: isPanelOpen, toggle: togglePanel } = useSidePanel()
 
@@ -89,8 +90,12 @@ export function GlobalNav({
             </button>
           </div>
 
+          {/* The title cluster's mobile gutter clears both floating buttons:
+              the panel toggle on the left (16px + 28px) and the legend on the
+              right (16px + 36px), so it has to be at least 52px for the centred
+              title not to run under either. */}
           {showTitleCluster && (
-            <div className="flex flex-col gap-0 min-w-0 w-full items-center text-center px-10 md:gap-[2px] md:w-auto md:items-start md:text-left md:px-0">
+            <div className="flex flex-col gap-0 min-w-0 w-full items-center text-center px-[52px] md:gap-[2px] md:w-auto md:items-start md:text-left md:px-0">
               {onTimelineTitleChange && mode === 'edit' ? (
                 <input
                   type="text"
@@ -132,110 +137,39 @@ export function GlobalNav({
           )}
         </div>
 
-        {/* Right cluster: save status + action buttons. Hidden below `md` —
-            the mobile header is title-only. `mode` is unpersisted state that
-            defaults to 'edit' (App.tsx), so hiding the toggle can't strand a
-            phone in view mode, and FloatingToolbar already carries the editing
-            affordances there. */}
-        <div className="ml-auto hidden md:flex items-center gap-2">
-          {/* SaveStatusIndicator hidden for now — keeping wiring in place for future reuse */}
-          {SHOW_SAVE_STATUS && variant === 'timeline' && saveStatus && (
-            <div className="hidden md:block mr-2">
-              <SaveStatusIndicator status={saveStatus} lastSaved={lastSavedTime} />
-            </div>
+        {/* Right cluster. The legend survives below `md` as a floating icon
+            button; Share is desktop-only. Below `md` the legend is out of flow,
+            so this wrapper contributes no width next to the full-width left
+            cluster. The Edit/Present toggle used to live here and now sits in
+            the dock, so the dock is the only place that switches modes. */}
+        <div className="ml-auto flex items-center gap-2">
+          {variant === 'timeline' && categories && onCategoriesChange && (
+            <CategoryLegend
+              categories={categories}
+              events={events}
+              onCategoriesChange={onCategoriesChange}
+            />
           )}
-          {variant === 'timeline' && onModeChange && (
-            <ModeToggle mode={mode} onChange={onModeChange} />
-          )}
-          {variant === 'timeline' && (
-            <Button
-              variant="glass-sm"
-              size="none"
-              onClick={handleShare}
-              disabled={!timelineId}
-            >
-              Share
-            </Button>
-          )}
+          <div className="hidden md:flex items-center gap-2">
+            {/* SaveStatusIndicator hidden for now — keeping wiring in place for future reuse */}
+            {SHOW_SAVE_STATUS && variant === 'timeline' && saveStatus && (
+              <div className="mr-2">
+                <SaveStatusIndicator status={saveStatus} lastSaved={lastSavedTime} />
+              </div>
+            )}
+            {variant === 'timeline' && (
+              <Button
+                variant="glass-sm"
+                size="none"
+                onClick={handleShare}
+                disabled={!timelineId}
+              >
+                Share
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </div>
-  )
-}
-
-interface ModeToggleProps {
-  mode: 'edit' | 'view'
-  onChange: (mode: 'edit' | 'view') => void
-}
-
-// Edit / Present segmented toggle. Each segment is fixed-width to match the
-// design spec (Edit = 72px, Present = 94px). The selected segment fills with
-// #262626; the unselected segment is transparent and dims its label/icon.
-function ModeToggle({ mode, onChange }: ModeToggleProps) {
-  const isEdit = mode === 'edit'
-  return (
-    <div className="flex items-start p-[4px] h-[40px] bg-[#171717] border border-[#262626] rounded-[10px]">
-      <ModeToggleSegment
-        active={isEdit}
-        // When this segment is unselected, the spec uses a slightly different
-        // grey (#9B9EA3) than the inverse case (#A3A3A3). Match exactly.
-        inactiveColor="#9B9EA3"
-        onClick={() => onChange('edit')}
-        icon={<SquarePen size={16} strokeWidth={1} />}
-        label="Edit"
-        width={72}
-      />
-      <ModeToggleSegment
-        active={!isEdit}
-        inactiveColor="#A3A3A3"
-        onClick={() => onChange('view')}
-        icon={<SquarePlay size={16} strokeWidth={1} />}
-        label="Present"
-        width={94}
-      />
-    </div>
-  )
-}
-
-interface ModeToggleSegmentProps {
-  active: boolean
-  inactiveColor: string
-  onClick: () => void
-  icon: React.ReactNode
-  label: string
-  width: number
-}
-
-function ModeToggleSegment({
-  active,
-  inactiveColor,
-  onClick,
-  icon,
-  label,
-  width,
-}: ModeToggleSegmentProps) {
-  // Selected: bg #262626, label #C9CED4 / #D4D4D4 (label / icon).
-  // Unselected: no bg, label and icon both share `inactiveColor`.
-  const color = active ? '#D4D4D4' : inactiveColor
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`flex items-center justify-center gap-[6px] h-[32px] min-w-[60px] px-[12px] py-[6px] rounded-[6px] transition-colors ${
-        active ? 'bg-[#262626]' : 'bg-transparent hover:bg-white/[0.04]'
-      }`}
-      style={{ width, color }}
-    >
-      <span className="shrink-0" style={{ color }} aria-hidden>
-        {icon}
-      </span>
-      <span
-        className="font-['Avenir',sans-serif] font-normal text-[14px] leading-[20px]"
-        style={{ color: active ? '#C9CED4' : inactiveColor }}
-      >
-        {label}
-      </span>
-    </button>
   )
 }
