@@ -942,6 +942,8 @@ export function App() {
         timelineTitle={title}
         onTimelineTitleChange={setTitle}
         events={events}
+        categories={categories}
+        onCategoriesChange={updateCategories}
         timelineAccentColor={timelineAccentColor}
         saveStatus={saveStatus}
         lastSavedTime={lastSavedTime}

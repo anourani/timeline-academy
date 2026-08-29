@@ -7,9 +7,10 @@ import {
 import { useSidePanel } from '@/hooks/useSidePanel'
 import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
+import { CategoryLegend } from '@/components/Navigation/CategoryLegend'
 import { SaveStatusIndicator, type SaveStatus } from '@/components/SaveStatusIndicator/SaveStatusIndicator'
 import { getTimelineYearRange } from '@/utils/timelineUtils'
-import type { TimelineEvent } from '@/types/event'
+import type { CategoryConfig, TimelineEvent } from '@/types/event'
 
 interface GlobalNavProps {
   variant?: 'default' | 'timeline'
@@ -18,6 +19,9 @@ interface GlobalNavProps {
   timelineTitle?: string
   onTimelineTitleChange?: (title: string) => void
   events?: TimelineEvent[]
+  /** Category legend — only rendered on variant="timeline", and only with a setter */
+  categories?: CategoryConfig[]
+  onCategoriesChange?: (categories: CategoryConfig[]) => void
   timelineAccentColor?: string
   /** Save status — only rendered on variant="timeline" */
   saveStatus?: SaveStatus
@@ -33,6 +37,8 @@ export function GlobalNav({
   timelineTitle,
   onTimelineTitleChange,
   events = [],
+  categories,
+  onCategoriesChange,
   timelineAccentColor = '#4196E4',
   saveStatus,
   lastSavedTime,
@@ -89,8 +95,12 @@ export function GlobalNav({
             </button>
           </div>
 
+          {/* The title cluster's mobile gutter clears both floating buttons:
+              the panel toggle on the left (16px + 28px) and the legend on the
+              right (16px + 36px), so it has to be at least 52px for the centred
+              title not to run under either. */}
           {showTitleCluster && (
-            <div className="flex flex-col gap-0 min-w-0 w-full items-center text-center px-10 md:gap-[2px] md:w-auto md:items-start md:text-left md:px-0">
+            <div className="flex flex-col gap-0 min-w-0 w-full items-center text-center px-[52px] md:gap-[2px] md:w-auto md:items-start md:text-left md:px-0">
               {onTimelineTitleChange && mode === 'edit' ? (
                 <input
                   type="text"
@@ -132,31 +142,42 @@ export function GlobalNav({
           )}
         </div>
 
-        {/* Right cluster: save status + action buttons. Hidden below `md` —
-            the mobile header is title-only. `mode` is unpersisted state that
-            defaults to 'edit' (App.tsx), so hiding the toggle can't strand a
-            phone in view mode, and FloatingToolbar already carries the editing
-            affordances there. */}
-        <div className="ml-auto hidden md:flex items-center gap-2">
-          {/* SaveStatusIndicator hidden for now — keeping wiring in place for future reuse */}
-          {SHOW_SAVE_STATUS && variant === 'timeline' && saveStatus && (
-            <div className="hidden md:block mr-2">
-              <SaveStatusIndicator status={saveStatus} lastSaved={lastSavedTime} />
-            </div>
+        {/* Right cluster. The legend survives below `md` as a floating icon
+            button; everything else is desktop-only — `mode` is unpersisted
+            state that defaults to 'edit' (App.tsx), so hiding the toggle can't
+            strand a phone in view mode, and FloatingToolbar already carries the
+            editing affordances there. Below `md` the legend is out of flow, so
+            this wrapper contributes no width next to the full-width left
+            cluster. */}
+        <div className="ml-auto flex items-center gap-2">
+          {variant === 'timeline' && categories && onCategoriesChange && (
+            <CategoryLegend
+              categories={categories}
+              events={events}
+              onCategoriesChange={onCategoriesChange}
+            />
           )}
-          {variant === 'timeline' && onModeChange && (
-            <ModeToggle mode={mode} onChange={onModeChange} />
-          )}
-          {variant === 'timeline' && (
-            <Button
-              variant="glass-sm"
-              size="none"
-              onClick={handleShare}
-              disabled={!timelineId}
-            >
-              Share
-            </Button>
-          )}
+          <div className="hidden md:flex items-center gap-2">
+            {/* SaveStatusIndicator hidden for now — keeping wiring in place for future reuse */}
+            {SHOW_SAVE_STATUS && variant === 'timeline' && saveStatus && (
+              <div className="mr-2">
+                <SaveStatusIndicator status={saveStatus} lastSaved={lastSavedTime} />
+              </div>
+            )}
+            {variant === 'timeline' && onModeChange && (
+              <ModeToggle mode={mode} onChange={onModeChange} />
+            )}
+            {variant === 'timeline' && (
+              <Button
+                variant="glass-sm"
+                size="none"
+                onClick={handleShare}
+                disabled={!timelineId}
+              >
+                Share
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </div>
