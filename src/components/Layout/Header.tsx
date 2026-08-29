@@ -35,6 +35,7 @@ interface HeaderProps {
   onCloseAddEventModal: () => void;
   onDeleteTimeline: () => Promise<void> | void;
   mode?: 'edit' | 'view';
+  onModeChange?: (mode: 'edit' | 'view') => void;
 }
 
 export function Header({
@@ -61,6 +62,7 @@ export function Header({
   onCloseAddEventModal,
   onDeleteTimeline,
   mode = 'edit',
+  onModeChange,
 }: HeaderProps) {
   const closePanel = () => onActivePanelChange(null);
   const togglePanel = (panel: 'events' | 'settings') => {
@@ -74,14 +76,17 @@ export function Header({
 
   return (
     <>
-      {mode === 'edit' && (
-        <FloatingToolbar
-          onAddEventClick={onAddEventClick}
-          onEventsClick={() => togglePanel('events')}
-          onSettingsClick={() => togglePanel('settings')}
-          activePanel={activePanel}
-        />
-      )}
+      {/* Renders in both modes: the dock carries the Edit/Present switch, so
+          unmounting it in view mode would leave no way back. It hides its own
+          edit-only buttons instead. */}
+      <FloatingToolbar
+        onAddEventClick={onAddEventClick}
+        onEventsClick={() => togglePanel('events')}
+        onSettingsClick={() => togglePanel('settings')}
+        activePanel={activePanel}
+        mode={mode}
+        onModeChange={onModeChange}
+      />
 
       <Dialog open={showAddEventModal} onOpenChange={(open) => { if (!open) onCloseAddEventModal(); }}>
         <DialogContent className="bg-surface-secondary border-[rgba(210,210,210,0.15)] max-w-[360px] rounded-[20px] px-5 py-6">
@@ -124,6 +129,7 @@ export function Header({
         onEventsChange={onEventsChange}
         categories={categories}
         onCategoriesChange={onCategoriesChange}
+        mode={mode}
       />
     </>
   );

@@ -948,11 +948,6 @@ export function App() {
         saveStatus={saveStatus}
         lastSavedTime={lastSavedTime}
         mode={mode}
-        onModeChange={(newMode) => {
-          setMode(newMode);
-          // Force any open editing panel closed when switching to view mode.
-          if (newMode === 'view') setActivePanel(null);
-        }}
       />
       <Header
         title={title}
@@ -978,6 +973,15 @@ export function App() {
         onCloseAddEventModal={() => setShowAddEventModal(false)}
         onDeleteTimeline={handleDeleteTimeline}
         mode={mode}
+        onModeChange={(newMode) => {
+          setMode(newMode);
+          if (newMode === 'view') {
+            // Settings has no control in present mode, so it must not stay
+            // open. Events does — it keeps its dock button and opens read-only.
+            setActivePanel(prev => (prev === 'settings' ? null : prev));
+            setShowAddEventModal(false);
+          }
+        }}
       />
       {bootstrapError ? (
         <div className="flex-1 flex items-center justify-center py-20">

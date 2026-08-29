@@ -56,6 +56,12 @@ interface EventTableEditorProps {
   onEventsChange: (events: TimelineEvent[]) => void
   categories: CategoryConfig[]
   onCategoriesChange: (categories: CategoryConfig[]) => void
+  /**
+   * Edit/View mode. In view mode this is a reader: the Categories page is gone,
+   * every cell is static, and the footer offers only Close. Reachable because
+   * the dock keeps its Events button while presenting.
+   */
+  mode?: 'edit' | 'view'
 }
 
 interface DraftEvent extends Omit<TimelineEvent, 'id'> {
@@ -273,6 +279,7 @@ function DatePickerCell({
   disabledBefore,
   isEmpty,
   isFilled,
+  readOnly = false,
 }: {
   value: string
   onChange: (date: string) => void
@@ -280,6 +287,7 @@ function DatePickerCell({
   disabledBefore?: Date
   isEmpty: boolean
   isFilled: boolean
+  readOnly?: boolean
 }) {
   const [open, setOpen] = useState(false)
 
@@ -292,7 +300,26 @@ function DatePickerCell({
 
   const cellBg = isEmpty && !isFilled
     ? 'bg-[#151617]'
-    : 'bg-transparent hover:bg-[#151617]'
+    : readOnly
+      ? 'bg-transparent'
+      : 'bg-transparent hover:bg-[#151617]'
+
+  // Read-only drops the Popover entirely rather than disabling the trigger —
+  // the calendar has nothing to offer when the value cannot change.
+  if (readOnly) {
+    return (
+      <div
+        className={`
+          w-full text-left px-[6px] py-[5px] rounded-[4px]
+          font-['Avenir',sans-serif] font-normal text-[14px] leading-[20px]
+          ${cellBg}
+          ${value ? 'text-[#c9ced4]' : 'text-[#6b6e73]'}
+        `}
+      >
+        {value ? formatDateDisplay(value) : '—'}
+      </div>
+    )
+  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -376,7 +403,9 @@ export function EventTableEditor({
   onEventsChange,
   categories,
   onCategoriesChange,
+  mode = 'edit',
 }: EventTableEditorProps) {
+  const isEditing = mode === 'edit'
   const [activePageTab, setActivePageTab] = useState<'events' | 'categories'>('events')
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [emptyRows, setEmptyRows] = useState<DraftEvent[]>([])
@@ -583,7 +612,7 @@ export function EventTableEditor({
               sit. The tabs themselves are in the rail now. */}
           <div className="sm:col-start-2 sm:row-start-1 flex items-start justify-between gap-4 px-6 pt-5 pb-4">
             <DialogPrimitive.Title className="m-0 font-['Aleo',serif] font-normal text-[20px] leading-[1.4] text-[#dadee5]">
-              {activePageTab === 'events' ? 'Events' : 'Categories'}
+              {isEditing && activePageTab === 'categories' ? 'Categories' : 'Events'}
             </DialogPrimitive.Title>
           </div>
 
@@ -601,13 +630,15 @@ export function EventTableEditor({
               >
                 Events
               </button>
-              <button
-                onClick={() => setActivePageTab('categories')}
-                aria-current={activePageTab === 'categories' ? 'page' : undefined}
-                className={modalSidebarTabClass(activePageTab === 'categories')}
-              >
-                Categories
-              </button>
+              {isEditing && (
+                <button
+                  onClick={() => setActivePageTab('categories')}
+                  aria-current={activePageTab === 'categories' ? 'page' : undefined}
+                  className={modalSidebarTabClass(activePageTab === 'categories')}
+                >
+                  Categories
+                </button>
+              )}
             </div>
 
             {activePageTab === 'events' && (
@@ -632,7 +663,7 @@ export function EventTableEditor({
                     help: it makes the two gestures identical rather than
                     distinguishing them.
                   */}
-                  {isNarrow ? (
+                  {isNarrow || !isEditing ? (
                     draftCategories.map(cat => (
                       <CategoryTab
                         key={cat.id}
@@ -670,7 +701,7 @@ export function EventTableEditor({
 
           {/* Content Area */}
           <div className="sm:col-start-2 sm:row-start-2 min-w-0 min-h-0 px-6 pb-2 overflow-hidden">
-            {activePageTab === 'events' ? (
+            {!isEditing || activePageTab === 'events' ? (
               /* Events Tab Content */
               <div className="flex h-full">
                 {/* Table Area */}
@@ -680,11 +711,13 @@ export function EventTableEditor({
                     className="flex items-center pl-[16px] pr-[10px] pb-2 gap-[22px] border-b border-[rgba(210,210,210,0.2)]"
                     style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 300, fontSize: '12px', lineHeight: '1.4', color: '#9b9ea3' }}
                   >
-                    <div className="w-[240px] shrink-0">Title <span className="text-destructive">*</span></div>
-                    <div className="w-[90px] shrink-0">Start Date <span className="text-destructive">*</span></div>
+                    <div className="w-[240px] shrink-0">Title {isEditing && <span className="text-destructive">*</span>}</div>
+                    <div className="w-[90px] shrink-0">Start Date {isEditing && <span className="text-destructive">*</span>}</div>
                     <div className="w-[90px] shrink-0">End Date</div>
-                    <div className="flex-1">Category <span className="text-destructive">*</span></div>
-                    <div className="w-[32px] shrink-0"></div>
+                    <div className="flex-1">Category {isEditing && <span className="text-destructive">*</span>}</div>
+                    {/* Spacer for the delete column — must appear and disappear
+                        with the cell below it or the columns misalign. */}
+                    {isEditing && <div className="w-[32px] shrink-0"></div>}
                   </div>
 
                   {/* Scrollable Event Rows */}
@@ -705,15 +738,22 @@ export function EventTableEditor({
                               onChange={(e) => handleEventChange(event.id, { title: e.target.value })}
                               placeholder="Event title"
                               autoComplete="off"
+                              readOnly={!isEditing}
+                              // Stays an <input> when read-only so the text is
+                              // still selectable and the column widths do not
+                              // shift; only the hover/focus fills go, since
+                              // those are what read as "editable".
                               className={`
                                 w-full px-[6px] py-[5px] rounded-[4px] border-none outline-none
                                 font-['Avenir',sans-serif] font-normal text-[14px] leading-[20px]
                                 placeholder:text-[#6b6e73]
                                 ${empty && !isFieldFilled(event, 'title')
                                   ? 'bg-[#151617] text-[#c9ced4]'
-                                  : 'bg-transparent text-[#c9ced4] hover:bg-[#151617]'
+                                  : isEditing
+                                    ? 'bg-transparent text-[#c9ced4] hover:bg-[#151617]'
+                                    : 'bg-transparent text-[#c9ced4]'
                                 }
-                                focus:bg-[#151617] transition-colors
+                                ${isEditing ? 'focus:bg-[#151617]' : ''} transition-colors
                               `}
                             />
                           </div>
@@ -731,6 +771,7 @@ export function EventTableEditor({
                               placeholder="Pick a date"
                               isEmpty={empty}
                               isFilled={isFieldFilled(event, 'startDate')}
+                              readOnly={!isEditing}
                             />
                           </div>
 
@@ -743,11 +784,17 @@ export function EventTableEditor({
                               disabledBefore={parseDate(event.startDate)}
                               isEmpty={empty}
                               isFilled={isFieldFilled(event, 'endDate')}
+                              readOnly={!isEditing}
                             />
                           </div>
 
                           {/* Category */}
                           <div className="flex-1 min-w-0">
+                            {!isEditing ? (
+                              <div className="px-[6px] py-[5px] rounded-[4px] font-['Avenir',sans-serif] font-normal text-[14px] leading-[20px] text-[#c9ced4] truncate">
+                                {draftCategories.find(c => c.id === event.category)?.label ?? '—'}
+                              </div>
+                            ) : (
                             <Select
                               value={event.category || undefined}
                               onValueChange={(value) => handleEventChange(event.id, { category: value })}
@@ -778,20 +825,23 @@ export function EventTableEditor({
                                 ))}
                               </SelectContent>
                             </Select>
+                            )}
                           </div>
 
                           {/* Delete */}
-                          <div className="w-[32px] shrink-0 flex justify-center">
-                            <button
-                              onClick={() => empty
-                                ? handleDeleteEmptyRow(event.id)
-                                : handleDeleteEvent(event.id)
-                              }
-                              className="p-1 text-[#9b9ea3] hover:text-[#dadee5] transition-colors rounded"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
+                          {isEditing && (
+                            <div className="w-[32px] shrink-0 flex justify-center">
+                              <button
+                                onClick={() => empty
+                                  ? handleDeleteEmptyRow(event.id)
+                                  : handleDeleteEvent(event.id)
+                                }
+                                className="p-1 text-[#9b9ea3] hover:text-[#dadee5] transition-colors rounded"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )
                     })}
@@ -849,10 +899,15 @@ export function EventTableEditor({
             )}
           </div>
 
-          {/* Footer */}
+          {/* Footer. Kept in view mode even though there is nothing to add or
+              save: this dialog is hand-assembled from DialogPrimitive.Content
+              and so has no close X, which makes this button the only visible
+              way out. */}
           <div className="sm:col-start-2 sm:row-start-3 flex justify-between items-center gap-3 px-6 pt-2 pb-5">
             {/* Add button (left) — context-dependent */}
-            {activePageTab === 'events' ? (
+            {!isEditing ? (
+              <span />
+            ) : activePageTab === 'events' ? (
               <button
                 onClick={handleAddRow}
                 disabled={emptyRows.length >= MAX_EMPTY_ROWS}
@@ -873,16 +928,18 @@ export function EventTableEditor({
             {/* Cancel + Save (right) */}
             <div className="flex gap-[10px]">
               <button onClick={onClose} className={glassButtonClass}>
-                Cancel
+                {isEditing ? 'Cancel' : 'Close'}
               </button>
 
-              <button
-                onClick={handleApplyChanges}
-                disabled={!canApplyChanges}
-                className={`${primaryGlassButtonClass} disabled:opacity-50 disabled:pointer-events-none`}
-              >
-                Save
-              </button>
+              {isEditing && (
+                <button
+                  onClick={handleApplyChanges}
+                  disabled={!canApplyChanges}
+                  className={`${primaryGlassButtonClass} disabled:opacity-50 disabled:pointer-events-none`}
+                >
+                  Save
+                </button>
+              )}
             </div>
           </div>
         </DialogPrimitive.Content>
