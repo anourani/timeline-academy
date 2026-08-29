@@ -34,6 +34,8 @@ const JUNK_DESCRIPTION_PREFIXES = [
   'city in',
   'city and',
   'city of',
+  'largest city',
+  'most populous city',
   'capital of',
   'capital and',
   'capital city',
@@ -101,8 +103,9 @@ function isFacetTitle(title: string): boolean {
 }
 
 // Name particles that legitimately extend another result's name — "John F.
-// Kennedy Jr." is a distinct subject, not a facet of "John F. Kennedy".
-const NAME_SUFFIX_TOKENS = new Set(['jr', 'sr', 'ii', 'iii', 'iv'])
+// Kennedy Jr." is a distinct subject, not a facet of "John F. Kennedy",
+// and "World War I" is not a facet of the generic "World war" article.
+const NAME_SUFFIX_TOKENS = new Set(['jr', 'sr', 'i', 'ii', 'iii', 'iv', 'v'])
 
 function isLetterOrDigit(ch: string | undefined): boolean {
   return ch !== undefined && /[\p{L}\p{N}]/u.test(ch)
@@ -115,14 +118,21 @@ function isLetterOrDigit(ch: string | undefined): boolean {
  * is a name suffix, which marks a different person rather than a facet.
  */
 function isFacetOf(candidate: string, base: string): boolean {
-  const lowerCandidate = candidate.toLowerCase()
   const lowerBase = base.toLowerCase()
+  // A single-word base is too promiscuous an anchor — bare "Queen" would
+  // swallow "Queen Victoria" and "Queen (band)".
+  if (!lowerBase.includes(' ')) return false
+  const lowerCandidate = candidate.toLowerCase()
   const idx = lowerCandidate.indexOf(lowerBase)
   if (idx < 0) return false
   if (isLetterOrDigit(lowerCandidate[idx - 1])) return false
   if (isLetterOrDigit(lowerCandidate[idx + lowerBase.length])) return false
-  const rest =
-    lowerCandidate.slice(0, idx) + ' ' + lowerCandidate.slice(idx + lowerBase.length)
+  const suffix = lowerCandidate.slice(idx + lowerBase.length)
+  // "Base (qualifier)" is Wikipedia's disambiguation convention for a
+  // distinct subject sharing the name — "Michael Jackson (writer)" is not
+  // a facet of "Michael Jackson".
+  if (idx === 0 && /^ \([^()]+\)$/.test(suffix)) return false
+  const rest = lowerCandidate.slice(0, idx) + ' ' + suffix
   const restTokens = rest.split(/[^\p{L}\p{N}]+/u).filter(Boolean)
   if (restTokens.length === 0) return false
   return !restTokens.every((token) => NAME_SUFFIX_TOKENS.has(token))
