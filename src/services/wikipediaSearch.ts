@@ -22,13 +22,58 @@ const JUNK_DESCRIPTION_EXACT = [
   'family name',
 ]
 
-const JUNK_DESCRIPTION_SUBSTRINGS = ['given name', 'family name']
+const JUNK_DESCRIPTION_SUBSTRINGS = ['given name', 'family name', 'mythology']
+
+// Geographic and natural-world subjects rarely make promising timelines.
+// Wikipedia short descriptions for these are formulaic enough to match on
+// their opening words ("City in northern Syria", "Capital of Karnataka,
+// India", "Species of mammal"). Countries are deliberately left in — a
+// country's history is a legitimate topic timeline in a way a mid-size
+// city's isn't.
+const JUNK_DESCRIPTION_PREFIXES = [
+  'city in',
+  'city and',
+  'city of',
+  'capital of',
+  'capital and',
+  'capital city',
+  'town in',
+  'village in',
+  'place in',
+  'human settlement',
+  'municipality',
+  'commune in',
+  'borough',
+  'suburb',
+  'neighbourhood',
+  'neighborhood',
+  'county in',
+  'county of',
+  'district in',
+  'district of',
+  'province in',
+  'province of',
+  'region in',
+  'region of',
+  'u.s. state',
+  'census-designated place',
+  'airport in',
+  'river in',
+  'mountain in',
+  'mountain range',
+  'lake in',
+  'island in',
+  'species of',
+  'genus of',
+  'breed of',
+]
 
 function isJunkDescription(description: string | undefined): boolean {
   if (!description) return false
   const lower = description.toLowerCase()
   if (JUNK_DESCRIPTION_EXACT.includes(lower)) return true
   if (JUNK_DESCRIPTION_SUBSTRINGS.some((s) => lower.includes(s))) return true
+  if (JUNK_DESCRIPTION_PREFIXES.some((p) => lower.startsWith(p))) return true
   return false
 }
 
