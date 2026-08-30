@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { CornerDownLeft } from 'lucide-react'
 import type { SubjectType } from '@/constants/pillDefinitions'
 import { SubjectSuggestions } from '@/components/AIMode/SubjectSuggestions'
 import { GeneratingIndicator } from '@/components/NewTimeline/GeneratingIndicator'
@@ -52,6 +53,23 @@ const SEARCH_FIELD_FONT =
 
 /** Box padding. Shared with the ghost overlay, for the same reason. */
 const SEARCH_FIELD_PADDING = 'px-[11px] py-[9px] md:p-[11px]'
+
+/**
+ * Room at the field's right edge for the enter button: 12px inset + 38px button
+ * + a 10px gap. Reserved permanently rather than toggled with the button, so
+ * text long enough to have scrolled the input never jumps sideways when it
+ * appears.
+ *
+ * Input-only, deliberately not folded into `SEARCH_FIELD_PADDING`: the ghost
+ * overlay renders only while the field is empty and the button only while it is
+ * not, so the ghost has no button to make room for — and taking the reserve
+ * anyway would narrow the box its placeholder animates in from 416px to 367px,
+ * cutting the longest name's headroom ('Civil Rights Movement', ~302px) from
+ * 114px to 65px to buy nothing. Right padding cannot move left-anchored text,
+ * so the two still agree on every metric the ghost actually depends on: type,
+ * left padding, vertical padding.
+ */
+const SEARCH_FIELD_ENTER_RESERVE = 'md:pr-[60px]'
 
 function BackgroundGrid() {
   return (
@@ -247,6 +265,11 @@ export function NewTimelineScreen({
     name.trim().length >= MIN_SUGGESTION_QUERY_LENGTH &&
     (suggestions.length > 0 || suggestionsLoading)
 
+  // Gated on `renderDropdown` rather than `dropdownVisible` for the same reason
+  // the chips are: it keeps the button away through the panel's 180ms exit
+  // animation instead of popping it back under a panel that is still fading.
+  const showEnterButton = name.trim().length > 0 && !renderDropdown && !isWorking
+
   useEffect(() => {
     if (dropdownVisible) {
       setRenderDropdown(true)
@@ -300,13 +323,44 @@ export function NewTimelineScreen({
                   autoCorrect="off"
                   spellCheck={false}
                   enterKeyHint="search"
-                  className={`w-full rounded-[8px] border border-[#404040] bg-surface-secondary outline-none transition-shadow text-text-secondary focus-visible:ring-1 focus-visible:ring-white/40 disabled:opacity-70 ${SEARCH_FIELD_PADDING} ${SEARCH_FIELD_FONT} ${
+                  className={`w-full rounded-[8px] border border-[#404040] bg-surface-secondary outline-none transition-shadow text-text-secondary focus-visible:ring-1 focus-visible:ring-white/40 disabled:opacity-70 ${SEARCH_FIELD_PADDING} ${SEARCH_FIELD_ENTER_RESERVE} ${SEARCH_FIELD_FONT} ${
                     hasEngaged
                       ? 'shadow-[0px_8px_16px_0px_rgba(155,158,163,0.04)]'
                       : 'shadow-[0px_8px_16px_0px_rgba(0,0,0,0.4)]'
                   }`}
                   aria-label="Subject for timeline generation"
                 />
+
+                {/* `type="submit"` is the whole point: the Enter key and this
+                    button reach `handleSubmit` through one path — the form's
+                    default button — rather than two copies of it that could
+                    drift.
+
+                    Which is also why it must never be `disabled`. A disabled
+                    default button has no activation behaviour, so implicit
+                    submission fires nothing and the Enter key dies with it —
+                    including below `md`, where the button is not even rendered.
+                    Empty and in-flight queries are already refused inside
+                    `handleSubmit`; visibility is carried by `invisible` (the
+                    chips' idiom, which drops it from hit-testing and the tab
+                    order in one property) so the control stays mounted and the
+                    Enter path never changes shape.
+
+                    `top-[12px] h-[40px]` measures the input's *content* box —
+                    1px border plus 11px padding, then 32px type at 1.25
+                    line-height — rather than stretching to the wrapper, whose
+                    height an inline-block input can pad with a baseline
+                    descender. Tied to `SEARCH_FIELD_FONT`'s `md` metrics; if
+                    those move, this moves with them. */}
+                <button
+                  type="submit"
+                  aria-label="Generate timeline"
+                  className={`hidden md:flex absolute right-[12px] top-[12px] h-[40px] items-center justify-center px-[9px] rounded-[6px] bg-[rgba(37,99,235,0.8)] border border-white/[0.15] shadow-[0px_8px_32px_rgba(0,0,0,0.4),inset_0px_1px_0px_rgba(255,255,255,0.1)] text-[#dadee5] hover:bg-[rgba(37,99,235,0.9)] transition-colors outline-none focus-visible:ring-1 focus-visible:ring-white/40 ${
+                    showEnterButton ? '' : 'invisible'
+                  }`}
+                >
+                  <CornerDownLeft size={20} aria-hidden="true" />
+                </button>
 
                 {/* `border border-transparent` is load-bearing: the input has a
                     1px border and an inset-0 overlay does not, so without it the
@@ -336,10 +390,13 @@ export function NewTimelineScreen({
                 )}
               </div>
 
-              {/* `type="button"` is required, not tidiness: the form has no
-                  submit control, so Enter works only through HTML's implicit
-                  submission, and a chip left as the default `submit` would
-                  become the form's default button and silently take it over.
+              {/* `type="button"` is required, not tidiness: a chip left as the
+                  default `submit` would fire `handleSubmit` with whatever is in
+                  the field on top of `handleQuickSearch`, generating the typed
+                  query rather than the chip's subject. The enter button holds
+                  default-button status regardless — it comes first in tree order
+                  — but that only settles which control the Enter key reaches,
+                  not what a click on a chip does.
 
                   `invisible` rather than a fade, because it also takes the chips
                   out of the tab order — right for controls sitting under an open
