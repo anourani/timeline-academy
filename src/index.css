@@ -240,6 +240,22 @@
     animation: blink-caret 1s step-end infinite;
   }
 
+  /* Comet trail behind the event hover cursor (EventHoverCursor.tsx).
+     Each dot carries its own `--dot-opacity`, so the three keep their opacity
+     ranking (.55 / .42 / .30) while breathing on one shared 1.4s cycle. */
+  @keyframes timeline-cursor-breathe {
+    0%, 100% { opacity: calc(var(--dot-opacity) * 0.6); }
+    50%      { opacity: calc(var(--dot-opacity) * 1.3); }
+  }
+
+  /* Events are real buttons now. The focus ring is to the keyboard what the
+     custom cursor is to the mouse; its colour is the event's category colour,
+     set inline as `--event-focus-color`. */
+  .timeline-event:focus-visible {
+    outline: 2px solid var(--event-focus-color, #DADEE5);
+    outline-offset: 2px;
+  }
+
   .timeline-vertical-line {
     position: absolute;
     top: 0;

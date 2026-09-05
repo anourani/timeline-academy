@@ -27,7 +27,7 @@
 15. [Wheel → Horizontal Scroll](#wheel--horizontal-scroll)
 16. [Scroll-to-Date](#scroll-to-date)
 17. [Add-Event Cursor](#add-event-cursor)
-18. [Event Actions Menu](#event-actions-menu)
+18. [Event Hover Cursor](#event-hover-cursor)
 19. [Event Form Dialog](#event-form-dialog)
 20. [Scale / Zoom System](#scale--zoom-system)
 21. [Date-to-Grid Math](#date-to-grid-math)
@@ -60,9 +60,10 @@ Timeline
 │           │   │   └── TimelineEvent[]                  ─ events placed into the band's CSS Grid
 │           │   └── filler column
 │           │       └── TimelineGrid                     ─ fills remaining vertical space below events
-│           └── Add-Event Cursor                         ─ conditional: hoveredMonth !== null
-│                                                         && isEditing && onAddEvent && !dragState.isDragging
-├── EventActionsMenu                       ─ conditional: menuState (event clicked in edit mode)
+│           ├── Add-Event Cursor                         ─ conditional: hoveredMonth !== null
+│           │                                             && isEditing && onAddEvent
+│           │                                             && !dragState.isDragging && !isOverEvent
+│           └── EventHoverCursor                         ─ always mounted; driven imperatively
 └── Dialog (shadcn) > EventForm            ─ conditional: showEventModal
 ```
 
@@ -178,8 +179,10 @@ The switch itself lives in the **dock** (`FloatingToolbar/ModeTabs.tsx`), not th
 | Affordance | Edit mode | View mode |
 |---|---|---|
 | Drag-to-reschedule | Enabled (`onPointerDown` is wired only when `isEditing && onUpdateEvent`). | Suppressed. |
-| Add-Event Cursor (hover band) | Rendered when `onAddEvent` is provided. | Not rendered. |
-| Click on event | Opens `EventActionsMenu` at the click position. | Calls `onOpenDetails(event)`. |
+| Add-Event Cursor (hover band) | Rendered when `onAddEvent` is provided, except while the pointer is over an event. | Not rendered. |
+| Hover an event | Native cursor hidden, `EventHoverCursor` drawn in its place. | Same. |
+| Click on event | Calls `onOpenDetails(event)`. | Calls `onOpenDetails(event)`. |
+| `EventDetailPanel` header | Edit / Delete shown. | Hidden. |
 | Click on a month cell | Opens the `EventForm` Dialog seeded with that month's first day. | No-op (`handleMonthClick` returns early). |
 | Timeline title (`GlobalNav`) | Editable `<input>`. | Static `<p>`. |
 | Dock buttons | Add Event, Events, Settings. | Add Event and Settings collapse to zero width and fade out; Events stays. |
@@ -502,7 +505,7 @@ If you change the auto-scroll behavior here, also revisit the `TimelineScrollInd
 A translucent vertical band that follows the user's hovered month while the timeline is in edit mode.
 
 ```tsx
-{hoveredMonth !== null && isEditing && onAddEvent && !dragState.isDragging && (
+{hoveredMonth !== null && isEditing && onAddEvent && !dragState.isDragging && !isOverEvent && (
   <div
     className="absolute top-[64px] bottom-0 bg-[#FBFBFB]/25 pointer-events-none transition-transform duration-75 ease-out"
     style={{
@@ -515,22 +518,31 @@ A translucent vertical band that follows the user's hovered month while the time
 
 - `hoveredMonth` is set by `TimelineGrid`'s `onMouseEnter` / `onMouseLeave` (per-month).
 - `top-[64px]` aligns the band's top with the bottom of the header (= `HEADER_HEIGHT`).
-- The band is hidden in view mode, when no `onAddEvent` prop is provided, and during drag.
+- The band is hidden in view mode, when no `onAddEvent` prop is provided, during drag, and while the pointer is over an event (`isOverEvent`) — "add one here" and "open this one" must never read as offered at once.
 
 ---
 
-## Event Actions Menu
+## Event Hover Cursor
 
-`EventActionsMenu.tsx` is a portal-mounted floating menu shown when an event is clicked in edit mode.
+`EventHoverCursor.tsx` replaces the old click-path actions menu. While the pointer is inside an event's box the native cursor is hidden (`cursor-none` on the event) and a category-coloured disc is drawn in its place: 36px, centred on the pointer, carrying a 14px white plus, trailing three damped dots (14 / 11 / 8px at opacity .55 / .42 / .30, following at 260 / 380 / 500ms on `cubic-bezier(.2,.9,.2,1)` with a 1.4s opacity breathe staggered 0 / 160 / 320ms). The disc itself follows at 130ms so aim is unaffected, enters and exits with a 0.5→1 scale over 160ms, and dips to 0.88 for 90ms on pointerdown.
 
-- Triggered by `handleEventClick(event, { x: e.clientX, y: e.clientY })` in `Timeline.tsx`. The menu is rendered when `menuState !== null`.
-- Position: `fixed; left: x; top: y` initially, then a `useLayoutEffect` flips horizontally / vertically to keep the menu inside the viewport (8px margin).
-- Three items:
-  1. **Edit event** → calls `onEdit`, which sets `editingEvent` and opens the `EventForm` Dialog.
-  2. **Open details** → calls `onOpenDetails(event)` (handed up to the page, which opens the side panel).
-  3. **Delete** → calls `onDeleteEvent(event.id)`. Styled `destructive`.
-- An invisible full-viewport click-catcher (`fixed inset-0` with inline `zIndex: 999`) sits behind the menu (`zIndex: 1000`) and absorbs `mousedown` to close, preventing the underlying timeline grid from receiving a click that would otherwise create a new event. The catcher also handles `contextmenu` (right-click) for clean dismissal.
-- Closes on `Escape` (via a `document` `keydown` listener) and on outside `mousedown`/`contextmenu`.
+- **One instance per timeline**, rendered as the last child of the scroll content so it paints above the grid and every event. Every part is `pointer-events: none`.
+- **One delegated listener.** `Timeline.tsx` puts `onPointerMove` / `onPointerLeave` / `onPointerDown` / `onPointerUp` on the grid content div and resolves the hovered event with `e.target.closest('[data-event-id]')` — one listener regardless of event count. `TimelineEvent` supplies `data-event-id` and `data-event-color`.
+- **No React state per move.** The component exposes an imperative handle (`move` / `hide` / `setPressed` / `bloom`); pointer position lives in a ref and is flushed to the DOM in a single rAF, writing only `transform` and `opacity`. `TimelineEvent` is `memo`'d and never re-renders on a move. Coordinates are relative to the scroll content, so horizontal scroll needs no recalculation.
+- The only React state involved is `isOverEvent` in `Timeline`, which flips on enter/exit (not per move) to suppress the Add-Event Cursor band — the two affordances never appear together.
+- **Suppressed during drag** (`dragState.isDragging`), where the existing `cursor: grabbing` applies instead.
+- **`prefers-reduced-motion`**: no trail, no breathe, no press scale; the disc appears and follows with 0ms transitions.
+- **Coarse pointers** get no following cursor. `pointerType !== 'mouse'` skips the hover path entirely; a tap instead fires one 44px `bloom()` at the tap point as launch feedback, and the detail panel opens.
+- **Keyboard / screen readers** never see the cursor. Events are `role="button"` with `tabIndex={0}`, an `aria-label` of `"{title}, {dates}. Open details"`, Enter/Space activation, and a 2px `:focus-visible` outline in the category colour (`.timeline-event:focus-visible` in `index.css`, colour passed inline as `--event-focus-color`). The native `title` tooltip was dropped — the OS tooltip fights the custom cursor and the aria-label carries the same content.
+
+### Where Edit and Delete went
+
+`EventActionsMenu` has been removed. A left click on an event always calls `onOpenDetails(event)`, in edit and view mode alike, which opens `EventDetailPanel`. The panel's header carries the two edit-mode authoring actions:
+
+- **Edit** → the page sets `pendingEditEventId` and closes the panel; `Timeline` consumes that prop, opens its `EventForm` Dialog on the matching event, and clears it via `onEditRequestHandled` (the same controlled-prop pattern as `pendingScrollDate` / `onScrollComplete`, because the panel is mounted by the page and sits outside `Timeline`'s subtree).
+- **Delete** → confirms through `ConfirmationModal`, then calls the page's delete handler and closes the panel.
+
+Both are hidden in view mode. `Timeline` no longer takes an `onDeleteEvent` prop.
 
 ---
 

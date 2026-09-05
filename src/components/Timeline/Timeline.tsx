@@ -5,7 +5,7 @@ import { TimelineVerticalLines } from './TimelineVerticalLines';
 import { TimelineCategoryLabels } from './TimelineCategoryLabels';
 import { TimelineEvent } from './TimelineEvent';
 import { TimelineScrollIndicator } from './TimelineScrollIndicator';
-import { EventActionsMenu } from '../EventActionsMenu/EventActionsMenu';
+import { EventHoverCursor, EventHoverCursorHandle } from './EventHoverCursor';
 import { TimelineEvent as ITimelineEvent, CategoryConfig } from '../../types/event';
 import { TimelineScale, TimelineVerticalScale } from '../../types/timeline';
 import { formatYMD, getTimelineRange, shiftEventDates } from '../../utils/dateUtils';
@@ -27,15 +27,20 @@ interface TimelineProps {
   isFullScreen?: boolean;
   onAddEvent?: (event: Omit<ITimelineEvent, 'id'>) => ITimelineEvent | void;
   onUpdateEvent?: (event: ITimelineEvent) => void;
-  /** Called when "Delete" is selected from the event actions menu. */
-  onDeleteEvent?: (eventId: string) => void;
-  /** Called when "Open details" is selected (edit mode) or an enriched event is clicked (view mode). */
+  /** Called whenever an event is clicked, in either mode — it opens the detail
+   *  side panel. There is no longer an actions menu on the click path. */
   onOpenDetails?: (event: ITimelineEvent) => void;
   scale: TimelineScale;
   verticalScale: TimelineVerticalScale;
   groupByCategory?: boolean;
   pendingScrollDate?: string | null;
   onScrollComplete?: () => void;
+  /** Id of an event the page wants edited — set by the detail panel's Edit
+   *  action, which lives outside this subtree but needs the EventForm dialog
+   *  this component owns. Cleared via `onEditRequestHandled`, mirroring the
+   *  `pendingScrollDate` / `onScrollComplete` pair above. */
+  pendingEditEventId?: string | null;
+  onEditRequestHandled?: () => void;
   /**
    * Edit/View mode. In view mode, edit affordances (drag-to-reschedule,
    * hover-to-add cursor, click-to-edit) are suppressed.
@@ -61,13 +66,14 @@ export function Timeline({
   isFullScreen,
   onAddEvent,
   onUpdateEvent,
-  onDeleteEvent,
   onOpenDetails,
   scale,
   verticalScale,
   groupByCategory = false,
   pendingScrollDate,
   onScrollComplete,
+  pendingEditEventId,
+  onEditRequestHandled,
   mode = 'edit',
 }: TimelineProps) {
   const isEditing = mode === 'edit';
@@ -95,7 +101,13 @@ export function Timeline({
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [editingEvent, setEditingEvent] = useState<ITimelineEvent | null>(null);
   const [pendingScrollEventId, setPendingScrollEventId] = useState<string | null>(null);
-  const [menuState, setMenuState] = useState<{ event: ITimelineEvent; x: number; y: number } | null>(null);
+  // Only flips when the pointer enters or leaves an event, never per move, so
+  // the hover cursor costs at most two renders per event crossed.
+  const [isOverEvent, setIsOverEvent] = useState(false);
+
+  const gridContentRef = useRef<HTMLDivElement>(null);
+  const hoverCursorRef = useRef<EventHoverCursorHandle>(null);
+  const hoveredEventIdRef = useRef<string | null>(null);
 
   const { visibleRange } = useTimelineScroll(scrollContainerRef, months.length * 4);
 
@@ -242,22 +254,29 @@ export function Timeline({
     }
   }, [months, onAddEvent, justDraggedRef, isEditing]);
 
+  // One click, one outcome, in both modes: open the detail panel. The panel
+  // itself handles cached content vs. fresh generation. Edit and Delete now
+  // live in the panel's header rather than on the click path.
   const handleEventClick = useCallback(
-    (event: ITimelineEvent, position: { x: number; y: number }) => {
+    (event: ITimelineEvent) => {
       if (justDraggedRef.current) return;
-      if (isEditing) {
-        if (!onUpdateEvent) return;
-        setMenuState({ event, x: position.x, y: position.y });
-        return;
-      }
-      // View / present mode: open the detail panel for any event. The panel
-      // itself handles cached content vs. fresh generation.
-      if (onOpenDetails) {
-        onOpenDetails(event);
-      }
+      onOpenDetails?.(event);
     },
-    [onUpdateEvent, justDraggedRef, isEditing, onOpenDetails],
+    [justDraggedRef, onOpenDetails],
   );
+
+  // The detail panel's Edit action reaches the EventForm dialog through here —
+  // the panel is mounted by the page, outside this subtree.
+  useEffect(() => {
+    if (!pendingEditEventId) return;
+    const target = events.find(e => e.id === pendingEditEventId);
+    if (target) {
+      setEditingEvent(target);
+      setSelectedDate(null);
+      setShowEventModal(true);
+    }
+    onEditRequestHandled?.();
+  }, [pendingEditEventId, events, onEditRequestHandled]);
 
   const handleSubmit = useCallback((eventData: Omit<ITimelineEvent, 'id'>) => {
     let newEventId: string | null = null;
@@ -283,6 +302,90 @@ export function Timeline({
       setPendingScrollEventId(newEventId);
     }
   }, [editingEvent, onAddEvent, onUpdateEvent, scrollToDate]);
+
+  // --- Hover cursor (concept 3a) -----------------------------------------
+  // One delegated listener on the grid container regardless of event count.
+  // `closest('[data-event-id]')` resolves the hovered event; the cursor is
+  // then driven imperatively, so a move never re-renders anything.
+
+  const clearHoverCursor = useCallback(() => {
+    hoverCursorRef.current?.hide();
+    if (hoveredEventIdRef.current !== null) {
+      hoveredEventIdRef.current = null;
+      setIsOverEvent(false);
+    }
+  }, []);
+
+  const handleGridPointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      // Touch and pen get no custom cursor — there is no hover to express.
+      if (e.pointerType !== 'mouse') return;
+      // During a drag the native `cursor: grabbing` is the affordance.
+      if (dragState.isDragging) {
+        clearHoverCursor();
+        return;
+      }
+
+      const target = e.target as Element | null;
+      const eventEl = target?.closest?.('[data-event-id]') as HTMLElement | null;
+      if (!eventEl) {
+        clearHoverCursor();
+        return;
+      }
+
+      const content = gridContentRef.current;
+      if (!content) return;
+      const rect = content.getBoundingClientRect();
+      hoverCursorRef.current?.move(
+        e.clientX - rect.left,
+        e.clientY - rect.top,
+        eventEl.dataset.eventColor || '#666',
+      );
+
+      const id = eventEl.dataset.eventId ?? null;
+      if (hoveredEventIdRef.current !== id) {
+        hoveredEventIdRef.current = id;
+        setIsOverEvent(true);
+      }
+    },
+    [dragState.isDragging, clearHoverCursor],
+  );
+
+  const handleGridPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== 'mouse') return;
+    const target = e.target as Element | null;
+    if (!target?.closest?.('[data-event-id]')) return;
+    hoverCursorRef.current?.setPressed(true);
+  }, []);
+
+  const handleGridPointerUp = useCallback(() => {
+    hoverCursorRef.current?.setPressed(false);
+  }, []);
+
+  // Coarse pointers get one 44px bloom at the tap point as launch feedback
+  // instead of a cursor that follows nothing.
+  const handleGridPointerDownCoarse = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.pointerType === 'mouse') return;
+      const target = e.target as Element | null;
+      const eventEl = target?.closest?.('[data-event-id]') as HTMLElement | null;
+      const content = gridContentRef.current;
+      if (!eventEl || !content) return;
+      const rect = content.getBoundingClientRect();
+      hoverCursorRef.current?.bloom(
+        e.clientX - rect.left,
+        e.clientY - rect.top,
+        eventEl.dataset.eventColor || '#666',
+      );
+    },
+    [],
+  );
+
+  // A drag starting under the cursor must take it away immediately, not on the
+  // next move — otherwise the plus disc rides along with the grabbed event.
+  useEffect(() => {
+    if (dragState.isDragging) clearHoverCursor();
+  }, [dragState.isDragging, clearHoverCursor]);
 
   const handleEventMounted = useCallback((eventId: string, node: HTMLDivElement | null) => {
     if (!node) return;
@@ -321,12 +424,21 @@ export function Timeline({
           className="flex-1 min-h-0 overflow-auto scrollbar-hide"
         >
           <div
+            ref={gridContentRef}
             className="relative timeline-grid transition-[min-width] duration-200 ease-in-out flex flex-col"
             style={{
               minWidth: `${months.length * scale.monthWidth}px`,
               minHeight: '100%',
               cursor: isEditing && onAddEvent ? 'pointer' : 'default'
             }}
+            onPointerMove={handleGridPointerMove}
+            onPointerLeave={clearHoverCursor}
+            onPointerDown={(e) => {
+              handleGridPointerDown(e);
+              handleGridPointerDownCoarse(e);
+            }}
+            onPointerUp={handleGridPointerUp}
+            onPointerCancel={handleGridPointerUp}
           >
             <TimelineHeader months={months} scale={scale} />
             <div className="relative flex-1 min-h-0 flex flex-col">
@@ -357,9 +469,8 @@ export function Timeline({
                     scale={scale}
                   />
                   {band.events.map((event) => {
-                    const canHandleClick =
-                      (isEditing && !!onUpdateEvent) ||
-                      (!isEditing && !!onOpenDetails);
+                    // Same in both modes now — a click always opens details.
+                    const canHandleClick = !!onOpenDetails;
                     return (
                       <TimelineEvent
                         key={event.id}
@@ -393,8 +504,10 @@ export function Timeline({
               </div>
             </div>
 
-            {/* Add Event Cursor — hidden during drag and in view mode */}
-            {hoveredMonth !== null && isEditing && onAddEvent && !dragState.isDragging && (
+            {/* Add Event Cursor — hidden during drag, in view mode, and while
+                the pointer is over an event, so the "add here" band and the
+                "open this" cursor never appear at the same time. */}
+            {hoveredMonth !== null && isEditing && onAddEvent && !dragState.isDragging && !isOverEvent && (
               <div
                 className="absolute top-[64px] bottom-0 bg-[#FBFBFB]/25 pointer-events-none transition-transform duration-75 ease-out"
                 style={{
@@ -403,29 +516,13 @@ export function Timeline({
                 }}
               />
             )}
+
+            {/* Event hover cursor — last child so it paints above the grid and
+                every event. Every part is pointer-events: none. */}
+            <EventHoverCursor ref={hoverCursorRef} />
           </div>
         </div>
       </div>
-
-      {/* Event Actions Menu (edit mode click on event) */}
-      {menuState && (
-        <EventActionsMenu
-          event={menuState.event}
-          position={{ x: menuState.x, y: menuState.y }}
-          onClose={() => setMenuState(null)}
-          onEdit={() => {
-            setEditingEvent(menuState.event);
-            setSelectedDate(null);
-            setShowEventModal(true);
-          }}
-          onOpenDetails={() => {
-            if (onOpenDetails) onOpenDetails(menuState.event);
-          }}
-          onDelete={() => {
-            if (onDeleteEvent) onDeleteEvent(menuState.event.id);
-          }}
-        />
-      )}
 
       {/* Event Dialog */}
       <Dialog
