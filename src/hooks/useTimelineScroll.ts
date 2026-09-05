@@ -1,5 +1,5 @@
 import { useState, useEffect, RefObject } from 'react';
-import { debounce } from '../utils/debounce';
+import { rafThrottle } from '../utils/rafThrottle';
 
 interface TimelineScrollState {
   scrollLeft: number;
@@ -36,46 +36,61 @@ export function useTimelineScroll(
       } = scrollContainerRef.current;
 
       // Calculate visible range in months
-      const monthWidth = contentWidth / totalMonths;
-      const startMonth = Math.floor(scrollLeft / monthWidth);
-      const visibleMonths = Math.ceil(containerWidth / monthWidth);
+      const monthWidth = totalMonths > 0 ? contentWidth / totalMonths : 0;
+      const startMonth = monthWidth > 0 ? Math.floor(scrollLeft / monthWidth) : 0;
+      const visibleMonths = monthWidth > 0 ? Math.ceil(containerWidth / monthWidth) : 0;
+      const end = Math.min(startMonth + visibleMonths, totalMonths);
 
-      setScrollState({
-        scrollLeft,
-        containerWidth,
-        contentWidth,
-        visibleRange: {
-          start: startMonth,
-          end: Math.min(startMonth + visibleMonths, totalMonths),
-        },
-      });
+      // Bail when nothing moved. A fresh object every call re-renders the whole
+      // timeline — every month label, grid track and vertical line — and during
+      // a window drag this fires on every frame from three sources at once.
+      setScrollState(prev =>
+        prev.scrollLeft === scrollLeft &&
+        prev.containerWidth === containerWidth &&
+        prev.contentWidth === contentWidth &&
+        prev.visibleRange.start === startMonth &&
+        prev.visibleRange.end === end
+          ? prev
+          : {
+              scrollLeft,
+              containerWidth,
+              contentWidth,
+              visibleRange: { start: startMonth, end },
+            }
+      );
     };
 
-    const debouncedScroll = debounce(handleScroll, 16); // ~60fps
+    // One update per frame, *during* the gesture. This was a 16ms trailing
+    // debounce, which could not work here: `resize` and the ResizeObserver both
+    // fire every frame, so the calls land closer together than the wait and
+    // each one cleared the pending timer. The handler ran only once the drag
+    // ended, and the whole timeline snapped to its new size in one step.
+    const throttledScroll = rafThrottle(handleScroll);
 
     const container = scrollContainerRef.current;
     let observer: ResizeObserver | undefined;
 
     if (container) {
-      container.addEventListener('scroll', debouncedScroll);
+      container.addEventListener('scroll', throttledScroll);
       // Initial calculation
       handleScroll();
       // Recalculate on resize
-      window.addEventListener('resize', debouncedScroll);
+      window.addEventListener('resize', throttledScroll);
       // The window listener alone is not enough: resizing the side panel
       // changes this container's width (it is a push layout) without firing a
       // window resize, which would leave containerWidth — and so the sticky
       // year indicator driven by visibleRange — stale until the next scroll.
-      observer = new ResizeObserver(debouncedScroll);
+      observer = new ResizeObserver(throttledScroll);
       observer.observe(container);
     }
 
     return () => {
       if (container) {
-        container.removeEventListener('scroll', debouncedScroll);
-        window.removeEventListener('resize', debouncedScroll);
+        container.removeEventListener('scroll', throttledScroll);
+        window.removeEventListener('resize', throttledScroll);
         observer?.disconnect();
       }
+      throttledScroll.cancel();
     };
   }, [scrollContainerRef, totalMonths]);
 

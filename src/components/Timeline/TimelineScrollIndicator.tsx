@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Month } from '../../types/timeline'
 import { SCROLL_INDICATOR_HEIGHT } from '../../constants/timeline'
 
@@ -6,7 +7,7 @@ interface TimelineScrollIndicatorProps {
   visibleRange: { start: number; end: number }
 }
 
-export function TimelineScrollIndicator({
+export const TimelineScrollIndicator = memo(function TimelineScrollIndicator({
   months,
   visibleRange
 }: TimelineScrollIndicatorProps) {
@@ -21,4 +22,4 @@ export function TimelineScrollIndicator({
       {leftYear != null && <span>{leftYear}</span>}
     </div>
   )
-}
+})
