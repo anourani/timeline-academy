@@ -68,6 +68,9 @@ export function App() {
   const [showAddEventModal, setShowAddEventModal] = useState(false);
   const [mode, setMode] = useState<'edit' | 'view'>('edit');
   const [detailPanelEvent, setDetailPanelEvent] = useState<TimelineEvent | null>(null);
+  // Set by the detail panel's Edit action, consumed by Timeline — which owns
+  // the EventForm dialog but sits outside the panel's subtree.
+  const [pendingEditEventId, setPendingEditEventId] = useState<string | null>(null);
   const [pendingScrollDate, setPendingScrollDate] = useState<string | null>(null);
   const [draftHydrated, setDraftHydrated] = useState(false);
   // The route instruction a trial visitor asked for while their single slot was
@@ -1002,13 +1005,14 @@ export function App() {
             categories={categories}
             onAddEvent={mode === 'edit' ? addEvent : undefined}
             onUpdateEvent={mode === 'edit' ? handleUpdateEvent : undefined}
-            onDeleteEvent={mode === 'edit' ? handleDeleteEvent : undefined}
             onOpenDetails={(event) => setDetailPanelEvent(event)}
             scale={currentScale}
             verticalScale={currentVerticalScale}
             groupByCategory={groupByCategory}
             pendingScrollDate={pendingScrollDate}
             onScrollComplete={() => setPendingScrollDate(null)}
+            pendingEditEventId={pendingEditEventId}
+            onEditRequestHandled={() => setPendingEditEventId(null)}
             mode={mode}
           />
         </main>
@@ -1041,6 +1045,24 @@ export function App() {
           handleUpdateEvent(updated);
           setDetailPanelEvent(updated);
         }}
+        onEdit={
+          mode === 'edit'
+            ? () => {
+                if (!detailPanelEvent) return;
+                setPendingEditEventId(detailPanelEvent.id);
+                setDetailPanelEvent(null);
+              }
+            : undefined
+        }
+        onDelete={
+          mode === 'edit'
+            ? () => {
+                if (!detailPanelEvent) return;
+                handleDeleteEvent(detailPanelEvent.id);
+                setDetailPanelEvent(null);
+              }
+            : undefined
+        }
       />
     </div>
   );

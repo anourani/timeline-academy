@@ -2,14 +2,16 @@ import React, { memo, useRef, useEffect, useState, useLayoutEffect } from 'react
 import { TimelineEvent as ITimelineEvent } from '../../types/event';
 import { Month, TimelineScale } from '../../types/timeline';
 import { EVENT_ROW_HEIGHT, EVENT_MIN_WIDTH } from '../../constants/timeline';
-import { findMonthIndex, parseDateParts } from '../../utils/dateUtils';
+import { findMonthIndex, formatDateLong, parseDateParts } from '../../utils/dateUtils';
 
 interface TimelineEventProps {
   event: ITimelineEvent & { stackIndex: number };
   months: Month[];
   categoryOffset: number;
   categoryColor?: string;
-  onEventClick?: (event: ITimelineEvent, position: { x: number; y: number }) => void;
+  /** Left click / Enter / Space. No position argument: the click opens the
+   *  detail panel rather than a menu that needed anchoring. */
+  onEventClick?: (event: ITimelineEvent) => void;
   scale?: TimelineScale;
   isDragging?: boolean;
   dragDeltaPixels?: number;
@@ -110,16 +112,31 @@ export const TimelineEvent = memo(function TimelineEvent({
   );
 
   const isSingleDay = event.startDate === event.endDate;
-  const isDraggable = !!onPointerDown;
 
-  const handleClick = (e: React.MouseEvent) => {
+  const dateLabel = isSingleDay
+    ? formatDateLong(event.startDate)
+    : `${formatDateLong(event.startDate)} to ${formatDateLong(event.endDate)}`;
+  const ariaLabel = `${event.title}, ${dateLabel}. Open details`;
+
+  const activate = () => {
+    // A click that ends a drag is swallowed — the drop is the gesture, not a
+    // request to open the panel.
     if (wasDraggingRef.current) {
       wasDraggingRef.current = false;
       return;
     }
-    if (onEventClick) {
-      onEventClick(event, { x: e.clientX, y: e.clientY });
-    }
+    onEventClick?.(event);
+  };
+
+  const handleClick = () => {
+    activate();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    // Space would otherwise scroll the page out from under the timeline.
+    e.preventDefault();
+    activate();
   };
 
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -199,9 +216,17 @@ export const TimelineEvent = memo(function TimelineEvent({
       {/* Main event element */}
       <div
         ref={setRef}
-        className={`flex items-center text-text-secondary hover:text-text-primary group rounded p-0.5 ${
+        // `data-event-id` / `data-event-color` are how Timeline's single
+        // delegated pointermove resolves which event is under the cursor and
+        // what colour to paint it — no per-event listener.
+        data-event-id={event.id}
+        data-event-color={categoryColor}
+        role="button"
+        tabIndex={0}
+        aria-label={ariaLabel}
+        className={`timeline-event flex items-center text-text-secondary hover:text-text-primary group rounded p-0.5 ${
           isDragging ? 'select-none' : 'transition-colors hover:brightness-110'
-        } ${isDraggable ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-pointer'}`}
+        } ${isDragging ? 'cursor-grabbing' : 'cursor-none'}`}
         style={{
           gridColumn: `${startColumn} / ${endColumn}`,
           gridRow: event.stackIndex + 1,
@@ -215,12 +240,15 @@ export const TimelineEvent = memo(function TimelineEvent({
             : undefined,
           opacity: isDragging ? 0.92 : 1,
           transition,
+          ['--event-focus-color' as string]: categoryColor,
         }}
         onClick={handleClick}
+        onKeyDown={handleKeyDown}
         onPointerDown={handlePointerDown}
         onDragStart={(e) => e.preventDefault()}
         onTransitionEnd={handleTransitionEnd}
-        title={`${event.title} (${event.startDate}${event.endDate !== event.startDate ? ` to ${event.endDate}` : ''})`}
+        // No native `title`: the OS tooltip fights the custom cursor, and the
+        // aria-label already carries the same information for assistive tech.
       >
         {eventContent}
       </div>
