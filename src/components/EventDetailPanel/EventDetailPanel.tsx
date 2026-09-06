@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Pencil, Trash2, X } from 'lucide-react'
 import { ConfirmationModal } from '../Modal/ConfirmationModal'
@@ -44,6 +44,12 @@ type PanelState = 'idle' | 'generating' | 'loaded' | 'error'
  * of waiting, and an empty frame is the honest answer to the last two.
  */
 type ImageState = 'idle' | 'loading' | 'settled'
+
+/** Keys that scroll a container, plus Tab — moving focus to a link near the
+ *  bottom scrolls it into view, and that is the reader's doing. */
+const SCROLL_KEYS = new Set([
+  'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' ', 'Tab',
+])
 
 /** Ragged on purpose — three equal bars read as a table, not as a list. */
 const SOURCE_SKELETON_WIDTHS = ['72%', '54%', '63%']
@@ -101,6 +107,13 @@ export function EventDetailPanel({
   const abortRef = useRef<AbortController | null>(null)
   const panelRef = useRef<HTMLElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
+  // Hold the reader at the top while content is still arriving — but only until
+  // they scroll, after which the panel is theirs and nothing here touches it
+  // again. Stated as a guarantee rather than a fix for one mechanism: the panel
+  // has no scroll code of its own, so anything that moves it (a browser
+  // heuristic, a late reflow, a focus we don't control) is something this holds
+  // against without having to name it first.
+  const pinnedRef = useRef(true)
   const isWindowResizing = useWindowResizing()
   const skipTransition = isResizing || isWindowResizing
 
@@ -115,8 +128,10 @@ export function EventDetailPanel({
       return
     }
 
-    // A new event starts at the top. The panel is reused across events, so
-    // without this, opening one inherits wherever the last one was left.
+    // A new event starts at the top, pinned again. The panel is reused across
+    // events, so without this, opening one inherits both the previous event's
+    // offset and the previous reader's decision to have scrolled away from it.
+    pinnedRef.current = true
     if (contentRef.current) contentRef.current.scrollTop = 0
 
     if (hasGeneratedContent(event)) {
@@ -147,6 +162,71 @@ export function EventDetailPanel({
     runGeneration(event, false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, event?.id])
+
+  // The pin is released by the reader's *input*, not by the scroll position
+  // moving. That distinction is the whole design: a scroll event alone cannot
+  // say who caused it, and the thing being guarded against is precisely a
+  // scroll nobody asked for. So intent is read from the gestures that scroll a
+  // container — wheel and trackpad, touch drag, the scrollbar itself, and the
+  // scroll keys once focus is inside the panel — and anything that moves the
+  // offset without one of those is put back.
+  useEffect(() => {
+    const el = contentRef.current
+    if (!el) return
+
+    const release = () => {
+      pinnedRef.current = false
+    }
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (SCROLL_KEYS.has(e.key)) release()
+    }
+    const handlePointerDown = (e: PointerEvent) => {
+      // Only a press in the scrollbar gutter counts; a click on a button or a
+      // source link is not a request to move the view. Overlay scrollbars (the
+      // macOS default) leave no gutter and may not dispatch here at all, but
+      // they are also invisible until something has already scrolled — and that
+      // scroll was a wheel or trackpad gesture, which released the pin above.
+      const offsetX = e.clientX - el.getBoundingClientRect().left
+      if (offsetX >= el.clientWidth) release()
+    }
+    const handleScroll = () => {
+      // Only while content is still arriving. Once generation is done nothing
+      // grows, so there is nothing left to guard against and the panel is
+      // entirely the reader's — this keeps the guard to the few seconds it is
+      // actually for.
+      if (state !== 'generating') return
+      if (!pinnedRef.current || el.scrollTop === 0) return
+      // Nobody asked for this. Put it back.
+      el.scrollTop = 0
+    }
+
+    el.addEventListener('wheel', release, { passive: true })
+    el.addEventListener('touchmove', release, { passive: true })
+    el.addEventListener('keydown', handleKeyDown)
+    el.addEventListener('pointerdown', handlePointerDown)
+    el.addEventListener('scroll', handleScroll, { passive: true })
+    return () => {
+      el.removeEventListener('wheel', release)
+      el.removeEventListener('touchmove', release)
+      el.removeEventListener('keydown', handleKeyDown)
+      el.removeEventListener('pointerdown', handlePointerDown)
+      el.removeEventListener('scroll', handleScroll)
+    }
+  }, [state])
+
+  // Re-assert the top before paint whenever something that grows has grown, so
+  // a displaced position is never shown even for a frame. The scroll listener
+  // above is the backstop for anything the browser adjusts after layout, which
+  // is too late for this effect to see. Writing 0 over 0 is a no-op, so in the
+  // ordinary case this costs a ref check and nothing else.
+  useLayoutEffect(() => {
+    if (!pinnedRef.current) return
+    const el = contentRef.current
+    if (!el || el.scrollTop === 0) return
+    el.scrollTop = 0
+    // The raw state rather than the `display*` values derived further down —
+    // same signal, and these exist at this point in the component.
+  }, [streamedDescription, imageUrl, imageAttribution, sources])
 
   // Cleanup on unmount
   useEffect(() => {
