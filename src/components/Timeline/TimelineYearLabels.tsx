@@ -1,4 +1,4 @@
-import React from 'react';
+import { memo } from 'react';
 import { Month, TimelineScale } from '../../types/timeline';
 import { getUniqueYears } from '../../utils/timelineUtils';
 
@@ -7,7 +7,7 @@ interface TimelineYearLabelsProps {
   scale: TimelineScale;
 }
 
-export function TimelineYearLabels({ months, scale }: TimelineYearLabelsProps) {
+export const TimelineYearLabels = memo(function TimelineYearLabels({ months, scale }: TimelineYearLabelsProps) {
   const years = getUniqueYears(months);
   
   return (
@@ -37,4 +37,4 @@ export function TimelineYearLabels({ months, scale }: TimelineYearLabelsProps) {
       })}
     </div>
   );
-}
+});

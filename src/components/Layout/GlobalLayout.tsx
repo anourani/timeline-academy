@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import { GlobalSidePanel } from '@/components/SidePanel/GlobalSidePanel'
 import { PanelResizeHandle } from '@/components/ui/PanelResizeHandle'
 import { useSidePanel } from '@/hooks/useSidePanel'
+import { useWindowResizing } from '@/hooks/useWindowResizing'
 
 interface GlobalLayoutProps {
   children: ReactNode
@@ -30,16 +31,21 @@ interface GlobalLayoutProps {
  * `-translate-x-full` is a percentage of the panel's own width, so the collapse
  * animation follows both a variable width and a full-viewport one for free. The
  * width itself needs an explicit transition leg, dropped mid-drag so the edge
- * tracks the cursor instead of easing 300ms behind it.
+ * tracks the cursor instead of easing 300ms behind it — and dropped for a
+ * *window* drag too, since below the breakpoint the viewport clamp moves the
+ * same width every frame and each move would restart an ease that never
+ * finishes.
  */
 export function GlobalLayout({ children }: GlobalLayoutProps) {
   const { isOpen, width, setWidth, resetWidth, isResizing, setIsResizing } = useSidePanel()
+  const isWindowResizing = useWindowResizing()
+  const skipTransition = isResizing || isWindowResizing
 
   return (
     <div className="min-h-screen">
       <aside
         className={`fixed inset-0 z-40 md:inset-y-0 md:left-0 md:right-auto md:w-[var(--side-panel-width)] md:pl-[6px] md:py-[6px] ${
-          isResizing ? '' : 'transition-[transform,width] duration-300 ease-out'
+          skipTransition ? '' : 'transition-[transform,width] duration-300 ease-out'
         } ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
         style={{ '--side-panel-width': `${width}px` } as CSSProperties}
         aria-hidden={!isOpen}
@@ -58,7 +64,7 @@ export function GlobalLayout({ children }: GlobalLayoutProps) {
       </aside>
       <div
         className={`min-h-screen md:pl-[var(--side-panel-push)] ${
-          isResizing ? '' : 'transition-[padding-left] duration-300 ease-out'
+          skipTransition ? '' : 'transition-[padding-left] duration-300 ease-out'
         }`}
         style={{ '--side-panel-push': isOpen ? `${width}px` : '0px' } as CSSProperties}
       >

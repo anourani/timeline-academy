@@ -3,6 +3,7 @@ import { Plus, CalendarFold, Bolt } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ModeTabs } from '@/components/FloatingToolbar/ModeTabs'
 import { useSidePanel } from '@/hooks/useSidePanel'
+import { useWindowResizing } from '@/hooks/useWindowResizing'
 
 interface FloatingToolbarProps {
   onAddEventClick: () => void
@@ -26,6 +27,10 @@ export function FloatingToolbar({
   // user-resizable, so it has to be read live — a local copy of the constant
   // would drift silently on the first drag.
   const { isOpen: isSidePanelOpen, width: sidePanelWidth, isResizing } = useSidePanel()
+  // Dropped for a window drag as well as a handle drag: the same width feeds
+  // this transform, so an ease left on would trail the viewport edge.
+  const isWindowResizing = useWindowResizing()
+  const skipTransition = isResizing || isWindowResizing
   const desktopTranslateX = isSidePanelOpen
     ? `calc(-50% + ${sidePanelWidth / 2}px)`
     : '-50%'
@@ -53,7 +58,7 @@ export function FloatingToolbar({
           bg-[rgba(23,23,23,0.8)] border border-[#262626] backdrop-blur-[2px]
           rounded-[20px]
           will-change-transform
-          ${isResizing ? '' : 'transition-transform duration-300 ease-out'}
+          ${skipTransition ? '' : 'transition-transform duration-300 ease-out'}
         `}
         style={{ transform: `translateX(${desktopTranslateX})` }}
       >

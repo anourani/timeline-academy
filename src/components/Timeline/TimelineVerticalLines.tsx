@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { Month, TimelineScale } from '../../types/timeline';
 
 interface TimelineVerticalLinesProps {
@@ -13,7 +13,7 @@ function monthKey(month: Month): string {
   return `${month.year}-${month.month}`;
 }
 
-export function TimelineVerticalLines({
+export const TimelineVerticalLines = memo(function TimelineVerticalLines({
   months,
   scale,
   scrollContainerRef,
@@ -135,4 +135,4 @@ export function TimelineVerticalLines({
       })()}
     </div>
   );
-}
+});

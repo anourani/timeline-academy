@@ -1,4 +1,4 @@
-import React from 'react';
+import { memo } from 'react';
 import { TimelineYearLabels } from './TimelineYearLabels';
 import { TimelineMonthLabels } from './TimelineMonthLabels';
 import { Month, TimelineScale } from '../../types/timeline';
@@ -8,7 +8,7 @@ interface TimelineHeaderProps {
   scale: TimelineScale;
 }
 
-export function TimelineHeader({ months, scale }: TimelineHeaderProps) {
+export const TimelineHeader = memo(function TimelineHeader({ months, scale }: TimelineHeaderProps) {
   return (
     <div 
       className="grid transition-[grid-template-columns] duration-200 ease-in-out"
@@ -18,4 +18,4 @@ export function TimelineHeader({ months, scale }: TimelineHeaderProps) {
       <TimelineMonthLabels months={months} scale={scale} />
     </div>
   );
-}
+});

@@ -1,4 +1,4 @@
-import React from 'react';
+import { memo } from 'react';
 import { format } from 'date-fns';
 import { Month, TimelineScale } from '../../types/timeline';
 import { getMonthBorderClass } from '../../utils/timelineUtils';
@@ -12,7 +12,7 @@ interface TimelineMonthLabelsProps {
   scale: TimelineScale;
 }
 
-export function TimelineMonthLabels({ months, scale }: TimelineMonthLabelsProps) {
+export const TimelineMonthLabels = memo(function TimelineMonthLabels({ months, scale }: TimelineMonthLabelsProps) {
   return (
     <div 
       className="border-l border-line-default transition-[grid-template-columns] duration-200 ease-in-out"
@@ -37,4 +37,4 @@ export function TimelineMonthLabels({ months, scale }: TimelineMonthLabelsProps)
       ))}
     </div>
   );
-}
+});

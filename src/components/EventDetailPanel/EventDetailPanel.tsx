@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Pencil, Trash2, X } from 'lucide-react'
 import { ConfirmationModal } from '../Modal/ConfirmationModal'
 import { PanelResizeHandle } from '../ui/PanelResizeHandle'
+import { Skeleton, SkeletonText } from '../ui/skeleton'
 import { usePanelWidth } from '@/hooks/usePanelWidth'
+import { useWindowResizing } from '@/hooks/useWindowResizing'
 import { PANEL_DEFAULT_WIDTH } from '@/constants/panels'
 import { formatDateLong } from '@/utils/dateUtils'
 import {
@@ -31,6 +33,27 @@ interface EventDetailPanelProps {
 
 type PanelState = 'idle' | 'generating' | 'loaded' | 'error'
 
+/**
+ * The image is a separate request from the description — a Wikipedia lookup
+ * that runs alongside the stream — so it needs its own state. Keying its
+ * placeholder off `PanelState` meant the frame stopped pulsing the moment the
+ * *text* finished, with the picture still in flight, and kept pulsing for the
+ * whole generation when Wikipedia had no picture to give.
+ *
+ * `'settled'` covers found, not-found and failed alike: all three are the end
+ * of waiting, and an empty frame is the honest answer to the last two.
+ */
+type ImageState = 'idle' | 'loading' | 'settled'
+
+/** Keys that scroll a container, plus Tab — moving focus to a link near the
+ *  bottom scrolls it into view, and that is the reader's doing. */
+const SCROLL_KEYS = new Set([
+  'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' ', 'Tab',
+])
+
+/** Ragged on purpose — three equal bars read as a table, not as a list. */
+const SOURCE_SKELETON_WIDTHS = ['72%', '54%', '63%']
+
 function formatDateRange(event: TimelineEvent): string {
   if (event.startDate === event.endDate) return formatDateLong(event.startDate)
   return `${formatDateLong(event.startDate)} → ${formatDateLong(event.endDate)}`
@@ -54,6 +77,8 @@ export function EventDetailPanel({
   const [streamedDescription, setStreamedDescription] = useState('')
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [imageAttribution, setImageAttribution] = useState<string | null>(null)
+  const [imageState, setImageState] = useState<ImageState>('idle')
+  const [imageLoaded, setImageLoaded] = useState(false)
   const [sources, setSources] = useState<EventSource[]>([])
   const [errorMessage, setErrorMessage] = useState('')
   const [errorProvider, setErrorProvider] = useState<ByokProvider | null>(null)
@@ -81,6 +106,16 @@ export function EventDetailPanel({
     : null
   const abortRef = useRef<AbortController | null>(null)
   const panelRef = useRef<HTMLElement | null>(null)
+  const contentRef = useRef<HTMLDivElement | null>(null)
+  // Hold the reader at the top while content is still arriving — but only until
+  // they scroll, after which the panel is theirs and nothing here touches it
+  // again. Stated as a guarantee rather than a fix for one mechanism: the panel
+  // has no scroll code of its own, so anything that moves it (a browser
+  // heuristic, a late reflow, a focus we don't control) is something this holds
+  // against without having to name it first.
+  const pinnedRef = useRef(true)
+  const isWindowResizing = useWindowResizing()
+  const skipTransition = isResizing || isWindowResizing
 
   // Reset state when the panel closes or the event changes.
   useEffect(() => {
@@ -93,6 +128,12 @@ export function EventDetailPanel({
       return
     }
 
+    // A new event starts at the top, pinned again. The panel is reused across
+    // events, so without this, opening one inherits both the previous event's
+    // offset and the previous reader's decision to have scrolled away from it.
+    pinnedRef.current = true
+    if (contentRef.current) contentRef.current.scrollTop = 0
+
     if (hasGeneratedContent(event)) {
       // Cached content — render straight from the event.
       setState('loaded')
@@ -100,6 +141,10 @@ export function EventDetailPanel({
       setImageUrl(event.imageUrl ?? null)
       setImageAttribution(event.imageAttribution ?? null)
       setSources(event.sources ?? [])
+      // Nothing is being fetched, so nothing should be pulsing. `imageLoaded`
+      // stays false until the <img> paints — a cached URL is still bytes away.
+      setImageState('settled')
+      setImageLoaded(false)
       return
     }
 
@@ -117,6 +162,71 @@ export function EventDetailPanel({
     runGeneration(event, false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, event?.id])
+
+  // The pin is released by the reader's *input*, not by the scroll position
+  // moving. That distinction is the whole design: a scroll event alone cannot
+  // say who caused it, and the thing being guarded against is precisely a
+  // scroll nobody asked for. So intent is read from the gestures that scroll a
+  // container — wheel and trackpad, touch drag, the scrollbar itself, and the
+  // scroll keys once focus is inside the panel — and anything that moves the
+  // offset without one of those is put back.
+  useEffect(() => {
+    const el = contentRef.current
+    if (!el) return
+
+    const release = () => {
+      pinnedRef.current = false
+    }
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (SCROLL_KEYS.has(e.key)) release()
+    }
+    const handlePointerDown = (e: PointerEvent) => {
+      // Only a press in the scrollbar gutter counts; a click on a button or a
+      // source link is not a request to move the view. Overlay scrollbars (the
+      // macOS default) leave no gutter and may not dispatch here at all, but
+      // they are also invisible until something has already scrolled — and that
+      // scroll was a wheel or trackpad gesture, which released the pin above.
+      const offsetX = e.clientX - el.getBoundingClientRect().left
+      if (offsetX >= el.clientWidth) release()
+    }
+    const handleScroll = () => {
+      // Only while content is still arriving. Once generation is done nothing
+      // grows, so there is nothing left to guard against and the panel is
+      // entirely the reader's — this keeps the guard to the few seconds it is
+      // actually for.
+      if (state !== 'generating') return
+      if (!pinnedRef.current || el.scrollTop === 0) return
+      // Nobody asked for this. Put it back.
+      el.scrollTop = 0
+    }
+
+    el.addEventListener('wheel', release, { passive: true })
+    el.addEventListener('touchmove', release, { passive: true })
+    el.addEventListener('keydown', handleKeyDown)
+    el.addEventListener('pointerdown', handlePointerDown)
+    el.addEventListener('scroll', handleScroll, { passive: true })
+    return () => {
+      el.removeEventListener('wheel', release)
+      el.removeEventListener('touchmove', release)
+      el.removeEventListener('keydown', handleKeyDown)
+      el.removeEventListener('pointerdown', handlePointerDown)
+      el.removeEventListener('scroll', handleScroll)
+    }
+  }, [state])
+
+  // Re-assert the top before paint whenever something that grows has grown, so
+  // a displaced position is never shown even for a frame. The scroll listener
+  // above is the backstop for anything the browser adjusts after layout, which
+  // is too late for this effect to see. Writing 0 over 0 is a no-op, so in the
+  // ordinary case this costs a ref check and nothing else.
+  useLayoutEffect(() => {
+    if (!pinnedRef.current) return
+    const el = contentRef.current
+    if (!el || el.scrollTop === 0) return
+    el.scrollTop = 0
+    // The raw state rather than the `display*` values derived further down —
+    // same signal, and these exist at this point in the component.
+  }, [streamedDescription, imageUrl, imageAttribution, sources])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -175,6 +285,7 @@ export function EventDetailPanel({
     if (!preserveImage) {
       setImageUrl(null)
       setImageAttribution(null)
+      setImageLoaded(false)
     }
     setSources([])
     setErrorMessage('')
@@ -189,6 +300,7 @@ export function EventDetailPanel({
 
     // Image fetch in parallel with text streaming. Only re-fetch if not preserving.
     if (!preserveImage) {
+      setImageState('loading')
       fetchEventImage(currentEvent.title)
         .then((res) => {
           if (ctrl.signal.aborted) return
@@ -196,10 +308,17 @@ export function EventDetailPanel({
           nextImageAttribution = res.attribution
           setImageUrl(res.imageUrl)
           setImageAttribution(res.attribution)
+          setImageState('settled')
         })
         .catch(() => {
-          // Already returns null/null on errors — nothing to do.
+          // `fetchEventImage` already resolves to null/null on failure, so this
+          // only fires on something unexpected — but the frame must stop
+          // waiting either way rather than pulse forever.
+          if (ctrl.signal.aborted) return
+          setImageState('settled')
         })
+    } else {
+      setImageState('settled')
     }
 
     enrichEvent(
@@ -279,6 +398,17 @@ export function EventDetailPanel({
   const displayAttribution = state === 'loaded' ? event?.imageAttribution ?? imageAttribution : imageAttribution
   const displaySources = state === 'loaded' ? event?.sources ?? sources : sources
 
+  // The description slot rendered nothing at all until the first token landed —
+  // seconds, because `enrichEvent` runs a web search before it writes a word.
+  const showDescriptionSkeleton = state === 'generating' && description.length === 0
+  // Sources arrive on their own callback, usually before the stream finishes.
+  const showSourcesSkeleton = state === 'generating' && displaySources.length === 0
+  // Pulse while the lookup is in flight, and keep pulsing once a URL is known
+  // until the bytes actually paint. Settling with no image stops the pulse: an
+  // empty frame is the answer, and an answer should not look like waiting.
+  const showImageSkeleton =
+    imageState === 'loading' || (!!displayImageUrl && !imageLoaded)
+
   return createPortal(
     <>
       {/* Backdrop — same bg-black/50 overlay used by FeedbackPanel and
@@ -298,7 +428,7 @@ export function EventDetailPanel({
         // panel is full-screen off `inset-0` and must not be constrained.
         style={{ '--event-panel-width': `${width}px` } as React.CSSProperties}
         className={`fixed inset-0 md:inset-y-0 md:right-0 md:left-auto md:w-[var(--event-panel-width)] md:pr-[6px] md:py-[6px] z-50 ${
-          isResizing ? '' : 'transition-[transform,width] duration-300 ease-out'
+          skipTransition ? '' : 'transition-[transform,width] duration-300 ease-out'
         } ${open ? 'translate-x-0' : 'translate-x-full'}`}
         aria-hidden={!open}
         aria-label="Event details"
@@ -314,9 +444,31 @@ export function EventDetailPanel({
           />
         )}
         <div className="h-full w-full bg-[#171717] flex flex-col overflow-hidden border-0 md:border md:border-[#262626] rounded-none md:rounded-[6px]">
-          <div className="flex flex-col items-stretch p-[24px_20px] gap-[16px] overflow-y-auto flex-1 min-h-0">
+          {/* Scroll anchoring is deliberately left at the browser default. It
+              was suspected of walking the panel down as the description
+              streamed, but measurement says otherwise: appending paragraphs
+              below the reader moves nothing, and where anchoring does act — a
+              late image or attribution growing *above* the reader — it holds
+              them on the same sentence, which is what a reader wants. Turning
+              it off would reintroduce that jump. */}
+          <div
+            ref={contentRef}
+            aria-busy={state === 'generating'}
+            className="flex flex-col items-stretch p-[24px_20px] gap-[16px] overflow-y-auto flex-1 min-h-0"
+          >
             {event && (
               <>
+                {/* The skeletons are `aria-hidden`, so this is the only thing
+                    telling a screen reader that the panel is mid-generation.
+                    `polite` — it must not interrupt whatever is being read. */}
+                <p className="sr-only" role="status" aria-live="polite">
+                  {state === 'generating'
+                    ? 'Generating event details'
+                    : state === 'loaded'
+                      ? 'Event details ready'
+                      : ''}
+                </p>
+
                 {/* Date row + authoring actions + mobile close */}
                 <div className="flex items-center justify-between gap-3">
                   <p className="label-s-type1 text-[#9B9EA3] m-0">
@@ -348,10 +500,17 @@ export function EventDetailPanel({
                 </div>
 
                 {/* Photo frame. Fluid rather than a fixed 274px so it follows
-                    a resized panel; the 274/205 ratio is preserved. */}
+                    a resized panel; the 274/205 ratio is preserved.
+
+                    `shrink-0` is load-bearing. This is a flex item in a column
+                    whose content overflows as soon as a description arrives,
+                    and an aspect-ratio box has no min-content height to stop
+                    flexbox squeezing it — without this the frame collapsed to a
+                    2px line the moment the text got long, taking the picture
+                    with it. */}
                 <div
-                  className={`w-full aspect-[274/205] bg-[#0A0A0A] border border-[#525252] rounded-[8px] overflow-hidden ${
-                    state === 'generating' && !displayImageUrl ? 'animate-pulse' : ''
+                  className={`w-full shrink-0 aspect-[274/205] bg-[#0A0A0A] border border-[#525252] rounded-[8px] overflow-hidden ${
+                    showImageSkeleton ? 'animate-pulse' : ''
                   }`}
                 >
                   {displayImageUrl && (
@@ -361,6 +520,11 @@ export function EventDetailPanel({
                       // Never send the page URL (a /view share link is the
                       // access capability itself) to the image host.
                       referrerPolicy="no-referrer"
+                      onLoad={() => setImageLoaded(true)}
+                      // A broken URL stops the wait like a successful one — the
+                      // frame is empty either way, and pulsing at an image that
+                      // will never arrive is the bug this replaces.
+                      onError={() => setImageLoaded(true)}
                       className="w-full h-full object-cover rounded-[8px]"
                     />
                   )}
@@ -408,6 +572,16 @@ export function EventDetailPanel({
                       )}
                     </div>
                   </div>
+                ) : showDescriptionSkeleton ? (
+                  // Two blocks rather than one run of bars: the reserved height
+                  // matches the two-paragraph shape most descriptions come back
+                  // in, so the first token replaces the skeleton instead of
+                  // pushing the page around. Both vanish together — a skeleton
+                  // tail below streaming text dances on every token.
+                  <>
+                    <SkeletonText lines={4} />
+                    <SkeletonText lines={4} />
+                  </>
                 ) : (
                   description &&
                   description
@@ -421,6 +595,20 @@ export function EventDetailPanel({
                 )}
 
                 {/* Sources */}
+                {showSourcesSkeleton && (
+                  <div className="flex flex-col gap-0">
+                    <h3 className="label-m-type2 text-[#9B9EA3] m-0 mb-2">Sources</h3>
+                    {SOURCE_SKELETON_WIDTHS.map((width, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center py-2 border-b border-[#262626] last:border-b-0"
+                      >
+                        <Skeleton className="h-[14px]" style={{ width }} />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {displaySources && displaySources.length > 0 && (
                   <div className="flex flex-col gap-0">
                     <h3 className="label-m-type2 text-[#9B9EA3] m-0 mb-2">Sources</h3>
