@@ -1047,10 +1047,15 @@ export function App() {
         <main className="timeline-container relative flex-1 min-h-0 flex flex-col pt-[140px]">
           {/* Absolutely positioned inside the 140px band, which was empty
               before this — so the strip appearing or disappearing never moves
-              the canvas. Pinned 24px above the year readout rather than to the
-              top of the band, which is the spacing the design specifies and
-              keeps the chips visually attached to the timeline they index. */}
-          <div className="absolute inset-x-0 bottom-[24px] top-auto">
+              the canvas.
+
+              Offset from the TOP, not the bottom. `main` is `flex-1`, so its
+              containing block runs all the way to the bottom of the viewport:
+              a `bottom-` offset put the strip down among the floating dock,
+              ~650px below the readout it belongs to. The band is 140px, the
+              strip is 40px, and the design wants 24px of air above the
+              readout — so 140 - 24 - 40 = 76. */}
+          <div className="absolute inset-x-0 top-[76px] h-[40px]">
             <ChaptersStrip
               chapters={chapters}
               events={events}
