@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { TimelineEvent, CategoryConfig } from '../types/event';
+import type { TimelineChapter } from '../types/timeline';
 import { useAuth } from './useAuth';
 import { DEFAULT_TIMELINE_TITLE } from '../constants/defaults';
 import { notifyUsageChanged } from '../utils/usageChanged';
@@ -45,6 +46,7 @@ export interface TimelineData {
   description?: string;
   events: TimelineEvent[];
   categories?: CategoryConfig[];
+  chapters?: TimelineChapter[];
   scale?: 'large' | 'medium' | 'small';
   verticalScale?: 'small' | 'medium';
   groupByCategory?: boolean;
@@ -173,6 +175,12 @@ export function useTimeline() {
       // Empty normalises to undefined so the editor falls back to defaults.
       categories: Array.isArray(timeline.categories) && timeline.categories.length > 0
         ? timeline.categories
+        : undefined,
+      // Same jsonb-column treatment, and the same empty-normalises-to-undefined
+      // rule. A timeline predating chapters — or one never AI-generated — has
+      // null here, and the editor simply renders no strip.
+      chapters: Array.isArray(timeline.chapters) && timeline.chapters.length > 0
+        ? timeline.chapters
         : undefined,
       scale: timeline.scale || 'large',
       verticalScale: timeline.vertical_scale || 'medium',

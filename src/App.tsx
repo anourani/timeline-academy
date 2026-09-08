@@ -23,6 +23,9 @@ import { LimitReachedError, getCurrentLimits } from './lib/limits';
 import { supabase } from './lib/supabase';
 import { DEFAULT_TIMELINE_TITLE } from './constants/defaults';
 import { DEFAULT_CATEGORIES } from './constants/categories';
+import { ChaptersStrip } from './components/Timeline/ChaptersStrip';
+import { findChapterAtMonth, normalizeChapters } from './utils/chapters';
+import { getTimelineRange } from './utils/dateUtils';
 
 function limitReachedMessage(kind: 'event' | 'timeline'): string {
   const { eventLimit, timelineLimit } = getCurrentLimits();
@@ -37,6 +40,7 @@ export function App() {
     events, addEvent, addEvents, clearEvents, setEvents, updateEvent,
     title, description, setTitle, setDescription,
     categories, updateCategories, resetCategories,
+    chapters, updateChapters, resetChapters,
     scale, currentScale, handleScaleChange,
     verticalScale, currentVerticalScale, handleVerticalScaleChange,
     groupByCategory, handleGroupByCategoryChange,
@@ -72,6 +76,10 @@ export function App() {
   // the EventForm dialog but sits outside the panel's subtree.
   const [pendingEditEventId, setPendingEditEventId] = useState<string | null>(null);
   const [pendingScrollDate, setPendingScrollDate] = useState<string | null>(null);
+  // Left-most visible month of the canvas, reported up by Timeline — which
+  // owns the scroll container. Only the chapters strip and the readout consume
+  // it, and both are cheap, so a plain state update per settled scroll is fine.
+  const [currentMonthIndex, setCurrentMonthIndex] = useState(0);
   const [draftHydrated, setDraftHydrated] = useState(false);
   // The route instruction a trial visitor asked for while their single slot was
   // still occupied. Held here rather than acted on, until they say what should
@@ -114,6 +122,7 @@ export function App() {
     description,
     events,
     categories,
+    chapters,
     scale: currentScale.value,
     verticalScale: currentVerticalScale.value,
     groupByCategory,
@@ -132,6 +141,23 @@ export function App() {
     [events, categories],
   );
 
+  // The same month range Timeline builds internally. Recomputed here rather
+  // than lifted out of Timeline: it is a pure function of `events`, memoised on
+  // the identical dependency, and passing it down would put the grid's geometry
+  // on a prop where a stale render could disagree with the canvas.
+  const { months } = useMemo(() => getTimelineRange(events), [events]);
+
+  const activeChapter = useMemo(
+    () => findChapterAtMonth(chapters, months, currentMonthIndex),
+    [chapters, months, currentMonthIndex],
+  );
+
+  // Stable identity: Timeline fires this from an effect keyed on the callback,
+  // so an inline arrow would re-run it on every render of the editor.
+  const handleVisibleMonthChange = useCallback((monthIndex: number) => {
+    setCurrentMonthIndex(monthIndex);
+  }, []);
+
   // Trigger autosave when timeline data changes.
   //
   // `loadedTimelineId` is null until a timeline's contents are actually in the
@@ -146,12 +172,13 @@ export function App() {
         description,
         events,
         categories,
+        chapters,
         scale: currentScale.value,
         verticalScale: currentVerticalScale.value,
         groupByCategory,
       });
     }
-  }, [loadedTimelineId, title, description, events, categories, currentScale.value, currentVerticalScale.value, groupByCategory, handleChange]);
+  }, [loadedTimelineId, title, description, events, categories, chapters, currentScale.value, currentVerticalScale.value, groupByCategory, handleChange]);
 
   // Hydrate from localStorage draft if logged out.
   //
@@ -175,6 +202,9 @@ export function App() {
           description: string;
           events: TimelineEvent[];
           categories: CategoryConfig[];
+          /** Absent when the responding model or edge function predates
+           *  chapters — see the parser in services/llmShared.ts. */
+          chapters?: Array<{ label: string; startDate: string; endDate: string }>;
         };
         importedEvents?: TimelineEvent[];
       } | null;
@@ -228,6 +258,7 @@ export function App() {
         setDescription(newDraft.description);
         setEvents(imported);
         updateCategories(newDraft.categories);
+        updateChapters(newDraft.chapters);
         handleScaleChange(newDraft.scale);
         handleVerticalScaleChange(newDraft.verticalScale ?? 'medium');
         if (imported.length > 0) {
@@ -253,12 +284,13 @@ export function App() {
           setDraftHydrated(true);
           return;
         }
-        const { title: aiTitle, description: aiDesc, events: aiEvents, categories: aiCategories } = routeState.aiGenerated;
+        const { title: aiTitle, description: aiDesc, events: aiEvents, categories: aiCategories, chapters: aiChapters } = routeState.aiGenerated;
         setActiveDraftId(newDraft.id);
         setTitle(aiTitle);
         setDescription(aiDesc);
         setEvents(aiEvents);
         updateCategories(aiCategories);
+        updateChapters(normalizeChapters(aiChapters));
         handleScaleChange(newDraft.scale);
         handleVerticalScaleChange(newDraft.verticalScale ?? 'medium');
         if (aiEvents.length > 0) {
@@ -288,6 +320,7 @@ export function App() {
         setDescription(newDraft.description);
         setEvents(newDraft.events);
         updateCategories(newDraft.categories);
+        updateChapters(newDraft.chapters);
         handleScaleChange(newDraft.scale);
         handleVerticalScaleChange(newDraft.verticalScale ?? 'medium');
         // Reset grouping too, or the previous draft's setting leaks into this
@@ -302,6 +335,7 @@ export function App() {
           setDescription(draft.description);
           setEvents(draft.events);
           updateCategories(draft.categories);
+          updateChapters(draft.chapters);
           handleScaleChange(draft.scale);
           handleVerticalScaleChange(draft.verticalScale ?? 'medium');
           handleGroupByCategoryChange(draft.groupByCategory ?? false);
@@ -320,6 +354,7 @@ export function App() {
           setDescription(mostRecent.description);
           setEvents(mostRecent.events);
           updateCategories(mostRecent.categories);
+          updateChapters(mostRecent.chapters);
           handleScaleChange(mostRecent.scale);
           handleVerticalScaleChange(mostRecent.verticalScale ?? 'medium');
           handleGroupByCategoryChange(mostRecent.groupByCategory ?? false);
@@ -334,7 +369,7 @@ export function App() {
       // Clear the route state so refreshing doesn't re-trigger
       routerNavigate('/editor', { replace: true, state: {} });
     }
-  }, [authReady, storageReconciled, tier, user, draftHydrated, createDraft, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange, loadAllDrafts, loadDraft, location.state, location.key, routerNavigate, setDescription, setEvents, setTitle, updateCategories]);
+  }, [authReady, storageReconciled, tier, user, draftHydrated, createDraft, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange, loadAllDrafts, loadDraft, location.state, location.key, routerNavigate, setDescription, setEvents, setTitle, updateCategories, updateChapters]);
 
   // Guest drafts save on a 500 ms debounce, so a rename followed immediately by
   // closing the tab or navigating away would be lost — the draft path has no
@@ -390,13 +425,14 @@ export function App() {
         description,
         events,
         categories,
+        chapters,
         scale: currentScale.value,
         verticalScale: currentVerticalScale.value,
         groupByCategory,
         savedAt: new Date().toISOString()
       });
     }
-  }, [user, storageReconciled, draftHydrated, activeDraftId, title, description, events, categories, currentScale.value, currentVerticalScale.value, groupByCategory, saveDraft]);
+  }, [user, storageReconciled, draftHydrated, activeDraftId, title, description, events, categories, chapters, currentScale.value, currentVerticalScale.value, groupByCategory, saveDraft]);
 
   /**
    * Move any work that is sitting in a store below the visitor's current tier
@@ -556,6 +592,9 @@ export function App() {
     // and every load would write itself straight back, reordering the panel
     // just for having been opened.
     const categories = data.categories?.length ? data.categories : DEFAULT_CATEGORIES;
+    // Same reasoning, one step simpler: chapters have no defaults to fall back
+    // to, so the empty array IS the resolved value and both sides get it.
+    const chapters = data.chapters ?? [];
 
     // First, before any setter, so no ordering of effects can let the autosave
     // effect see this content while the baseline still describes the last one.
@@ -565,6 +604,7 @@ export function App() {
       description,
       events: data.events,
       categories,
+      chapters,
       scale,
       verticalScale,
       groupByCategory,
@@ -574,11 +614,12 @@ export function App() {
     setDescription(description);
     setEvents(data.events);
     updateCategories(categories);
+    updateChapters(chapters);
     handleScaleChange(scale);
     handleVerticalScaleChange(verticalScale);
     handleGroupByCategoryChange(groupByCategory);
     setLoadedTimelineId(data.id);
-  }, [markClean, setTitle, setDescription, setEvents, updateCategories, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange]);
+  }, [markClean, setTitle, setDescription, setEvents, updateCategories, updateChapters, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange]);
 
   const switchTimeline = useCallback(async (newTimelineId: string) => {
     try {
@@ -625,6 +666,7 @@ export function App() {
         description: string;
         events: TimelineEvent[];
         categories: CategoryConfig[];
+        chapters?: Array<{ label: string; startDate: string; endDate: string }>;
       };
       importedEvents?: TimelineEvent[];
     } | null;
@@ -664,6 +706,7 @@ export function App() {
         setDescription(aiData.description);
         setEvents(aiData.events);
         updateCategories(aiData.categories);
+        updateChapters(normalizeChapters(aiData.chapters));
         if (aiData.events.length > 0) {
           const earliest = aiData.events.reduce((a, b) => a.startDate < b.startDate ? a : b);
           setPendingScrollDate(earliest.startDate);
@@ -683,7 +726,7 @@ export function App() {
       }
       routerNavigate('/editor', { replace: true, state: {} });
     }
-  }, [location.state, location.key, authReady, storageReconciled, user, routerNavigate, setDescription, setEvents, setTitle, switchTimeline, updateCategories]);
+  }, [location.state, location.key, authReady, storageReconciled, user, routerNavigate, setDescription, setEvents, setTitle, switchTimeline, updateCategories, updateChapters]);
 
   // Signed in, on /editor, with nothing in the route state telling us what to
   // show — a bookmark, a refresh, or the browser back button.
@@ -769,6 +812,7 @@ export function App() {
     setDescription(draft.description);
     setEvents(draft.events);
     updateCategories(draft.categories);
+    updateChapters(draft.chapters);
     handleScaleChange(draft.scale);
     handleVerticalScaleChange(draft.verticalScale ?? 'medium');
     handleGroupByCategoryChange(draft.groupByCategory ?? false);
@@ -910,6 +954,7 @@ export function App() {
     setDescription('');
     setEvents([]);
     resetCategories();
+    resetChapters();
     setActiveDraftId(null);
     setActivePanel(null);
     routerNavigate('/');
@@ -1000,6 +1045,21 @@ export function App() {
         </div>
       ) : (
         <main className="timeline-container relative flex-1 min-h-0 flex flex-col pt-[140px]">
+          {/* Absolutely positioned inside the 140px band, which was empty
+              before this — so the strip appearing or disappearing never moves
+              the canvas. Pinned 24px above the year readout rather than to the
+              top of the band, which is the spacing the design specifies and
+              keeps the chips visually attached to the timeline they index. */}
+          <div className="absolute inset-x-0 bottom-[24px] top-auto">
+            <ChaptersStrip
+              chapters={chapters}
+              events={events}
+              months={months}
+              currentMonthIndex={currentMonthIndex}
+              accentColor={timelineAccentColor}
+              onSelect={setPendingScrollDate}
+            />
+          </div>
           <Timeline
             events={events}
             categories={categories}
@@ -1013,6 +1073,8 @@ export function App() {
             onScrollComplete={() => setPendingScrollDate(null)}
             pendingEditEventId={pendingEditEventId}
             onEditRequestHandled={() => setPendingEditEventId(null)}
+            onVisibleMonthChange={handleVisibleMonthChange}
+            chapterLabel={activeChapter?.label}
             mode={mode}
           />
         </main>

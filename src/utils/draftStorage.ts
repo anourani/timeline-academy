@@ -1,4 +1,5 @@
 import type { TimelineEvent, CategoryConfig } from '../types/event'
+import type { TimelineChapter } from '../types/timeline'
 import { DEFAULT_CATEGORIES } from '../constants/categories'
 import { DEFAULT_TIMELINE_TITLE } from '../constants/defaults'
 import { PLAN_LIMITS } from '../constants/plans'
@@ -9,6 +10,8 @@ export interface LocalDraft {
   description: string
   events: TimelineEvent[]
   categories: CategoryConfig[]
+  /** Optional: drafts written before chapters existed simply don't have them. */
+  chapters?: TimelineChapter[]
   scale: 'large' | 'medium' | 'small'
   verticalScale?: 'small' | 'medium'
   groupByCategory?: boolean
@@ -110,6 +113,7 @@ export function createDraftStore(config: DraftStoreConfig): DraftStore {
         description: '',
         events: [],
         categories: [...DEFAULT_CATEGORIES],
+        chapters: [],
         scale: 'large',
         verticalScale: 'medium',
         groupByCategory: false,

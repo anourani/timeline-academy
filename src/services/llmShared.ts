@@ -176,6 +176,40 @@ export function parseTimelineJson(text: string): GeneratedTimeline {
     timelineTitle: obj.timelineTitle as string,
     timelineDescription: obj.timelineDescription as string,
     categoryMapping,
+    chapters: parseChapters(obj.chapters),
     events,
   }
+}
+
+/**
+ * Chapters are optional and never fatal.
+ *
+ * The site and the edge functions deploy on separate pipelines, so a browser
+ * running the new bundle routinely talks to a function still emitting the old
+ * shape (and cached bundles stretch that window further). A timeline without
+ * chapters simply renders no strip — throwing here would turn a normal deploy
+ * gap into a broken Generate button.
+ */
+function parseChapters(
+  raw: unknown,
+): Array<{ label: string; startDate: string; endDate: string }> | undefined {
+  if (!Array.isArray(raw)) return undefined
+
+  const chapters = (raw as Array<Record<string, unknown>>)
+    .filter(
+      (c) =>
+        typeof c.label === 'string' &&
+        c.label.length > 0 &&
+        typeof c.startDate === 'string' &&
+        c.startDate.length > 0 &&
+        typeof c.endDate === 'string' &&
+        c.endDate.length > 0,
+    )
+    .map((c) => ({
+      label: (c.label as string).slice(0, 30),
+      startDate: c.startDate as string,
+      endDate: c.endDate as string,
+    }))
+
+  return chapters.length > 0 ? chapters : undefined
 }

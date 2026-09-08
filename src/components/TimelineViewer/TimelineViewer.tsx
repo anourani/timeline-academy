@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useMemo, useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { Timeline } from '../Timeline/Timeline';
@@ -8,6 +8,11 @@ import { SCALES } from '../../constants/scales';
 import { VERTICAL_SCALES } from '../../constants/verticalScales';
 import { DEFAULT_CATEGORIES } from '../../constants/categories';
 import { TimelineEvent, CategoryConfig } from '../../types/event';
+import type { TimelineChapter } from '../../types/timeline';
+import { ChaptersStrip } from '../Timeline/ChaptersStrip';
+import { findChapterAtMonth, normalizeChapters } from '../../utils/chapters';
+import { computeDominantCategoryColor } from '../../utils/dominantCategory';
+import { getTimelineRange } from '../../utils/dateUtils';
 import {
   getCachedEvent,
   setCachedEvent,
@@ -18,6 +23,7 @@ interface TimelineData {
   description: string;
   events: TimelineEvent[];
   categories: CategoryConfig[];
+  chapters: TimelineChapter[];
   scale: 'large' | 'medium' | 'small';
   verticalScale: 'small' | 'medium';
   groupByCategory: boolean;
@@ -29,6 +35,8 @@ export function TimelineViewer() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [detailPanelEvent, setDetailPanelEvent] = useState<TimelineEvent | null>(null);
+  const [currentMonthIndex, setCurrentMonthIndex] = useState(0);
+  const [pendingScrollDate, setPendingScrollDate] = useState<string | null>(null);
 
   useEffect(() => {
     const loadTimeline = async () => {
@@ -109,6 +117,10 @@ export function TimelineViewer() {
           description: timelineData.description || '',
           events: formattedEvents,
           categories: categories,
+          // Present only once the chapters migration has been applied AND
+          // `get_public_timeline` recreated with the column — an older RPC
+          // simply omits the key, and the viewer shows no strip.
+          chapters: normalizeChapters(timelineData.chapters),
           scale: timelineData.scale || 'large',
           verticalScale: timelineData.vertical_scale ?? 'medium',
           groupByCategory: timelineData.group_by_category ?? false
@@ -123,6 +135,23 @@ export function TimelineViewer() {
 
     loadTimeline();
   }, [timelineId]);
+
+  // Derived above the early returns — these are hooks, so they have to run on
+  // the loading and error renders too. `timeline` is null until the fetch
+  // lands, hence the fallbacks.
+  const viewerEvents = useMemo(() => timeline?.events ?? [], [timeline]);
+  const { months } = useMemo(() => getTimelineRange(viewerEvents), [viewerEvents]);
+  const accentColor = useMemo(
+    () => computeDominantCategoryColor(viewerEvents, timeline?.categories ?? []),
+    [viewerEvents, timeline]
+  );
+  const activeChapter = useMemo(
+    () => findChapterAtMonth(timeline?.chapters ?? [], months, currentMonthIndex),
+    [timeline, months, currentMonthIndex]
+  );
+  const handleVisibleMonthChange = useCallback((monthIndex: number) => {
+    setCurrentMonthIndex(monthIndex);
+  }, []);
 
   if (loading) {
     return (
@@ -169,6 +198,16 @@ export function TimelineViewer() {
       </div>
 
       <main className="timeline-container relative mt-4">
+        {/* In flow here, unlike the editor: the viewer has no fixed band to
+            slot into, so the strip takes its own 40px above the canvas. */}
+        <ChaptersStrip
+          chapters={timeline.chapters}
+          events={timeline.events}
+          months={months}
+          currentMonthIndex={currentMonthIndex}
+          accentColor={accentColor}
+          onSelect={setPendingScrollDate}
+        />
         <Timeline
           events={timeline.events}
           categories={timeline.categories}
@@ -177,6 +216,10 @@ export function TimelineViewer() {
           groupByCategory={timeline.groupByCategory}
           mode="view"
           onOpenDetails={(event) => setDetailPanelEvent(event)}
+          onVisibleMonthChange={handleVisibleMonthChange}
+          chapterLabel={activeChapter?.label}
+          pendingScrollDate={pendingScrollDate}
+          onScrollComplete={() => setPendingScrollDate(null)}
         />
       </main>
 

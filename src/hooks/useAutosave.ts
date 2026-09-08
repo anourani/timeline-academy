@@ -12,6 +12,7 @@ import { notifyTimelineSaved } from '../utils/timelineSaved';
 import { notifyUsageChanged } from '../utils/usageChanged';
 import type { SaveStatus } from '../components/SaveStatusIndicator/SaveStatusIndicator';
 import type { TimelineEvent, CategoryConfig } from '../types/event';
+import type { TimelineChapter } from '../types/timeline';
 
 interface TimelineData {
   id: string | null;
@@ -19,6 +20,7 @@ interface TimelineData {
   description: string;
   events: TimelineEvent[];
   categories: CategoryConfig[];
+  chapters: TimelineChapter[];
   scale: 'large' | 'medium' | 'small';
   verticalScale: 'small' | 'medium';
   groupByCategory: boolean;
@@ -61,6 +63,7 @@ export function useAutosave(timelineData: TimelineData) {
       verticalScale: data.verticalScale,
       groupByCategory: data.groupByCategory,
       categories: data.categories,
+      chapters: data.chapters,
     }),
     events: eventsFpRef.current(data.events),
   }), []);
@@ -99,6 +102,7 @@ export function useAutosave(timelineData: TimelineData) {
           title: data.title,
           description: data.description,
           categories: data.categories,
+          chapters: data.chapters,
           scale: data.scale,
           vertical_scale: data.verticalScale,
           group_by_category: data.groupByCategory,

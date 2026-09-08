@@ -8,7 +8,7 @@ import { TimelineScrollIndicator } from './TimelineScrollIndicator';
 import { EventHoverCursor, EventHoverCursorHandle } from './EventHoverCursor';
 import { TimelineEvent as ITimelineEvent, CategoryConfig } from '../../types/event';
 import { TimelineScale, TimelineVerticalScale } from '../../types/timeline';
-import { formatYMD, getTimelineRange, shiftEventDates } from '../../utils/dateUtils';
+import { findMonthIndex, formatYMD, getTimelineRange, shiftEventDates } from '../../utils/dateUtils';
 import { calculateEventStacks, StackedEvent } from '../../utils/eventStacking';
 import { useTimelineScroll } from '../../hooks/useTimelineScroll';
 import { useEventDrag } from '../../hooks/useEventDrag';
@@ -41,6 +41,13 @@ interface TimelineProps {
    *  `pendingScrollDate` / `onScrollComplete` pair above. */
   pendingEditEventId?: string | null;
   onEditRequestHandled?: () => void;
+  /** Left-most visible month, reported on every scroll. The chapters strip
+   *  lives above this component and needs the scroll position this component
+   *  privately owns — same shape as the two callbacks above, so nothing has to
+   *  lift `scrollContainerRef` out. */
+  onVisibleMonthChange?: (monthIndex: number) => void;
+  /** Rendered beside the year in the readout — the chapter you are inside. */
+  chapterLabel?: string;
   /**
    * Edit/View mode. In view mode, edit affordances (drag-to-reschedule,
    * hover-to-add cursor, click-to-edit) are suppressed.
@@ -74,6 +81,8 @@ export function Timeline({
   onScrollComplete,
   pendingEditEventId,
   onEditRequestHandled,
+  onVisibleMonthChange,
+  chapterLabel,
   mode = 'edit',
 }: TimelineProps) {
   const isEditing = mode === 'edit';
@@ -110,6 +119,15 @@ export function Timeline({
   const hoveredEventIdRef = useRef<string | null>(null);
 
   const { visibleRange } = useTimelineScroll(scrollContainerRef, months.length * 4);
+
+  // `visibleRange` counts quarter-columns; the readout below does the same
+  // conversion to reach a month. Reported through an effect rather than from
+  // the scroll handler so subscribers only hear about it once per settled
+  // render, whatever the wheel lerp is doing.
+  const visibleMonthIndex = Math.max(0, Math.floor(visibleRange.start / 4));
+  useEffect(() => {
+    onVisibleMonthChange?.(visibleMonthIndex);
+  }, [visibleMonthIndex, onVisibleMonthChange]);
 
   // Translate vertical wheel into smooth horizontal scroll. A rAF loop lerps
   // scrollLeft toward an accumulated target so fast ticks glide instead of
@@ -164,8 +182,11 @@ export function Timeline({
   const scrollToDate = useCallback((dateStr: string) => {
     if (!months.length || !scrollContainerRef.current) return;
 
-    const [year, month] = dateStr.split('-').map(Number);
-    const monthIndex = months.findIndex(m => m.year === year && m.month === month - 1);
+    // `findMonthIndex` rather than an exact match: it clamps a date outside
+    // the rendered range to the nearest edge. Chapter boundaries sit near the
+    // padded ends of that range, and an exact lookup silently no-ops there —
+    // which reads as a dead chip.
+    const monthIndex = findMonthIndex(months, dateStr);
     if (monthIndex === -1) return;
 
     const pixelOffset = monthIndex * scale.monthWidth;
@@ -418,6 +439,7 @@ export function Timeline({
         <TimelineScrollIndicator
           months={months}
           visibleRange={visibleRange}
+          chapterLabel={chapterLabel}
         />
         <div
           ref={scrollContainerRef}
