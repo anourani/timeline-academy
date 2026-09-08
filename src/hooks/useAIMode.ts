@@ -20,6 +20,10 @@ interface GenerateResult {
   description: string;
   events: TimelineEvent[];
   categories: CategoryConfig[];
+  /** Raw wire shape — ids are assigned by `normalizeChapters` once the editor
+   *  seeds them. Absent whenever the model or edge function predates
+   *  chapters, so every consumer must treat it as optional. */
+  chapters?: Array<{ label: string; startDate: string; endDate: string }>;
 }
 
 export function useAIMode() {
@@ -138,6 +142,9 @@ export function useAIMode() {
         description: result.timelineDescription,
         events,
         categories,
+        // Passed straight through: unlike events and categories there is
+        // nothing to reshape here, and the editor normalises them.
+        chapters: result.chapters,
       };
     } catch (err) {
       if (abortedRef.current) {

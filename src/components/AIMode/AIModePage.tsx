@@ -41,11 +41,11 @@ export function AIModePage() {
   ) => {
     lastSubjectRef.current = subject
     try {
-      const { title, description, events, categories } =
+      const { title, description, events, categories, chapters } =
         await classifyAndGenerate(subject, providerOverride)
       navigate('/editor', {
         state: {
-          aiGenerated: { title, description, events, categories },
+          aiGenerated: { title, description, events, categories, chapters },
         },
       })
     } catch {
