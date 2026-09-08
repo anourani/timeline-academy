@@ -5,6 +5,11 @@ export interface GeneratedTimeline {
   timelineTitle: string;
   timelineDescription: string;
   categoryMapping?: Record<string, string>;
+  chapters?: Array<{
+    label: string;
+    startDate: string;
+    endDate: string;
+  }>;
   events: Array<{
     title: string;
     startDate: string;
@@ -220,8 +225,41 @@ function parseAndValidate(text: string): GeneratedTimeline {
     timelineTitle: obj.timelineTitle as string,
     timelineDescription: obj.timelineDescription as string,
     categoryMapping,
+    chapters: parseChapters(obj.chapters),
     events,
   };
+}
+
+/**
+ * Chapters are optional and never fatal.
+ *
+ * The site and these functions deploy on separate pipelines, so an old browser
+ * bundle routinely reads a new function's response and vice versa. A response
+ * without usable chapters just yields undefined — a client that doesn't know
+ * the field ignores it, and one that does renders no strip.
+ */
+function parseChapters(
+  raw: unknown
+): Array<{ label: string; startDate: string; endDate: string }> | undefined {
+  if (!Array.isArray(raw)) return undefined;
+
+  const chapters = (raw as Record<string, unknown>[])
+    .filter(
+      (c) =>
+        typeof c.label === "string" &&
+        c.label.length > 0 &&
+        typeof c.startDate === "string" &&
+        c.startDate.length > 0 &&
+        typeof c.endDate === "string" &&
+        c.endDate.length > 0
+    )
+    .map((c) => ({
+      label: (c.label as string).slice(0, 30),
+      startDate: c.startDate as string,
+      endDate: c.endDate as string,
+    }));
+
+  return chapters.length > 0 ? chapters : undefined;
 }
 
 // ---------------------------------------------------------------------------

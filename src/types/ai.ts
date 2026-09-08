@@ -33,6 +33,13 @@ export interface GeneratedTimeline {
   timelineTitle: string
   timelineDescription: string
   categoryMapping?: Record<string, string>
+  /** Optional: absent whenever the responding model or edge function predates
+   *  chapters. Ids are assigned client-side, so the wire shape has none. */
+  chapters?: Array<{
+    label: string
+    startDate: string
+    endDate: string
+  }>
   events: Array<{
     title: string
     startDate: string

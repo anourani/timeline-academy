@@ -22,7 +22,8 @@ HARD RULES:
    GOOD: "Scored 81 points vs. Raptors"
 4. DATE FORMAT — YYYY-MM-DD, AD years only (never a BC/BCE date). Year-only → January 1. Ranges → use startDate/endDate span. Chronological order.
 5. EVENT SPAN — Keep every event inside the subject's own span: for a person, birth to death. Express legacy and influence as events dated within that span, never as one long event reaching into later centuries.
-6. JSON ONLY — No markdown, no code fences, no explanation.
+6. CHAPTERS — Also divide the timeline into 3–7 named chapters: contiguous spans that together cover every event, with no gaps and no overlaps. Each chapter's startDate must be the first of a month, each label max 30 characters, named for what happened in that span ("Race to the Moon", not "Chapter 3"). The first chapter starts on or before the earliest event; the last ends on or after the latest.
+7. JSON ONLY — No markdown, no code fences, no explanation.
 
 RESPONSE SCHEMA:
 {
@@ -34,6 +35,13 @@ RESPONSE SCHEMA:
     "category_3": "<third category label>",
     "category_4": "<fourth category label>"
   },
+  "chapters": [
+    {
+      "label": "<max 30 chars>",
+      "startDate": "YYYY-MM-01",
+      "endDate": "YYYY-MM-DD"
+    }
+  ],
   "events": [
     {
       "title": "<max 55 chars>",

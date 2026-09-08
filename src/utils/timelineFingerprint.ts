@@ -1,4 +1,5 @@
 import type { TimelineEvent, CategoryConfig } from '../types/event';
+import type { TimelineChapter } from '../types/timeline';
 
 /**
  * Fingerprints for deciding whether a timeline actually changed.
@@ -35,6 +36,8 @@ interface MetaInput {
   groupByCategory: boolean;
   /** Guest drafts persist categories; signed-in timelines do not. */
   categories?: CategoryConfig[];
+  /** Both stores persist chapters, so both must fingerprint them. */
+  chapters?: TimelineChapter[];
 }
 
 /**
@@ -60,6 +63,9 @@ export function metaFingerprint(input: MetaInput): string {
     input.groupByCategory,
     input.categories
       ? input.categories.map(c => [c.id, c.label, c.color, c.visible])
+      : null,
+    input.chapters
+      ? input.chapters.map(c => [c.id, c.label, c.startDate, c.endDate])
       : null,
   ]);
 }
