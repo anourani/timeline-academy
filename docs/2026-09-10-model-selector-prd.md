@@ -39,17 +39,17 @@ Draft v1 assumed BYOK was Anthropic-only, keys lived in the database, and the Ed
 
 ## 2. Decisions
 
-Locked, with the audit's amendments marked. Amended rows need Alex's sign-off before Step 4.
+Locked, with the audit's amendments marked. D3, D6 and D7 were confirmed by Alex on 10 Sep; D8 and D9 are still proposed.
 
 | # | Decision | Status |
 |---|---|---|
 | D1 | UI is a plain dropdown (shadcn `Select` — present at `src/components/ui/select.tsx` with `SelectGroup`, `SelectLabel`, `SelectItem`, `SelectSeparator`). No slider, no thinking-effort control. | Locked |
 | D2 | Guest and Free tiers are hard-locked to Claude Sonnet, enforced server-side. | Locked. **Already true**: the Edge Function reads only `subject`, `categories`, `mode` (`generate-timeline/index.ts:46`) and pins Sonnet. Enforcement = keep it that way (Step 3). |
-| D3 | Locked models still render in the dropdown, disabled, with a lock icon and an unlock CTA row. | **Amended (A6):** one unlock copy, "Add an API key to unlock more models", for every locked state. No login-specific copy. |
+| D3 | Locked models still render in the dropdown, disabled, with a lock icon and an unlock CTA row. | **Amended (A6), confirmed 10 Sep:** one unlock copy, "Add an API key to unlock more models", for every locked state. No login-specific copy. |
 | D4 | Six models, grouped by provider: Anthropic (Sonnet, Opus, Fable) and OpenAI (Luna, Terra, Astra). | Locked. Astra stays in the list through its staged rollout (A8). Group order follows `PROVIDER_ORDER` (`src/constants/byokProviders.ts`: OpenAI, then Anthropic) unless Alex wants the dropdown to differ from the key modal. |
 | D5 | A provider's models unlock only with a key for that provider. | Locked. **Extends to Sonnet** (A5). |
-| D6 | The chosen model is remembered. | **Amended (A4):** `localStorage` slot `timeline_byok_model`, same pattern as `timeline_byok_provider`. No profile column, no migration. Rationale in §4. |
-| D7 | Default is Claude Sonnet. | **Amended (A5):** default is the provider's current pin — Sonnet for Anthropic, Terra for OpenAI — which is exactly what every existing user gets today. Nobody's generation changes model until they open the dropdown. |
+| D6 | The chosen model is remembered. | **Amended (A4), confirmed 10 Sep:** `localStorage` slot `timeline_byok_model`, same pattern as `timeline_byok_provider`. No profile column, no migration. Rationale in §4. |
+| D7 | Default is Claude Sonnet. | **Amended (A5), confirmed 10 Sep:** default is the provider's current pin — Sonnet for Anthropic, Terra for OpenAI — which is exactly what every existing user gets today. Nobody's generation changes model until they open the dropdown. |
 | D8 *(new)* | The chosen model's provider decides which key the **whole Create flow** uses — classification and generation together. | Proposed. Without this, a user with both keys and preferred-provider OpenAI who picks Opus would bill OpenAI for the classify call and Anthropic for the generate call in one click. The 12 Aug PRD's own rule: spending on an account the user didn't pick for this request is a surprise. |
 | D9 *(new)* | The default-provider picker stays. It keeps governing event enrichment, which this PRD does not touch. | Proposed. See §9.3 for the alternative. |
 
@@ -290,7 +290,7 @@ Manual, in a real browser against `npm run dev` (no test framework exists — ev
 
 **Blocking — answer before Step 4:**
 
-1. **Alex — confirm the amended decisions D3, D6, D7 and the new D8.** Each is a consequence of the code, not a preference, but they change what v1 said and should not be silently adopted.
+1. **Alex — confirm D8** (the chosen model's provider decides the key for classify and generate together). D3, D6 and D7 were confirmed on 10 Sep.
 
 **Non-blocking:**
 
