@@ -19,6 +19,7 @@ import { useLocalDraft } from './hooks/useLocalDraft';
 import { useAccountTier, type AccountTier } from './hooks/useAccountTier';
 import { byokAnonDraftStore, trialDraftStore } from './utils/draftStorage';
 import { TimelineEvent, CategoryConfig } from './types/event';
+import type { ScrollTarget } from './types/timeline';
 import { LimitReachedError, getCurrentLimits } from './lib/limits';
 import { supabase } from './lib/supabase';
 import { DEFAULT_TIMELINE_TITLE } from './constants/defaults';
@@ -75,7 +76,7 @@ export function App() {
   // Set by the detail panel's Edit action, consumed by Timeline — which owns
   // the EventForm dialog but sits outside the panel's subtree.
   const [pendingEditEventId, setPendingEditEventId] = useState<string | null>(null);
-  const [pendingScrollDate, setPendingScrollDate] = useState<string | null>(null);
+  const [pendingScrollTarget, setPendingScrollTarget] = useState<ScrollTarget | null>(null);
   // Left-most visible month of the canvas, reported up by Timeline — which
   // owns the scroll container. Only the chapters strip and the readout consume
   // it, and both are cheap, so a plain state update per settled scroll is fine.
@@ -263,7 +264,7 @@ export function App() {
         handleVerticalScaleChange(newDraft.verticalScale ?? 'medium');
         if (imported.length > 0) {
           const earliest = imported.reduce((a, b) => a.startDate < b.startDate ? a : b);
-          setPendingScrollDate(earliest.startDate);
+          setPendingScrollTarget(earliest.startDate);
         }
       } else if (routeState?.aiGenerated) {
         // Arriving from AI mode with a freshly generated timeline — create a draft
@@ -295,7 +296,7 @@ export function App() {
         handleVerticalScaleChange(newDraft.verticalScale ?? 'medium');
         if (aiEvents.length > 0) {
           const earliest = aiEvents.reduce((a, b) => a.startDate < b.startDate ? a : b);
-          setPendingScrollDate(earliest.startDate);
+          setPendingScrollTarget(earliest.startDate);
         }
       } else if (routeState?.newTimeline && routeState.skipCreationScreen) {
         // "Create a Timeline" — create draft immediately
@@ -691,7 +692,7 @@ export function App() {
         setEvents(imported);
         if (imported.length > 0) {
           const earliest = imported.reduce((a, b) => a.startDate < b.startDate ? a : b);
-          setPendingScrollDate(earliest.startDate);
+          setPendingScrollTarget(earliest.startDate);
         }
       })();
       routerNavigate('/editor', { replace: true, state: {} });
@@ -709,7 +710,7 @@ export function App() {
         updateChapters(normalizeChapters(aiData.chapters));
         if (aiData.events.length > 0) {
           const earliest = aiData.events.reduce((a, b) => a.startDate < b.startDate ? a : b);
-          setPendingScrollDate(earliest.startDate);
+          setPendingScrollTarget(earliest.startDate);
         }
       })();
       routerNavigate('/editor', { replace: true, state: {} });
@@ -976,7 +977,7 @@ export function App() {
       const earliest = addedEvents.reduce((a, b) =>
         a.startDate < b.startDate ? a : b
       );
-      setPendingScrollDate(earliest.startDate);
+      setPendingScrollTarget(earliest.startDate);
     }
 
     setEvents(newEvents);
@@ -1062,7 +1063,7 @@ export function App() {
               months={months}
               currentMonthIndex={currentMonthIndex}
               accentColor={timelineAccentColor}
-              onSelect={setPendingScrollDate}
+              onSelect={setPendingScrollTarget}
             />
           </div>
           <Timeline
@@ -1074,8 +1075,8 @@ export function App() {
             scale={currentScale}
             verticalScale={currentVerticalScale}
             groupByCategory={groupByCategory}
-            pendingScrollDate={pendingScrollDate}
-            onScrollComplete={() => setPendingScrollDate(null)}
+            pendingScrollTarget={pendingScrollTarget}
+            onScrollComplete={() => setPendingScrollTarget(null)}
             pendingEditEventId={pendingEditEventId}
             onEditRequestHandled={() => setPendingEditEventId(null)}
             onVisibleMonthChange={handleVisibleMonthChange}

@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { TimelineEvent } from '@/types/event'
-import type { Month, TimelineChapter } from '@/types/timeline'
+import type { Month, ScrollTarget, TimelineChapter } from '@/types/timeline'
 import {
   chapterProgress,
   chapterStartYear,
@@ -17,7 +17,7 @@ interface ChaptersStripProps {
   currentMonthIndex: number
   /** The nav's dominant-category colour, so the strip matches the status dot. */
   accentColor: string
-  onSelect?: (startDate: string) => void
+  onSelect?: (target: ScrollTarget) => void
 }
 
 /**
@@ -109,7 +109,7 @@ export const ChaptersStrip = memo(function ChaptersStrip({
               key={chapter.id}
               ref={isActive ? activeRef : undefined}
               type="button"
-              onClick={() => onSelect?.(chapter.startDate)}
+              onClick={() => onSelect?.({ date: chapter.startDate, align: 'start' })}
               aria-current={isActive ? 'true' : undefined}
               title={`${chapter.label} · ${chapterYearRange(chapter)} · ${count} events`}
               className={`

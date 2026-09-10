@@ -26,7 +26,7 @@
 13. [Band Height Calculation](#band-height-calculation)
 14. [Drag-and-Drop System](#drag-and-drop-system)
 15. [Wheel → Horizontal Scroll](#wheel--horizontal-scroll)
-16. [Scroll-to-Date](#scroll-to-date)
+16. [Scroll-to-Target](#scroll-to-target)
 17. [Add-Event Cursor](#add-event-cursor)
 18. [Event Hover Cursor](#event-hover-cursor)
 19. [Event Form Dialog](#event-form-dialog)
@@ -276,13 +276,17 @@ Chapters themselves are `{ id, label, startDate, endDate }` on `timelines.chapte
 
 ### How it reads scroll position
 
-`useTimelineScroll` lives inside `Timeline` and its `visibleRange` is private to that component. Rather than lift the scroll container ref out, `Timeline` takes an `onVisibleMonthChange?: (monthIndex: number) => void` callback — the same prop-pair idiom as `pendingScrollDate` / `onScrollComplete`. The parent holds `currentMonthIndex`, resolves the active chapter from it, and feeds the label back down as `chapterLabel`.
+`useTimelineScroll` lives inside `Timeline` and its `visibleRange` is private to that component. Rather than lift the scroll container ref out, `Timeline` takes an `onVisibleMonthChange?: (monthIndex: number) => void` callback — the same prop-pair idiom as `pendingScrollTarget` / `onScrollComplete`. The parent holds `currentMonthIndex`, resolves the active chapter from it, and feeds the label back down as `chapterLabel`.
 
 The callback must be referentially stable: `Timeline` fires it from an effect keyed on the callback itself, so an inline arrow would re-run on every parent render.
 
 ### Clicking a chip
 
-`onSelect(chapter.startDate)` sets the parent's `pendingScrollDate`, reusing the existing scroll-to-date channel (§16) with no new plumbing.
+`onSelect({ date: chapter.startDate, align: 'start' })` sets the parent's `pendingScrollTarget`, reusing the existing scroll channel (§16) with no new plumbing.
+
+The `align: 'start'` form parks the chapter's first month at the **left edge** rather than centring it. Centring filled half the viewport with the chapter you just left; left-aligning puts the whole chapter ahead of you, and every chip lands in the same place so clicking down the strip reads like flipping pages.
+
+Note this changes *where you land*, not *how far you travel*: the delta between two chip clicks is the distance between their start dates either way. Travel distance is a function of how wide the chapters are, which is why the AI prompt asks for 3–5 chapters that each cover a real phase.
 
 ---
 
@@ -370,7 +374,7 @@ Drag transforms take priority over FLIP transforms — the dragged event is excl
 
 ### Mount callback
 
-`onMounted(eventId, node)` is called from a ref callback. `Timeline.tsx` uses it to detect when a freshly-added event has rendered, then calls `node.scrollIntoView` to bring it into view. See §16 Scroll-to-Date.
+`onMounted(eventId, node)` is called from a ref callback. `Timeline.tsx` uses it to detect when a freshly-added event has rendered, then calls `node.scrollIntoView` to bring it into view. See §16 Scroll-to-Target.
 
 ---
 
@@ -478,33 +482,36 @@ The listener is scoped to the scroll container ref, so wheel events inside side 
 
 ---
 
-## Scroll-to-Date
+## Scroll-to-Target
 
-`scrollToDate(dateStr)` is defined in `Timeline.tsx`:
+`scrollToTarget(target)` is defined in `Timeline.tsx`. It takes a `ScrollTarget` (`src/types/timeline.ts`) — either a bare date string, or `{ date, align: 'start' }`:
 
 ```ts
-const monthIndex   = findMonthIndex(months, dateStr)
-const pixelOffset  = monthIndex * scale.monthWidth
-const viewportWidth = scrollContainerRef.current.clientWidth
-const targetLeft   = pixelOffset - (viewportWidth / 2) + (scale.monthWidth / 2)
-scrollContainerRef.current.scrollTo({ left: targetLeft, behavior: 'smooth' })
+const monthIndex  = findMonthIndex(months, typeof target === 'string' ? target : target.date)
+const pixelOffset = monthIndex * scale.monthWidth
+const targetLeft  = typeof target === 'string'
+  ? pixelOffset - (el.clientWidth / 2) + (scale.monthWidth / 2)   // centre
+  : pixelOffset - (SCROLL_LEAD_IN_MONTHS * scale.monthWidth)      // left-align
+el.scrollTo({ left: Math.max(0, targetLeft), behavior: 'smooth' })
 ```
 
-It centers the requested month within the viewport.
+A bare string **centers** the requested month, which is what every entry point but the chapters strip wants. The object form **left-aligns** it, keeping `SCROLL_LEAD_IN_MONTHS` (2, in `constants/timeline.ts`) of the previous chapter on screen so the boundary reads as a boundary.
+
+The browser clamps `scrollLeft` to `scrollWidth - clientWidth`, so a chapter near the end of the canvas lands as far left as the canvas allows rather than flush — progressively further in, the closer its start is to the end. That is inherent to a scrolling container, not a bug; the trailing 3-year padding (§22) is what gives the last chapters any room at all.
 
 The month is resolved with `findMonthIndex` (`utils/dateUtils.ts`), which **clamps** a date outside the rendered range to the nearest edge, rather than an exact `findIndex`, which returned `-1` and silently no-opped. That mattered once chapter chips became a scroll entry point: chapter boundaries sit near the padded ends of the range, and a no-op there reads as a dead chip.
 
 ### Entry points
 
-1. **`pendingScrollDate` prop.** A `useEffect` runs `scrollToDate(pendingScrollDate)` inside `requestAnimationFrame` and then calls `onScrollComplete?.()` so the parent can clear its pending state. `App.tsx` sets `pendingScrollDate` to the earliest event's `startDate` in five places — see "Auto-scroll on initial load" below.
-2. **`handleSubmit` after add/edit.** After dismissing the dialog, `scrollToDate(eventData.startDate)` runs in a rAF. For a newly-created event, the event's `id` is stashed in `pendingScrollEventId` so that when its DOM node mounts, `handleEventMounted` can call `node.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' })`. `scrollIntoView` handles vertical alignment; horizontal alignment is handled by `scrollToDate`.
-3. **A chapter chip.** `ChaptersStrip`'s `onSelect` sets the same `pendingScrollDate` with the chapter's `startDate` — see §8a.
+1. **`pendingScrollTarget` prop.** A `useEffect` runs `scrollToTarget(pendingScrollTarget)` inside `requestAnimationFrame` and then calls `onScrollComplete?.()` so the parent can clear its pending state. `App.tsx` sets `pendingScrollTarget` to the earliest event's `startDate` (bare string, so it centres) in five places — see "Auto-scroll on initial load" below.
+2. **`handleSubmit` after add/edit.** After dismissing the dialog, `scrollToTarget(eventData.startDate)` runs in a rAF (bare string, so it centres). For a newly-created event, the event's `id` is stashed in `pendingScrollEventId` so that when its DOM node mounts, `handleEventMounted` can call `node.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' })`. `scrollIntoView` handles vertical alignment; horizontal alignment is handled by `scrollToTarget`.
+3. **A chapter chip.** `ChaptersStrip`'s `onSelect` sets the same `pendingScrollTarget` with `{ date: chapter.startDate, align: 'start' }`, so the chapter lands at the left edge — see §8a.
 
 ### Auto-scroll on initial load
 
-When a timeline is first populated with events, `App.tsx` always centers the viewport on the **earliest event** by setting `pendingScrollDate = earliest.startDate`. This is a deliberate UX choice but it has an important visual consequence: the leading 3-year padding (see §22) is rendered, but the user lands centered on the first event rather than at `scrollLeft = 0`. The padding is **off-screen on the left until the user scrolls back into it**.
+When a timeline is first populated with events, `App.tsx` always centers the viewport on the **earliest event** by setting `pendingScrollTarget = earliest.startDate`. This is a deliberate UX choice but it has an important visual consequence: the leading 3-year padding (see §22) is rendered, but the user lands centered on the first event rather than at `scrollLeft = 0`. The padding is **off-screen on the left until the user scrolls back into it**.
 
-Five call sites in `App.tsx` set `pendingScrollDate` from the earliest event:
+Five call sites in `App.tsx` set `pendingScrollTarget` from the earliest event:
 
 | App.tsx location | Trigger |
 |---|---|
@@ -514,7 +521,7 @@ Five call sites in `App.tsx` set `pendingScrollDate` from the earliest event:
 | ~line 349 | AI-generated events route-state handoff (post-auth re-entry into `/editor`) |
 | ~line 527 | Bulk add via `EventTableEditor` (`handleBulkEventsChange`) |
 
-Loading an existing saved timeline via `switchTimeline(timelineId)` does **not** set `pendingScrollDate`, so on revisit the viewport opens at `scrollLeft = 0` (the very start of the leading padding) — which exposes a different perceived behavior than first-load.
+Loading an existing saved timeline via `switchTimeline(timelineId)` does **not** set `pendingScrollTarget`, so on revisit the viewport opens at `scrollLeft = 0` (the very start of the leading padding) — which exposes a different perceived behavior than first-load.
 
 **Discoverability note.** The scroll container has `scrollbar-hide` (see §3), so there is no visible scrollbar to indicate that more content exists to the left. Users discover the leading padding via:
 
@@ -566,7 +573,7 @@ A translucent vertical band that follows the user's hovered month while the time
 
 `EventActionsMenu` has been removed. A left click on an event always calls `onOpenDetails(event)`, in edit and view mode alike, which opens `EventDetailPanel`. The panel's header carries the two edit-mode authoring actions:
 
-- **Edit** → the page sets `pendingEditEventId` and closes the panel; `Timeline` consumes that prop, opens its `EventForm` Dialog on the matching event, and clears it via `onEditRequestHandled` (the same controlled-prop pattern as `pendingScrollDate` / `onScrollComplete`, because the panel is mounted by the page and sits outside `Timeline`'s subtree).
+- **Edit** → the page sets `pendingEditEventId` and closes the panel; `Timeline` consumes that prop, opens its `EventForm` Dialog on the matching event, and clears it via `onEditRequestHandled` (the same controlled-prop pattern as `pendingScrollTarget` / `onScrollComplete`, because the panel is mounted by the page and sits outside `Timeline`'s subtree).
 - **Delete** → confirms through `ConfirmationModal`, then calls the page's delete handler and closes the panel.
 
 Both are hidden in view mode. `Timeline` no longer takes an `onDeleteEvent` prop.
@@ -595,7 +602,7 @@ Both are hidden in view mode. `Timeline` no longer takes an `onDeleteEvent` prop
 </DialogContent>
 ```
 
-`handleSubmit` calls `onUpdateEvent` (when `editingEvent` is set) or `onAddEvent` (otherwise), closes the modal, queues a smooth `scrollToDate(eventData.startDate)`, and (for adds) sets `pendingScrollEventId` so the new event's mount callback can `scrollIntoView`.
+`handleSubmit` calls `onUpdateEvent` (when `editingEvent` is set) or `onAddEvent` (otherwise), closes the modal, queues a smooth `scrollToTarget(eventData.startDate)`, and (for adds) sets `pendingScrollEventId` so the new event's mount callback can `scrollIntoView`.
 
 `EventForm` handles its own state: title (max 55 chars), category (single-select pill grid of `visibleCategories`), and `startDate`/`endDate` (text input with calendar popover; end date is optional and falls back to start date on submit).
 
@@ -724,8 +731,8 @@ The 3-year padding is **always rendered** — every consumer of `months` (Timeli
 
 What changes is **whether the user sees the padding on initial load**:
 
-- **Newly-imported / AI-generated / bulk-added events** → `App.tsx` sets `pendingScrollDate = earliest.startDate`, which centers the viewport on the first event. Leading padding is off-screen until the user scrolls left. See §16 ("Auto-scroll on initial load").
-- **Loading an existing saved timeline** (revisit via `switchTimeline(timelineId)`) → no `pendingScrollDate` is set, so `scrollLeft` stays at `0`; the leading padding is fully visible at the left edge.
+- **Newly-imported / AI-generated / bulk-added events** → `App.tsx` sets `pendingScrollTarget = earliest.startDate`, which centers the viewport on the first event. Leading padding is off-screen until the user scrolls left. See §16 ("Auto-scroll on initial load").
+- **Loading an existing saved timeline** (revisit via `switchTimeline(timelineId)`) → no `pendingScrollTarget` is set, so `scrollLeft` stays at `0`; the leading padding is fully visible at the left edge.
 
 If the perceived behavior is "the timeline starts at the first event," the cause is the auto-scroll in `App.tsx`, not the range calculation here.
 

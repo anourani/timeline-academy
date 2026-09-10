@@ -22,7 +22,7 @@ HARD RULES:
    GOOD: "Scored 81 points vs. Raptors"
 4. DATE FORMAT — YYYY-MM-DD, AD years only (never a BC/BCE date). Year-only → January 1. Ranges → use startDate/endDate span. Chronological order.
 5. EVENT SPAN — Keep every event inside the subject's own span: for a person, birth to death. Express legacy and influence as events dated within that span, never as one long event reaching into later centuries.
-6. CHAPTERS — Also divide the timeline into 3–7 named chapters: contiguous spans that together cover every event, with no gaps and no overlaps. Each chapter's startDate must be the first of a month, each label max 30 characters, named for what happened in that span ("Race to the Moon", not "Chapter 3"). The first chapter starts on or before the earliest event; the last ends on or after the latest.
+6. CHAPTERS — Also divide the timeline into named chapters: contiguous spans that together cover every event, with no gaps and no overlaps. Aim for 3–5. A chapter is a phase a biographer would name — a stretch someone lived through — not a single season, a single event, or a single achievement. If two adjacent spans describe one arc, make them one chapter and name the arc ("The NFL Years", not "Enters the NFL"). Each chapter's startDate must be the first of a month, each label max 30 characters, named for what happened in that span ("Race to the Moon", not "Chapter 3"). The first chapter starts on or before the earliest event; the last ends on or after the latest.
 7. JSON ONLY — No markdown, no code fences, no explanation.
 
 RESPONSE SCHEMA:
