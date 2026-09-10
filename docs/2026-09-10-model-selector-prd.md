@@ -11,7 +11,7 @@ A dropdown in the Create flow (`/`) that lets users pick which LLM generates the
 
 **Why:** BYOK users are paying for their own tokens and should get to spend them on the model they want. For everyone else, the locked list is a low-effort upsell that shows what adding a key gets you.
 
-**One sentence to keep in mind:** the dropdown lists what your keys can reach. Nothing in it changes what our server does, because our server never runs a model the user chose.
+**Two sentences to keep in mind.** The dropdown lists what your keys can reach, and the model you pick is the model that answers every AI call made with your key: classifying the subject, generating the timeline, and writing an event's description. Nothing in it changes what our server does, because our server never runs a model the user chose.
 
 ---
 
@@ -29,7 +29,7 @@ Draft v1 assumed BYOK was Anthropic-only, keys lived in the database, and the Ed
 | A6 | Guest and Free unlock differently ("Log in" vs "Add a key") | Signing in moves `trial` → `free`, which is **still Sonnet-only**. The only action that unlocks any model, for any tier, is adding a key. The key modal already offers sign-in as a secondary link. | The `login` lock reason is dropped. One footer copy for everyone without a key. D3 amended. |
 | A7 | Per-model request tweaks can wait until Step 8 | `claude-fable-5-1` **rejects `thinking: {type: 'disabled'}` with a 400**, and both generation calls send exactly that (`anthropicDirect.ts:179`, `llm-client.ts:129`). Picking Fable with today's request body fails every time. | Per-model `params` are part of the registry from Step 1, not a Step 8 afterthought. |
 | A8 | `gpt-6-astra` is available | The id is real (`gpt-6-astra`, $10/$50 per MTok) but it began a **staged rollout on 3 Sep** — enterprise Trusted Access first, then "over the coming days" to the API. Whether a given ordinary key reaches it yet depends on the account. | **Astra ships anyway** (Alex, 10 Sep). `readApiError()` already turns a 403/404 into "Your API key can't reach *model*", so an account the rollout hasn't reached gets a clear sentence, not a generic failure. Step 0 confirms that sentence is what actually appears. |
-| A9 | The event-detail panels might share the generation function | They don't share the function. They share the **constant**: `MODEL_SONNET` in `anthropicDirect.ts:31` and `MODEL_MAIN` in `openaiDirect.ts:36` are read by generation *and* enrichment. Classification uses `MODEL_HAIKU` / `MODEL_CHEAP` with assistant prefill, which Sonnet-tier and above reject. | Generation reads the registry; enrichment and classification keep their pins. The dropdown cannot leak into the panels by construction. Non-blocking question 1 from v1 is answered: no. |
+| A9 | The event-detail panels might share the generation function | They don't share the function. They share the **constant**: `MODEL_SONNET` in `anthropicDirect.ts:31` and `MODEL_MAIN` in `openaiDirect.ts:36` are read by generation *and* enrichment. Classification uses `MODEL_HAIKU` / `MODEL_CHEAP` with assistant prefill, which Sonnet-tier and above reject. | Decided the other way (D8, Alex 10 Sep): the chosen model runs **all three** BYOK calls, so all four pins are deleted and every call reads the registry. The classify call must lose its prefill and its `temperature: 0` to run on anything above Haiku. Non-blocking question 1 from v1 is answered: they don't share the function, and the dropdown reaches the panels on purpose. |
 | A10 | "Left of the generate button, matching the floating-toolbar / pill styling" | The Create page has no floating toolbar (that's the editor). The generate button is a blue ↵ **inside** the search field (`NewTimelineScreen.tsx:355`, desktop only, PR #107). The pill on this page is `glassButtonClass` (`src/components/ui/glassButton.ts`), used by the quick-search chips below the field. | Placement in §5 Step 4 rewritten around the actual layout. |
 | A11 | Nothing said about it | `docs/2026-08-12-openai-byok-prd.md` §2 and §9 **explicitly reject a user-facing model picker**, listing it under "Decisions worth not re-litigating". | This PRD reverses that on Alex's call. Step 6 amends that doc so the two don't contradict. The cost argument it made is still valid and is carried into §3 as context. |
 
@@ -39,19 +39,19 @@ Draft v1 assumed BYOK was Anthropic-only, keys lived in the database, and the Ed
 
 ## 2. Decisions
 
-Locked, with the audit's amendments marked. D3, D6, D7 and D8 were confirmed by Alex on 10 Sep; D9 is still proposed.
+Locked, with the audit's amendments marked. D3, D6, D7 and D8 were confirmed by Alex on 10 Sep, and D9 follows from D8.
 
 | # | Decision | Status |
 |---|---|---|
 | D1 | UI is a plain dropdown (shadcn `Select` — present at `src/components/ui/select.tsx` with `SelectGroup`, `SelectLabel`, `SelectItem`, `SelectSeparator`). No slider, no thinking-effort control. | Locked |
 | D2 | Guest and Free tiers are hard-locked to Claude Sonnet, enforced server-side. | Locked. **Already true**: the Edge Function reads only `subject`, `categories`, `mode` (`generate-timeline/index.ts:46`) and pins Sonnet. Enforcement = keep it that way (Step 3). |
 | D3 | Locked models still render in the dropdown, disabled, with a lock icon and an unlock CTA row. | **Amended (A6), confirmed 10 Sep:** one unlock copy, "Add an API key to unlock more models", for every locked state. No login-specific copy. |
-| D4 | Six models, grouped by provider: Anthropic (Sonnet, Opus, Fable) and OpenAI (Luna, Terra, Astra). | Locked. Astra stays in the list through its staged rollout (A8). Group order follows `PROVIDER_ORDER` (`src/constants/byokProviders.ts`: OpenAI, then Anthropic) unless Alex wants the dropdown to differ from the key modal. |
+| D4 | Six models, grouped by provider: Anthropic (Sonnet, Opus, Fable) and OpenAI (Luna, Terra, Astra). | Locked. Astra stays in the list through its staged rollout (A8). **Anthropic group first** (Alex, 10 Sep) — this differs from `PROVIDER_ORDER` in `byokProviders.ts`, which lists OpenAI first on the key screens; see Step 4. |
 | D5 | A provider's models unlock only with a key for that provider. | Locked. **Extends to Sonnet** (A5). |
 | D6 | The chosen model is remembered. | **Amended (A4), confirmed 10 Sep:** `localStorage` slot `timeline_byok_model`, same pattern as `timeline_byok_provider`. No profile column, no migration. Rationale in §4. |
 | D7 | Default is Claude Sonnet. | **Amended (A5), confirmed 10 Sep:** default is the provider's current pin — Sonnet for Anthropic, Terra for OpenAI — which is exactly what every existing user gets today. Nobody's generation changes model until they open the dropdown. |
-| D8 *(new)* | The chosen model's provider decides which key the **whole Create flow** uses — classification and generation together. | **Confirmed 10 Sep.** Without this, a user with both keys and preferred-provider OpenAI who picks Opus would bill OpenAI for the classify call and Anthropic for the generate call in one click. The 12 Aug PRD's own rule: spending on an account the user didn't pick for this request is a surprise. |
-| D9 *(new)* | The default-provider picker stays. It keeps governing event enrichment, which this PRD does not touch. | Proposed. See §9.3 for the alternative. |
+| D8 *(new)* | **The chosen model answers every BYOK call**: classifying the subject, generating the timeline, and writing an event's description. Not just the provider — the model. | **Confirmed 10 Sep, widened from "classify + generate" to all three by Alex.** One choice, one account billed, one mental model. The server-funded path is untouched: Free users still get Haiku for classify and Sonnet for the rest, pinned in the Edge Functions. |
+| D9 *(new)* | **The default-provider picker is removed.** With D8 covering all three calls, the picker has nothing left to decide. The model selector takes its place in editor settings. | Follows from D8 (10 Sep). Its storage slot is kept read-only to seed the model preference for existing users — §4. |
 
 ---
 
@@ -72,7 +72,7 @@ Lives at `src/constants/models.ts` — beside `byokProviders.ts` and `plans.ts`,
 
 Ids verified 10 Sep: the three Anthropic ids against Anthropic's current model list; `gpt-5.6-luna` and `gpt-5.6-terra` are already pinned in the code and were confirmed against OpenAI's pricing page; `gpt-6-astra` against OpenAI's announcement and pricing pages. **Model ids are complete as written — never append date suffixes.**
 
-Prices are context for Alex, not UI (out of scope, §7). The point the 12 Aug PRD made still stands: this workload is bounded JSON. A generation on Sonnet costs roughly $0.02; the same generation on Fable or Astra costs roughly five times that, on the user's own account, for a difference they may not be able to see. That is the user's call to make now, and the "Fastest / Balanced / Most capable" descriptors are deliberately version-free so the dropdown copy survives the next id rotation.
+Prices are context for Alex, not UI (out of scope, §7). The point the 12 Aug PRD made still stands: this workload is bounded JSON. A generation on Sonnet costs roughly $0.02; the same generation on Fable or Astra costs roughly five times that, on the user's own account, for a difference they may not be able to see. Event descriptions are the bigger number: roughly $0.06 each on Sonnet, about half of it web-search fees that don't change with the model, so on Fable or Astra expect three to four times that per event opened. That is the user's call to make now, and the "Fastest / Balanced / Most capable" descriptors are deliberately version-free so the dropdown copy survives the next id rotation.
 
 ### Registry shape
 
@@ -86,14 +86,21 @@ export interface ModelDef {
   descriptor: 'Fastest' | 'Balanced' | 'Most capable'
   /** True for the one model the server-funded (Free) path runs. */
   serverFunded: boolean
-  /** Per-model request-body overrides. See "Why params is not optional". */
-  params: AnthropicParams | OpenAIParams
+  /** Per-model, per-call request-body overrides. See "Why params is not optional". */
+  params: {
+    classify: RequestParams
+    generate: RequestParams
+    enrich: RequestParams
+  }
 }
 
 export const DEFAULT_MODEL_BY_PROVIDER: Record<ByokProvider, string> = {
   anthropic: 'claude-sonnet-5',   // today's MODEL_SONNET
   openai: 'gpt-5.6-terra',        // today's MODEL_MAIN
 }
+
+/** Dropdown group order. Deliberately not PROVIDER_ORDER (Alex, 10 Sep). */
+export const MODEL_GROUP_ORDER: ByokProvider[] = ['anthropic', 'openai']
 
 export const MODELS: ModelDef[] = [ /* six entries per the table */ ]
 ```
@@ -112,9 +119,13 @@ The Anthropic generation call today sends `thinking: { type: 'disabled' }` and `
 
 `max_tokens` is a ceiling, not a charge. Raising it costs nothing unless the tokens are produced.
 
+**Classify** (`params.classify`) has the same shape of problem in miniature. Today it runs on Haiku with two things only Haiku still accepts: an assistant prefill (`{ role: 'assistant', content: '{"type": "' }`) and `temperature: 0` (`anthropicDirect.ts:200-243`). Every model in the dropdown rejects both with a 400. Step 3 removes them for all models; `max_tokens: 32` also has to grow on the thinking models, because the cap now covers thinking plus the one-word answer. `output_config: { effort: 'low' }` keeps that cheap.
+
+**Enrich** (`params.enrich`) is the easy one on Anthropic: the call already leaves thinking on and sends no `thinking` key, so Fable accepts it as-is. Raise `max_tokens` for Opus and Fable for the same thinking-budget reason. What needs checking, not assuming: whether `web_search_20260209` is accepted on `claude-fable-5-1` — Anthropic's docs list it for the Opus and Sonnet families, and Fable's page should be read at Step 0. An enrichment whose web search never fires produces a description with an empty Sources list and no error (the 12 Aug PRD's failure mode), so this is a silent one.
+
 The OpenAI side has fewer known hazards: all three run through Chat Completions with `response_format: { type: 'json_object' }` and `max_tokens: 8192`, no `temperature` (already removed for the reasoning-capable family). Astra's parameter contract is unverified — it is a new generation, and OpenAI's docs are egress-blocked from the dev container, same as on 12 Aug. Step 5 is where it gets checked, and if the test key can't reach Astra yet, its `params` entry starts as a copy of Terra's and is marked unverified in a comment rather than guessed.
 
-Rule: **every per-model difference lives in `params`. The adapters apply `{ model: def.id, ...def.params }` and contain no per-model branches.** A future pin change is then a registry edit, not an adapter edit.
+Rule: **every per-model difference lives in `params`. The adapters apply `{ model: def.id, ...def.params[call] }` and contain no per-model branches.** A future pin change is then a registry edit, not an adapter edit.
 
 ### Helpers
 
@@ -127,12 +138,20 @@ export function getModelAvailability(
   keys: { anthropic: boolean; openai: boolean },      // from useByokKeys()
 ): Array<{ model: ModelDef; locked: boolean; lockReason?: LockReason }>
 
-/** The requested id if this visitor may use it, else their provider default. */
+/** The requested id if these keys can reach it, else the active provider's default. */
 export function resolveModelId(
   requested: string | null,
-  tier: AccountTier,
   keys: { anthropic: boolean; openai: boolean },
 ): string
+
+/**
+ * What a BYOK call should run on right now: the resolved model plus the key
+ * for its provider, or null when there is no key (the server path). Replaces
+ * getActiveCredential() as the one thing every call site asks.
+ */
+export function getActiveModel(
+  override?: ByokProvider,   // the "Retry with X" action, one call only
+): { model: ModelDef; credential: ByokCredential } | null
 ```
 
 Availability logic, in words:
@@ -141,18 +160,22 @@ Availability logic, in words:
 - `byok-anon` or `byok`: a model is unlocked iff `keys[model.provider]`. Sonnet included (A5).
 - `loading`: the hook returns nothing selectable; the dropdown renders its trigger disabled. Same rule `useAccountTier` already imposes on every consumer (`CLAUDE.md` → Access & data model).
 
-Fallback logic for `resolveModelId`, mirroring the load-bearing "exactly one key wins" branch in `resolveActive()`:
+Fallback logic for `resolveModelId`, mirroring the load-bearing "exactly one key wins" branch in today's `resolveActive()`:
 
-1. Requested id exists and is unlocked → return it.
-2. Otherwise → `DEFAULT_MODEL_BY_PROVIDER[p]` where `p` is the active credential's provider (`getActiveCredential()`), or `anthropic` when there is no key (the server path).
+1. Requested id exists and its provider's key is present → return it.
+2. Otherwise → `DEFAULT_MODEL_BY_PROVIDER[p]`, where `p` is the only provider with a key, or `anthropic` when both keys exist (same tie-break as today), or `anthropic` when there is no key (the server path — the dropdown shows Sonnet selected there because it is the `serverFunded` model).
 
-So a user who saved Opus, then removes their Anthropic key, silently generates on Terra if they have an OpenAI key, and is gated to sign-in-or-key if they have neither — exactly what happens to them today. The stale preference is **not** cleared, for the same reason `timeline_byok_provider` isn't: re-adding the key restores what they asked for.
+`getActiveModel()` is `resolveModelId` plus `getCredentialFor(model.provider)`. With an `override`, it is `DEFAULT_MODEL_BY_PROVIDER[override]` plus that provider's key, and it does not touch the stored preference — the same contract today's `providerOverride` has.
+
+So a user who saved Opus, then removes their Anthropic key, silently runs on Terra if they have an OpenAI key, and is gated to sign-in-or-key if they have neither — exactly what happens to them today. The stale preference is **not** cleared, for the same reason `timeline_byok_provider` wasn't: re-adding the key restores what they asked for.
 
 ---
 
 ## 4. Persistence (D6, amended)
 
-**Where:** a fourth slot in `src/services/userApiKey.ts`, `timeline_byok_model`, added to the `WATCHED` set so cross-tab sync and the `byok:changed` event cover it for free. `getPreferredModel()` / `setPreferredModel()` mirror `getPreferredProvider()` / `setPreferredProvider()` exactly, including the deliberate absence of a `reconcileBYOKMetadata()` call (a model preference cannot change whether a key exists). `useByokKeys()` grows a `model` field.
+**Where:** a fourth slot in `src/services/userApiKey.ts`, `timeline_byok_model`, added to the `WATCHED` set so cross-tab sync and the `byok:changed` event cover it for free. `getPreferredModel()` / `setPreferredModel()` mirror today's `getPreferredProvider()` / `setPreferredProvider()` exactly, including the deliberate absence of a `reconcileBYOKMetadata()` call (a model preference cannot change whether a key exists). `useByokKeys()` grows a `model` field.
+
+**The old provider slot.** `timeline_byok_provider` is what the removed picker (D9) wrote. It is kept for one purpose: when `timeline_byok_model` is empty and the provider slot says `openai`, the first read seeds the model slot with `gpt-5.6-terra`, so a user who chose OpenAI before this shipped lands on the model they were already using rather than on Sonnet. After that the provider slot is never written again. `setPreferredProvider()` and the picker's other exports are **deleted, not shimmed** — same reasoning as the 12 Aug PRD's `getAnthropicKey` removal: a same-named function whose meaning quietly changed is worse than a compile error at every stale call site.
 
 **Why not the account:**
 
@@ -180,7 +203,7 @@ The file-location audit is done (§1). Two things still need a real key, and can
 ### Step 1 — Registry
 
 - Create `src/constants/models.ts` per §3.
-- Delete `MODEL_SONNET` from `anthropicDirect.ts` and `MODEL_MAIN` from `openaiDirect.ts` **for generation only**. Enrichment keeps a local pin (rename it `ENRICH_MODEL` so a grep for the generation constant finds nothing). Classification keeps `MODEL_HAIKU` / `MODEL_CHEAP` untouched — those calls use assistant prefill, which only Haiku supports (A9).
+- Delete all four module pins: `MODEL_SONNET` and `MODEL_HAIKU` from `anthropicDirect.ts`, `MODEL_MAIN` and `MODEL_CHEAP` from `openaiDirect.ts`. Every direct call takes a `ModelDef` (D8). Haiku and Luna leave the client entirely; they survive only in the Edge Functions, where the server-funded path still uses them.
 - Point the "do not upgrade these to a frontier model" comments at the registry, so the reasoning survives the move.
 
 ### Step 2 — Persistence
@@ -192,9 +215,11 @@ The file-location audit is done (§1). Two things still need a real key, and can
 
 **Client:**
 
-- `generateTimelineDirect()` and `generateTimelineOpenAIDirect()` take a `ModelDef` instead of reading a module constant, and spread `def.params` into the body. Anthropic's adapter checks `stop_reason` before reading `content`.
-- `aiTimeline.generateTimeline()` and `classifySubject()` take `model: ModelDef`. `resolveCredential()` becomes `getCredentialFor(model.provider)` — the model decides the key (D8). The `providerOverride` retry path stays: a retry against the *other* provider runs that provider's `DEFAULT_MODEL_BY_PROVIDER` entry and, like today, does not change the stored preference.
-- `useAIMode.classifyAndGenerate()` and `AIModePage.runGeneration()` pass the model along. `AIModePage` owns the selected id (read via `useByokKeys().model` → `resolveModelId`), because it already owns the two modals the footer CTA opens.
+- All six direct functions — `classifySubjectDirect`, `generateTimelineDirect`, `enrichEventDirect` and their OpenAI twins — take a `ModelDef` instead of reading a module constant, and spread `def.params[call]` into the body. Anthropic's adapters check `stop_reason` before reading `content`.
+- **Classify loses its prefill.** `classifySubjectDirect` drops the `{ role: 'assistant', content: '{"type": "' }` message and `temperature: 0`, and parses the reply the way `classifySubjectOpenAIDirect` already does (no prefill, validate against the four types, `topic` fallback — which `classifySubject()` in `aiTimeline.ts` does a second time anyway). Anthropic's structured outputs (`output_config.format`) are the alternative if a bare instruction proves unreliable on the thinking models; Claude Code decides after reading the current docs at Step 0, not from memory.
+- `aiTimeline.classifySubject()`, `aiTimeline.generateTimeline()` and `eventEnrichment.enrichEvent()` all replace their `getActiveCredential()` / `getCredentialFor()` calls with `getActiveModel(override)` (§3). That is the whole of D8 in code: three call sites, one resolver. The `providerOverride` retry path keeps its contract — the *other* provider's default model, one call, stored preference untouched.
+- `useAIMode`, `AIModePage`, and `EventDetailPanel` need no new props for the model itself — the resolver reads the stored preference. `AIModePage` reads `useByokKeys().model` only to display the selection and to own the modals the footer CTA opens.
+- **Remove the picker (D9).** Delete `ByokDefaultProviderPicker.tsx` and its two mounts (`ApiKeyModal.tsx:200`, `ApiKeySection.tsx:177`). `ApiKeySection` gets the `ModelSelector` in that spot (Step 4); `ApiKeyModal` gets nothing — it is a gate, the default model applies, and the Create page it usually sits over has the dropdown.
 - Error mapping: `ProviderError` already carries the provider, and `readApiError()` already names the model on 403/404. A **401** from either provider should read "Your Anthropic/OpenAI key was rejected" — add that branch beside the 403/404 one in `llmShared.ts:51`.
 
 **Server — the one rule:** `generate-timeline/index.ts` continues to destructure only `subject`, `categories`, `mode`. Add a comment at line 46 saying `model` is deliberately not read and pointing here. The provider is a server decision (`DEFAULT_LLM_PROVIDER`), and the model is the pin in `_shared/llm-client.ts`. That pin should carry a comment naming it as the registry's `serverFunded` model, because if `DEFAULT_LLM_PROVIDER` is ever flipped to `openai`, the Free tier's dropdown label ("Claude Sonnet") becomes a lie and nothing in the code will notice.
@@ -203,15 +228,15 @@ No deploy of any Edge Function is needed for this feature. That is worth saying 
 
 ### Step 4 — Dropdown UI
 
-**Where it lives.** `src/components/NewTimeline/ModelSelector.tsx`, rendered by `NewTimelineScreen` as the **first item in the quick-searches row** beneath the field (`NewTimelineScreen.tsx:408`, the `role="group"` flex-wrap row), so it wraps with the chips on narrow screens and disappears with them under the suggestions panel. It takes the same `disabled={isWorking}` the chips do. Not inside the field: the ↵ button already owns the field's right edge and a second control there breaks the reserve-width arithmetic documented at lines 58–66.
+**Where it lives.** `src/components/Settings/ModelSelector.tsx` — the Settings folder, because it is mounted in two places. Primary: rendered by `NewTimelineScreen` as the **first item in the quick-searches row** beneath the field (`NewTimelineScreen.tsx:408`, the `role="group"` flex-wrap row), so it wraps with the chips on narrow screens and disappears with them under the suggestions panel. It takes the same `disabled={isWorking}` the chips do. Not inside the field: the ↵ button already owns the field's right edge and a second control there breaks the reserve-width arithmetic documented at lines 58–66. Secondary: in `ApiKeySection` (editor settings), where the removed picker was, because the model now decides what writes event descriptions and the editor needs a place to change it without leaving.
 
 **Trigger.** shadcn `SelectTrigger` with `className` overridden to the `glassButtonClass` geometry (`rounded-[10px]`, `px-[11px] py-[6px]`, the blur and inset highlight). Content: `Sparkles` leading, the current model's `label` only, default chevron trailing. Do not fork `select.tsx` — override through `className`, which is what it exists for.
 
-**Content.** Two `SelectGroup`s with `SelectLabel`s, in `PROVIDER_ORDER`, labels from `PROVIDER_META[provider].label` so provider naming can't drift from the key modal. Each `SelectItem`: label left, descriptor right in `text-text-secondary`. Locked items: `disabled`, `Lock` replacing the descriptor, opacity via the component's existing `data-[disabled]:opacity-50`. They stay visible.
+**Content.** Two `SelectGroup`s with `SelectLabel`s, in `MODEL_GROUP_ORDER` — **Anthropic first** (Alex, 10 Sep) — with labels from `PROVIDER_META[provider].label` so provider naming can't drift from the key modal. The key modal's fields stay in `PROVIDER_ORDER` (OpenAI first); the two orders differ on purpose and the constant's comment says so. Each `SelectItem`: label left, descriptor right in `text-text-secondary`. Locked items: `disabled`, `Lock` replacing the descriptor, opacity via the component's existing `data-[disabled]:opacity-50`. They stay visible.
 
-**Footer.** One non-selectable row after the last group, rendered only when at least one item is locked: **"Add an API key to unlock more models"**. Click → `onRequestApiKey()` → `AIModePage` sets `showApiKeyModal`, the same modal the Generate gate opens. That modal already has both key fields and a "sign in instead" link, so guest, Free, and one-key-BYOK all land on the right screen without three copies of the CTA. There is no "BYOK settings" reachable from `/` — `ApiKeySection` lives in the editor's settings panel — so this is the only correct target.
+**Footer.** One non-selectable row after the last group, rendered only when at least one item is locked: **"Add an API key to unlock more models"**. Click → `onRequestApiKey()`. On the Create page that means `AIModePage` sets `showApiKeyModal`, the same modal the Generate gate opens; in `ApiKeySection` the key fields are already on screen, so the footer is simply not rendered there. That modal already has both key fields and a "sign in instead" link, so guest, Free, and one-key-BYOK all land on the right screen without three copies of the CTA. There is no "BYOK settings" reachable from `/` — `ApiKeySection` lives in the editor's settings panel — so this is the only correct target.
 
-**Selection.** On change: `setPreferredModel(id)`; no network. The next Generate reads it. Nothing is written per generation.
+**Selection.** On change: `setPreferredModel(id)`; no network. The next call of any kind reads it. Nothing is written per generation.
 
 **Copy rules.** Outcome-focused. "Fastest / Balanced / Most capable", never sizes, parameter counts, or version numbers in the descriptor. The label carries the version (`GPT-5.6 Terra`) because that is the name the provider uses.
 
@@ -226,6 +251,8 @@ Run the same three subjects (one history, one science, one biography) through al
 - [ ] `parseTimelineJson` accepts every response — no throw, ≥1 event after the category filter.
 - [ ] **Chapters come back from every model.** Their absence is silent (§1, chapters note): check `result.chapters` is populated, 3–5 entries, first-of-month `startDate`s, labels ≤ 30 chars.
 - [ ] Opus and Fable: no `<thinking>` text in the JSON block; `stop_reason` is `end_turn`, never `max_tokens` (raise the `params` ceiling if it is).
+- [ ] **Classify on every model** returns one of the four types for all three subjects — not `topic` by fallback. Log the raw reply; a model that answers in a sentence rather than a word is the case the prefill used to prevent.
+- [ ] **Enrich on every model**: open one event per subject. Description streams, `stop_reason` is not `max_tokens`, and the **Sources list is non-empty** — an empty one means web search never fired, which is silent everywhere else.
 - [ ] Astra: `response_format: json_object` and `max_tokens` accepted, or note which parameter the new generation renamed. If the test key cannot reach Astra yet, record that here and re-run this row when it can — do not ship a guessed `params` entry as verified.
 - [ ] Any per-model prompt tweak found here goes into `params`, not into the prompt files, which are shared with enrichment and the server.
 
@@ -241,14 +268,16 @@ Run the same three subjects (one history, one science, one biography) through al
 
 Grep-based, run from the repo root:
 
-- [ ] `grep -rn "claude-sonnet\|claude-opus\|claude-fable\|gpt-" src/` → hits only in `src/constants/models.ts` plus the enrichment and classification pins (`ENRICH_MODEL`, `MODEL_HAIKU`, `MODEL_CHEAP`), each with a comment saying why it is not in the registry.
+- [ ] `grep -rn "claude-\|gpt-" src/` → hits only in `src/constants/models.ts`. No pin survives in either direct client.
 - [ ] `grep -rn "claude-\|gpt-" supabase/functions/` → **unchanged** from today (four hits: `llm-client.ts:59,116`, `classify.ts:37,89`, `enrich-event/index.ts:178`). This feature touches no function.
 - [ ] `grep -rn "model" supabase/functions/generate-timeline/index.ts` → only the comment from Step 3. Nothing reads it from the body.
 - [ ] `grep -rn "preferred_model" supabase/migrations/` → zero. There is no migration.
 - [ ] `grep -rn "timeline_byok_model" src/` → only `userApiKey.ts`.
 - [ ] `grep -rn "SelectGroup" src/` → `select.tsx` and `ModelSelector.tsx` only; no custom dropdown.
-- [ ] `grep -n "#[0-9a-fA-F]\{6\}" src/components/NewTimeline/ModelSelector.tsx` → zero.
-- [ ] `grep -rn "getCredentialFor\|getActiveCredential" src/services/aiTimeline.ts` → generation resolves by `model.provider`, not by the stored provider preference.
+- [ ] `grep -n "#[0-9a-fA-F]\{6\}" src/components/Settings/ModelSelector.tsx` → zero.
+- [ ] `grep -rn "getActiveCredential\|getCredentialFor" src/` → only inside `userApiKey.ts`, called by `getActiveModel()`. `aiTimeline.ts` and `eventEnrichment.ts` call `getActiveModel` and nothing else.
+- [ ] `grep -rn "ByokDefaultProviderPicker\|setPreferredProvider" src/` → zero. The picker and its writer are gone.
+- [ ] `grep -n "role: 'assistant'" src/services/anthropicDirect.ts` → zero. No prefill remains.
 - [ ] `npx tsc --noEmit -p tsconfig.app.json` → no errors in any touched file. `npm run build` is `vite build` alone and **does not type-check**; there were 16 pre-existing errors on 12 Aug and this is the real gate.
 - [ ] `npm run lint` clean.
 
@@ -258,11 +287,13 @@ Manual, in a real browser against `npm run dev` (no test framework exists — ev
 - [ ] Free (signed in, no key): identical to trial. Generate runs on our server on Sonnet.
 - [ ] Anthropic key only: Sonnet, Opus, Fable selectable; three OpenAI models locked; footer present.
 - [ ] OpenAI key only: **Sonnet locked**, Terra selected by default, Luna and Astra selectable.
-- [ ] Both keys: all six selectable, no footer. Pick Opus with preferred-provider set to OpenAI → the classify *and* generate calls both go to `api.anthropic.com` (DevTools → Network). This is D8.
+- [ ] Both keys: all six selectable, no footer. Pick Opus → DevTools → Network shows the classify call, the generate call, and (after opening an event in the editor) the description call all going to `api.anthropic.com` with `"model":"claude-opus-5"` in the body. This is D8.
+- [ ] Both keys, and `timeline_byok_provider` set to `openai` in `localStorage` from before this shipped, `timeline_byok_model` absent → first load shows Terra selected, not Sonnet. This is the §4 seeding.
+- [ ] The key modal and editor settings no longer show the default-provider toggle; editor settings shows the model dropdown in its place, and changing it there changes the next event description's model.
 - [ ] Pick Opus, reload → Opus still selected. Open a second tab → Opus selected there too.
 - [ ] Pick Opus, remove the Anthropic key → dropdown falls back to Terra (OpenAI key present) or Sonnet-locked-with-gate (no key). Re-add the key → Opus again.
 - [ ] Free user, DevTools: add `model: "claude-fable-5-1"` to the `generate-timeline` request body → response is a Sonnet generation, and the function log shows nothing about it.
-- [ ] Generation failure on Anthropic with an OpenAI key present → "Retry with OpenAI" runs Terra; the dropdown still says the Anthropic model afterwards.
+- [ ] Generation failure on Anthropic with an OpenAI key present → "Retry with OpenAI" runs Terra; the dropdown still says the Anthropic model afterwards. Same check on an event description's "Retry with" button.
 - [ ] Production, after deploy: `curl -sI https://<site>/ | grep -i content-security-policy` still lists both provider hosts (`netlify.toml:22` — no change expected, this confirms nothing regressed).
 
 ---
@@ -272,8 +303,8 @@ Manual, in a real browser against `npm run dev` (no test framework exists — ev
 - Any thinking-effort / reasoning-depth control. The dropdown picks a model. The `effort` values inside `params` are implementation, not UI.
 - Per-model pricing display or cost estimates. The §3 prices are for Alex, not the dropdown.
 - Letting Free users past Sonnet. If a future pricing tier changes that, it is a `serverFunded` flag and an Edge Function change — the function would then need a `model` param and the server-side `resolveModelId` that v1 described. Not now.
-- Model choice for event enrichment. It keeps its own pin (A9) and follows the default-provider picker (D9).
-- Model choice for classification, independent of generation. It follows the generation model's provider and runs that provider's cheap pin (D8).
+- A separate model choice per call. One model answers everything (D8); if a future need appears for, say, a cheaper classify, it is a `params`-level decision, not a second dropdown.
+- The server-funded pins. Free users keep Haiku for classify and Sonnet for generate and enrich, in the Edge Functions, untouched.
 - Other providers. `ByokProvider` is a two-member union; a third member is a `byokProviders.ts` + `models.ts` + adapter job, and nothing here makes it harder.
 - Any Edge Function change or deploy.
 
@@ -282,19 +313,20 @@ Manual, in a real browser against `npm run dev` (no test framework exists — ev
 - A one-line "why pick this" tooltip per model.
 - Remembering the model per timeline rather than per browser.
 - Syncing the preference to the account, if and when a profiles table exists for some other reason.
-- Updating the `ByokDefaultProviderPicker` helper text to say it now governs enrichment only (see §9.1 — depends on the answer).
+- Flipping `PROVIDER_ORDER` so the key modal and settings rows also lead with Anthropic, matching the dropdown. One line in `byokProviders.ts`, but it reorders two existing screens, so it is its own small change.
 
 ## 9. Open questions
 
 **Resolved 10 Sep:** Astra, not Sol, is OpenAI's "Most capable" (Alex). Its rollout is staged, so some keys won't reach it for a while; the existing "can't reach *model*" error covers that case, and Step 0 confirms it reads well.
 
-**Resolved 10 Sep:** D3, D6, D7 and D8 confirmed (Alex).
+**Resolved 10 Sep:** D3, D6, D7 confirmed; D8 confirmed and widened to all three calls; D9 follows — the default-provider picker goes; the dropdown leads with Anthropic (Alex).
 
-**Non-blocking:**
+**Non-blocking, for Claude Code at Step 0:**
 
-1. **Alex — does the model selector replace the default-provider picker?** With the dropdown choosing the generation key (D8), the picker's remaining job is event enrichment. Keeping it (D9) means two controls that both say "which account gets billed", for different actions. Replacing it means enrichment follows the generation model's provider, and the picker component and its `timeline_byok_provider` slot go away — but the slot cannot simply be deleted (it is read by `resolveActive()` for every BYOK user today), so that is a small read-old/write-new step. Recommendation for v1: keep both; revisit once there is a second thing the dropdown could govern.
-2. **Alex — group order.** D4 lists Anthropic first; `PROVIDER_ORDER` lists OpenAI first everywhere both providers are shown today. Using `PROVIDER_ORDER` keeps the dropdown and the key modal in the same order. Default: follow `PROVIDER_ORDER`.
-3. **Claude Code, at Step 0** — does the test key reach `gpt-6-astra` yet (and if not, does the error read well), and do Opus 5 / Fable 5.1 accept the §3 params unchanged?
+1. Does the test key reach `gpt-6-astra` yet, and if not, does the error read well?
+2. Do Opus 5 and Fable 5.1 accept the §3 `params` unchanged, for all three calls?
+3. Is `web_search_20260209` accepted on `claude-fable-5-1`? If not, Fable's `params.enrich` names whichever web-search variant its docs list.
+4. Does a bare instruction reliably yield a one-word classification on the thinking models, or does classify need structured outputs?
 
 ---
 
@@ -305,8 +337,8 @@ Carried from the 12 Aug PRD where still true, plus this one's own.
 - **The server never runs a user-chosen model.** Every model that isn't Sonnet costs the user, never us. If that ever changes, it is a pricing decision first and an Edge Function change second.
 - **Keys and the model preference live in the same store.** Splitting them across browser and account produces "locked but selected" on every second device.
 - **Per-model request differences live in the registry's `params`.** An adapter with `if (model === ...)` branches is the thing that makes the next pin rotation a three-file change.
-- **Classification stays on Haiku and Luna.** Assistant prefill only works there, and the user cannot see that call anyway.
-- **Enrichment does not follow the dropdown.** It is the most expensive call in the product (web search, up to three per event) and the dropdown says "generates your timeline". Changing what it bills should be its own decision.
+- **One model answers every BYOK call.** The alternative — a cheap model for classify, the chosen one for generate, a third rule for descriptions — saves a fraction of a cent per click and costs the one-sentence explanation of what the dropdown does. Alex chose the sentence.
+- **The default-provider picker is gone, not hidden.** With the model deciding the key, a second control that also decides the key is a contradiction waiting to happen.
 - **The stale model preference is not cleared when its key is removed.** Same rule, same reason, as the provider preference.
 - **Astra is in the list from day one.** Its rollout is staged, so some keys will get "can't reach gpt-6-astra" for a while. Listing a lower model to avoid that would mean swapping it back within weeks, and the error already says exactly what is wrong.
 - **Descriptors carry no version numbers.** "Most capable" is still true after the id underneath it rotates; "GPT-6" is not.
