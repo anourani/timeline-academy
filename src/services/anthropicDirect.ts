@@ -16,20 +16,23 @@ import {
   ENRICH_SYSTEM_PROMPT,
   type CategoryDefinition,
 } from './llmPrompts'
-import { parseTimelineJson, readApiError, readSseStream } from './llmShared'
+import {
+  parseTimelineJson,
+  readApiError,
+  readSseStream,
+  stripCodeFence,
+} from './llmShared'
+import type { ModelDef } from '@/constants/models'
 import type { EnrichmentStreamHandlers, GeneratedTimeline } from '@/types/ai'
 import type { EventSource, TimelineEvent } from '@/types/event'
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 
-// Deliberately mid-tier, not frontier. This workload is bounded JSON
-// generation and short prose — Opus- and Fable-tier models cost several times
-// as much for no gain the user can see, and BYOK spend lands on the user's own
-// account. Do not "upgrade" these to a frontier model without a reason.
-//
-// Model IDs are complete as written; do not append date suffixes.
-const MODEL_SONNET = 'claude-sonnet-5'
-const MODEL_HAIKU = 'claude-haiku-4-5'
+// No model constants here. Every call takes the ModelDef the user chose and
+// spreads its per-call params into the body, so this file has no per-model
+// branches and a pin rotation is a registry edit. The reasoning that used to
+// live above the Sonnet pin — why the default is mid-tier rather than
+// frontier — moved to src/constants/models.ts with it.
 
 function headers(key: string): Record<string, string> {
   return {
@@ -40,6 +43,48 @@ function headers(key: string): Record<string, string> {
   }
 }
 
+/**
+ * The text of a non-streaming response, or a thrown error explaining why
+ * there isn't any.
+ *
+ * Two things this must not do, both of which the old `content[0]` read did:
+ *
+ *  - Take the first block. Every model in the registry thinks by default, so
+ *    `content[0]` is a `thinking` block and the JSON sits behind it. Reading
+ *    index 0 would fail on Opus and Fable every single time.
+ *  - Read `content` before `stop_reason`. Opus 5 and Fable 5.1 can decline a
+ *    request with HTTP 200 and `stop_reason: 'refusal'`, which would
+ *    otherwise surface as a bare "Empty response".
+ */
+function readMessageText(json: Record<string, unknown>): string {
+  if (json.stop_reason === 'refusal') {
+    throw new Error(
+      'The model declined this request. Try rephrasing the subject, or pick a different model.',
+    )
+  }
+
+  // Checked before the emptiness test below, because running out of room is
+  // the more useful thing to say in both cases it produces: a truncated reply
+  // (which would otherwise read as invalid JSON) and a reply that spent the
+  // whole budget thinking (which would otherwise read as an empty response).
+  // The cap covers thinking as well as the answer.
+  if (json.stop_reason === 'max_tokens') {
+    throw new Error(
+      'The model ran out of room before finishing. Try again, or pick a different model.',
+    )
+  }
+
+  const blocks = (json.content as Array<Record<string, unknown>> | undefined) ?? []
+  const text = blocks
+    .filter((b) => b.type === 'text')
+    .map((b) => b.text as string)
+    .join('')
+
+  if (!text) throw new Error('Empty response from Anthropic')
+
+  return text
+}
+
 // ---------------------------------------------------------------------------
 // Event enrichment (streaming)
 // ---------------------------------------------------------------------------
@@ -48,6 +93,7 @@ export async function enrichEventDirect(
   event: TimelineEvent,
   timelineTitle: string,
   handlers: EnrichmentStreamHandlers,
+  model: ModelDef,
   apiKey: string,
   signal?: AbortSignal,
 ): Promise<void> {
@@ -57,33 +103,19 @@ export async function enrichEventDirect(
       method: 'POST',
       headers: headers(apiKey),
       body: JSON.stringify({
-        model: MODEL_SONNET,
-        // Sonnet 5 runs adaptive thinking by default, and max_tokens caps
-        // thinking PLUS response text. The old 1024 was sized for the
-        // description alone and would now truncate mid-sentence.
-        //
-        // We leave thinking on rather than disabling it to claw the budget
-        // back: with thinking off, Sonnet 5 reaches for tools noticeably less
-        // often, and this call is only worth making if web_search actually
-        // fires — a description with an empty Sources list is the failure
-        // mode nothing else here would catch. max_tokens is a ceiling, not a
-        // charge; only tokens actually produced are billed.
-        max_tokens: 4096,
+        model: model.id,
         system: ENRICH_SYSTEM_PROMPT,
-        tools: [
-          {
-            // Dynamic filtering: results are filtered before they reach the
-            // context window. Enrichment cost is dominated by search-result
-            // input tokens, so this is the cheapest lever available here.
-            type: 'web_search_20260209',
-            name: 'web_search',
-            max_uses: 3,
-          },
-        ],
         messages: [
           { role: 'user', content: buildEnrichUserPrompt(event, timelineTitle) },
         ],
         stream: true,
+        // max_tokens and the web_search tool come from the registry: every
+        // model here thinks, and the cap covers thinking PLUS the description,
+        // so the ceiling is per-model. Thinking is deliberately left on for
+        // this call — with it off the model reaches for tools noticeably less
+        // often, and an enrichment whose search never fires produces an empty
+        // Sources list with no error anywhere.
+        ...model.params.enrich,
       }),
       signal,
     })
@@ -95,7 +127,7 @@ export async function enrichEventDirect(
 
   if (!res.ok || !res.body) {
     handlers.onError(
-      await readApiError(res, 'Anthropic API error', MODEL_SONNET),
+      await readApiError(res, 'Anthropic API error', model.id, 'anthropic'),
       'anthropic',
     )
     return
@@ -104,10 +136,16 @@ export async function enrichEventDirect(
   const sources: EventSource[] = []
   const seenUrls = new Set<string>()
   const blockTypes = new Map<number, string>()
+  // A refusal arrives mid-stream with HTTP 200 and no text blocks, so without
+  // this the panel would simply settle on an empty description.
+  let refused = false
 
   try {
     await readSseStream(res.body, (eventName, data) => {
-      if (eventName === 'content_block_start') {
+      if (eventName === 'message_delta') {
+        const delta = data.delta as Record<string, unknown> | undefined
+        if (delta?.stop_reason === 'refusal') refused = true
+      } else if (eventName === 'content_block_start') {
         const index = data.index as number
         const block = data.content_block as Record<string, unknown>
         if (block && typeof block.type === 'string') {
@@ -139,6 +177,14 @@ export async function enrichEventDirect(
       }
     })
 
+    if (refused) {
+      handlers.onError(
+        'The model declined to describe this event. Try a different model.',
+        'anthropic',
+      )
+      return
+    }
+
     handlers.onSources(sources)
     handlers.onDone()
   } catch (err) {
@@ -154,6 +200,7 @@ export async function enrichEventDirect(
 export async function generateTimelineDirect(
   subject: string,
   categories: CategoryDefinition[] | undefined,
+  model: ModelDef,
   apiKey: string,
 ): Promise<GeneratedTimeline> {
   const userPrompt = categories
@@ -164,41 +211,49 @@ export async function generateTimelineDirect(
     method: 'POST',
     headers: headers(apiKey),
     body: JSON.stringify({
-      model: MODEL_SONNET,
-      max_tokens: 4096,
+      model: model.id,
       system: getSystemPrompt(),
       messages: [{ role: 'user', content: userPrompt }],
-      // No `temperature`: Sonnet 5 rejects a non-default value with a 400.
-      // The old 0.4 is gone rather than moved — steer with the prompt.
+      // No `temperature`: every model in the registry rejects a non-default
+      // value with a 400. The old 0.4 is gone rather than moved — steer with
+      // the prompt.
       //
-      // Thinking is off because this call emits a fixed JSON schema and uses
-      // no tools, so there is nothing for reasoning to improve, and adaptive
-      // thinking would eat into the same max_tokens the JSON needs. (The
-      // enrichment call above makes the opposite trade for the opposite
-      // reason — it depends on a tool firing.)
-      thinking: { type: 'disabled' },
+      // How thinking is handled is per-model and lives in the registry: Sonnet
+      // takes `thinking: { type: 'disabled' }` because this call emits a fixed
+      // JSON schema with no tools, while Opus and Fable must leave it alone
+      // (Fable 400s on any explicit value, and Opus can leak <thinking> tags
+      // into the text with it off) and lower `effort` instead.
+      ...model.params.generate,
     }),
   })
 
   if (!res.ok) {
-    throw new Error(await readApiError(res, 'Anthropic API error', MODEL_SONNET))
+    throw new Error(
+      await readApiError(res, 'Anthropic API error', model.id, 'anthropic'),
+    )
   }
 
-  const json = await res.json()
-  const block = json.content?.[0]
-  if (!block || block.type !== 'text') {
-    throw new Error('Empty response from Anthropic')
-  }
-
-  return parseTimelineJson(block.text as string)
+  return parseTimelineJson(readMessageText(await res.json()))
 }
 
 // ---------------------------------------------------------------------------
-// Subject classification (cheap, non-streaming)
+// Subject classification (non-streaming)
 // ---------------------------------------------------------------------------
 
+/**
+ * Classify a subject into one of four types.
+ *
+ * This used to run on Haiku with an assistant prefill (`{"type": "` as the
+ * start of the reply) and `temperature: 0`. Both are 400s on every model the
+ * dropdown offers, so both are gone — and their job is done better by
+ * `output_config.format`, which the registry puts in `params.classify`: the
+ * reply is constrained to the schema rather than merely started in the right
+ * shape. The parse below therefore matches the OpenAI twin's: read the whole
+ * reply, validate against the four types, fall back to `topic`.
+ */
 export async function classifySubjectDirect(
   subject: string,
+  model: ModelDef,
   apiKey: string,
 ): Promise<string> {
   const validTypes = new Set(['person', 'event', 'topic', 'organization'])
@@ -207,34 +262,31 @@ export async function classifySubjectDirect(
     method: 'POST',
     headers: headers(apiKey),
     body: JSON.stringify({
-      model: MODEL_HAIKU,
-      max_tokens: 32,
+      model: model.id,
       messages: [
         {
           role: 'user',
           content: CLASSIFICATION_PROMPT.replace('{subject}', subject),
         },
-        { role: 'assistant', content: '{"type": "' },
       ],
-      temperature: 0,
+      ...model.params.classify,
     }),
   })
 
   if (!res.ok) {
-    throw new Error(await readApiError(res, 'Anthropic API error', MODEL_HAIKU))
+    throw new Error(
+      await readApiError(res, 'Anthropic API error', model.id, 'anthropic'),
+    )
   }
 
-  const json = await res.json()
-  const block = json.content?.[0]
-  if (!block || block.type !== 'text') {
-    throw new Error('Empty response from Anthropic')
-  }
+  // readMessageText outside the try: a refusal or a truncated reply has its
+  // own message worth showing, and folding it into the parse failure below
+  // would replace it with a misleading one.
+  const text = readMessageText(await res.json())
 
-  // We prefilled with '{"type": "' so the response continues from there.
-  const text = '{"type": "' + (block.text as string)
   let parsed: { type: string }
   try {
-    parsed = JSON.parse(text)
+    parsed = JSON.parse(stripCodeFence(text))
   } catch {
     throw new Error('LLM returned invalid JSON for classification')
   }

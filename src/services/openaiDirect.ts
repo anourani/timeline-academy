@@ -11,9 +11,10 @@
 //     `response_format: json_object`, which is what makes the prose-only
 //     "JSON ONLY" instruction in llmPrompts.ts reliable. Only enrichment
 //     needs /v1/responses, because that is where web search lives.
-//  3. No assistant prefill. Anthropic's classify call starts the reply with
-//     `{"type": "` to force shape; OpenAI has no equivalent, and structured
-//     output replaces it.
+//  3. Structured output rather than a prefill. Anthropic's classify call used
+//     to start the reply with `{"type": "`; OpenAI has no equivalent. That
+//     prefill is now gone on both sides — every model the dropdown offers
+//     rejects it — and both providers constrain the shape instead.
 
 import {
   getSystemPrompt,
@@ -24,17 +25,16 @@ import {
   type CategoryDefinition,
 } from './llmPrompts'
 import { parseTimelineJson, readApiError, readSseStream } from './llmShared'
+import type { ModelDef } from '@/constants/models'
 import type { EnrichmentStreamHandlers, GeneratedTimeline } from '@/types/ai'
 import type { EventSource, TimelineEvent } from '@/types/event'
 
 const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions'
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses'
 
-// Deliberately mid-tier and budget-tier, not frontier — same reasoning as the
-// Anthropic pins: this workload is bounded JSON and short prose, and BYOK
-// spend lands on the user's own account.
-const MODEL_MAIN = 'gpt-5.6-terra'
-const MODEL_CHEAP = 'gpt-5.6-luna'
+// No model constants here — see the note in anthropicDirect.ts. Every call
+// takes the ModelDef the user chose; the reasoning for the mid-tier default
+// lives in src/constants/models.ts.
 
 function headers(key: string): Record<string, string> {
   return {
@@ -90,6 +90,7 @@ export async function enrichEventOpenAIDirect(
   event: TimelineEvent,
   timelineTitle: string,
   handlers: EnrichmentStreamHandlers,
+  model: ModelDef,
   apiKey: string,
   signal?: AbortSignal,
 ): Promise<void> {
@@ -99,22 +100,17 @@ export async function enrichEventOpenAIDirect(
       method: 'POST',
       headers: headers(apiKey),
       body: JSON.stringify({
-        model: MODEL_MAIN,
+        model: model.id,
         // `instructions` is the Responses-API analogue of Anthropic's
         // top-level `system`.
         instructions: ENRICH_SYSTEM_PROMPT,
         input: buildEnrichUserPrompt(event, timelineTitle),
-        tools: [{ type: 'web_search' }],
-        include: ['web_search_call.action.sources'],
-        // A ceiling, not a charge. Generous because reasoning-capable models
-        // spend part of the budget before the visible answer starts.
-        max_output_tokens: 4096,
-        // NOT cosmetic: the Responses API defaults to store: true, which
-        // persists the user's prompts and our outputs into THEIR OpenAI
-        // dashboard. The Anthropic path has no equivalent, and the privacy
-        // policy describes neither. Leave this false.
-        store: false,
         stream: true,
+        // The web_search tool, `include`, `store: false` and the output
+        // ceiling all come from the registry. `store` in particular is not
+        // cosmetic: the Responses API defaults to store: true, which persists
+        // the user's prompts and our outputs into THEIR OpenAI dashboard.
+        ...model.params.enrich,
       }),
       signal,
     })
@@ -126,7 +122,7 @@ export async function enrichEventOpenAIDirect(
 
   if (!res.ok || !res.body) {
     handlers.onError(
-      await readApiError(res, 'OpenAI API error', MODEL_MAIN),
+      await readApiError(res, 'OpenAI API error', model.id, 'openai'),
       'openai',
     )
     return
@@ -204,6 +200,7 @@ export async function enrichEventOpenAIDirect(
 export async function generateTimelineOpenAIDirect(
   subject: string,
   categories: CategoryDefinition[] | undefined,
+  model: ModelDef,
   apiKey: string,
 ): Promise<GeneratedTimeline> {
   const userPrompt = categories
@@ -214,24 +211,28 @@ export async function generateTimelineOpenAIDirect(
     method: 'POST',
     headers: headers(apiKey),
     body: JSON.stringify({
-      model: MODEL_MAIN,
-      // `json_object` requires the literal word "JSON" somewhere in the
-      // messages. getSystemPrompt() satisfies that incidentally ("JSON ONLY",
-      // "RESPONSE SCHEMA"); a future prompt edit that removes the word would
-      // 400 every OpenAI generation while the Anthropic path kept working.
-      response_format: { type: 'json_object' },
+      model: model.id,
       messages: [
         { role: 'system', content: getSystemPrompt() },
         { role: 'user', content: userPrompt },
       ],
       // No `temperature`: newer reasoning-capable models reject non-default
       // sampling parameters, and this is a schema-constrained emit anyway.
-      max_tokens: 8192,
+      //
+      // `response_format: json_object` and `max_tokens` come from the
+      // registry. `json_object` requires the literal word "JSON" somewhere in
+      // the messages; getSystemPrompt() satisfies that incidentally ("JSON
+      // ONLY", "RESPONSE SCHEMA"), and a future prompt edit that removes the
+      // word would 400 every OpenAI generation while the Anthropic path kept
+      // working.
+      ...model.params.generate,
     }),
   })
 
   if (!res.ok) {
-    throw new Error(await readApiError(res, 'OpenAI API error', MODEL_MAIN))
+    throw new Error(
+      await readApiError(res, 'OpenAI API error', model.id, 'openai'),
+    )
   }
 
   const json = await res.json()
@@ -242,11 +243,12 @@ export async function generateTimelineOpenAIDirect(
 }
 
 // ---------------------------------------------------------------------------
-// Subject classification (cheap, non-streaming)
+// Subject classification (non-streaming)
 // ---------------------------------------------------------------------------
 
 export async function classifySubjectOpenAIDirect(
   subject: string,
+  model: ModelDef,
   apiKey: string,
 ): Promise<string> {
   const validTypes = new Set(['person', 'event', 'topic', 'organization'])
@@ -255,24 +257,24 @@ export async function classifySubjectOpenAIDirect(
     method: 'POST',
     headers: headers(apiKey),
     body: JSON.stringify({
-      model: MODEL_CHEAP,
-      response_format: { type: 'json_object' },
+      model: model.id,
       messages: [
         {
           role: 'user',
           content: CLASSIFICATION_PROMPT.replace('{subject}', subject),
         },
       ],
-      // Anthropic's version caps this at 32 because an assistant prefill has
-      // already written most of the answer. There is no prefill here, and a
-      // reasoning-capable model may spend tokens before emitting, so the
-      // ceiling is looser. Still fractions of a cent on the budget tier.
-      max_tokens: 256,
+      // `response_format` and the token ceiling come from the registry. There
+      // is no prefill on either provider now, and a reasoning-capable model
+      // may spend tokens before emitting, so the ceiling grows with the tier.
+      ...model.params.classify,
     }),
   })
 
   if (!res.ok) {
-    throw new Error(await readApiError(res, 'OpenAI API error', MODEL_CHEAP))
+    throw new Error(
+      await readApiError(res, 'OpenAI API error', model.id, 'openai'),
+    )
   }
 
   const json = await res.json()

@@ -197,8 +197,15 @@ Dependency-ordered. Steps 1–3 are invisible to users and shippable on their ow
 
 The file-location audit is done (§1). Two things still need a real key, and cannot be checked from the dev container because OpenAI's domains are egress-blocked:
 
-- [ ] With an ordinary OpenAI key, `GET https://api.openai.com/v1/models` → is `gpt-6-astra` listed? If not, run one generation on it anyway and confirm the user-facing error is the "Your API key can't reach gpt-6-astra" sentence from `readApiError()`. Astra stays in the list either way (D4); this only checks that the not-yet-enabled case reads well.
-- [ ] With a real Anthropic key, one generation each on `claude-opus-5` and `claude-fable-5-1` using the §3 params. Confirms the thinking/`max_tokens` contract before it's encoded in the registry.
+- [ ] With an ordinary OpenAI key, `GET https://api.openai.com/v1/models` → is `gpt-6-astra` listed? If not, run one generation on it anyway and confirm the user-facing error is the "Your API key can't reach gpt-6-astra" sentence from `readApiError()`. Astra stays in the list either way (D4); this only checks that the not-yet-enabled case reads well. **Still open** — no key available in the container. Astra's `params` shipped as a marked-unverified copy of Terra's, per §5 Step 5.
+- [x] With a real Anthropic key, one generation each on `claude-opus-5` and `claude-fable-5-1` using the §3 params. Confirms the thinking/`max_tokens` contract before it's encoded in the registry. **Checked against the docs, not a key** (no Anthropic key in the container either). Anthropic's current model reference confirms every claim §3 rests on: Fable 5.1 400s on any explicit `thinking` value, Opus 5 runs adaptive by default and can leak `<thinking>` tags with thinking off, `budget_tokens` and `temperature` are 400s on all three, and assistant prefill is rejected on all three. The one live-only unknown left is whether real generations come back inside the `max_tokens` ceilings, which is the Step 5 row.
+
+**Two things the docs settled that the registry now depends on**, both of which were §9 questions:
+
+- `web_search_20260209` **is** accepted on `claude-fable-5-1`. Fable 5.1's documented breaking changes against Fable 5 are forced tool use, thinking-block binding, and history editing; the server-tool surface is unchanged, and dynamic filtering covers the Fable tier. All three Anthropic models therefore share one tool block (`ANTHROPIC_WEB_SEARCH` in the registry).
+- Classify uses **structured outputs, not a bare instruction.** `output_config.format` is supported on Sonnet 5, Opus 5 and Fable 5.1, so the prefill's job is done by a schema rather than by hope. See the note on `CLASSIFY_FORMAT`.
+
+**One thing deliberately not adopted.** Anthropic's guidance is to pass server-side `fallbacks` on Fable and Opus so a refused request is re-run on another model inside the same call. That directly contradicts D8: the whole promise of the dropdown is that the model you pick is the model that answers, and a silent substitution would bill the user for a model they did not choose. A refusal surfaces as an error instead (`stop_reason: 'refusal'`, checked before `content` is read on every Anthropic call, streaming included).
 
 ### Step 1 — Registry
 
@@ -321,12 +328,14 @@ Manual, in a real browser against `npm run dev` (no test framework exists — ev
 
 **Resolved 10 Sep:** D3, D6, D7 confirmed; D8 confirmed and widened to all three calls; D9 follows — the default-provider picker goes; the dropdown leads with Anthropic (Alex).
 
-**Non-blocking, for Claude Code at Step 0:**
+**Answered at Step 0 (from Anthropic's current docs; no live key was available in the dev container):**
 
-1. Does the test key reach `gpt-6-astra` yet, and if not, does the error read well?
-2. Do Opus 5 and Fable 5.1 accept the §3 `params` unchanged, for all three calls?
-3. Is `web_search_20260209` accepted on `claude-fable-5-1`? If not, Fable's `params.enrich` names whichever web-search variant its docs list.
-4. Does a bare instruction reliably yield a one-word classification on the thinking models, or does classify need structured outputs?
+1. **Still open.** Nothing in the container can reach OpenAI. Astra ships with Terra's `params` and a comment marking them unverified, exactly as Step 5 requires — not as a guess presented as verified.
+2. **Yes, with the §3 amendments as written.** Confirmed: Fable 5.1 rejects every explicit `thinking` value, Opus 5 thinks by default and leaks `<thinking>` tags when it does not, and `temperature` and prefill are 400s on both. Whether real generations fit inside the ceilings is the one live-only row left in Step 5.
+3. **Yes.** `web_search_20260209` is accepted on `claude-fable-5-1` — its breaking changes against Fable 5 do not touch server tools. One tool block serves all three Anthropic models.
+4. **Neither — it uses structured outputs.** `output_config.format` is supported on all three Anthropic models, so the classify call constrains the reply to a four-value enum rather than asking for one word and hoping. That is a stronger guarantee than the prefill it replaces, and it removes the "answers in a sentence" failure the Step 5 row was written to catch.
+
+**One implementation finding worth recording, because it would have been silent.** Every model in the registry thinks by default, so `content[0]` in an Anthropic response is a `thinking` block, not the JSON. The old `json.content?.[0]` read would have failed on Opus and Fable *every single time* with a bare "Empty response from Anthropic". Both non-streaming calls now scan for text blocks, and check `stop_reason` for `refusal` and `max_tokens` before reading. The streaming enrichment path already filtered deltas by block type and needed no change, but it gained a refusal check for the same reason.
 
 ---
 

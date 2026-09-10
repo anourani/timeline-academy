@@ -113,6 +113,12 @@ class ClaudeClient implements LLMClient {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
+        // The server-funded pin. This is the model the client registry marks
+        // `serverFunded: true` (src/constants/models.ts), which is what makes
+        // the dropdown show "Claude Sonnet" selected for a keyless visitor.
+        // The two must agree: if DEFAULT_LLM_PROVIDER is ever flipped to
+        // "openai", the Free tier's dropdown label becomes a lie and nothing
+        // in the code will notice.
         model: "claude-sonnet-5",
         max_tokens: 4096,
         system: getSystemPrompt(),

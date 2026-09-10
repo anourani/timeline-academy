@@ -9,6 +9,7 @@ import {
   pickQuickSearches,
 } from '@/constants/aiSubjectSuggestions'
 import { glassButtonClass } from '@/components/ui/glassButton'
+import { ModelSelector } from '@/components/Settings/ModelSelector'
 import { PROVIDER_META } from '@/constants/byokProviders'
 import type { ByokProvider } from '@/types/ai'
 
@@ -25,6 +26,9 @@ interface NewTimelineScreenProps {
    *  which has no alternative to offer. */
   retryProvider?: ByokProvider | null
   onRetryWithProvider?: (provider: ByokProvider) => void
+  /** Opens the key modal from the model dropdown's unlock row. The page owns
+   *  that modal, because it is the same one the Generate gate opens. */
+  onRequestApiKey: () => void
 }
 
 const PLACEHOLDER_NAMES = [
@@ -166,6 +170,7 @@ export function NewTimelineScreen({
   error,
   retryProvider,
   onRetryWithProvider,
+  onRequestApiKey,
 }: NewTimelineScreenProps) {
   const [name, setName] = useState('')
   const [placeholderText, setPlaceholderText] = useState('')
@@ -406,11 +411,25 @@ export function NewTimelineScreen({
                   either way, so opening the panel reflows nothing. */}
               <div
                 role="group"
-                aria-label="Quick searches"
+                // The row holds the model dropdown as well as the chips now,
+                // so the label names both rather than mislabelling the first
+                // control in it.
+                aria-label="Model and quick searches"
                 className={`w-full flex flex-row flex-wrap items-start gap-[8px] ${
                   renderDropdown ? 'invisible' : ''
                 }`}
               >
+                {/* First in the row rather than inside the field: the enter
+                    button already owns the field's right edge, and a second
+                    control there would break the reserve-width arithmetic
+                    documented at SEARCH_FIELD_ENTER_RESERVE. Sitting with the
+                    chips means it wraps with them on narrow screens and hides
+                    with them under the suggestions panel. */}
+                <ModelSelector
+                  disabled={isWorking}
+                  onRequestApiKey={onRequestApiKey}
+                />
+
                 {quickSearches.map((subject) => (
                   <button
                     key={subject}

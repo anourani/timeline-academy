@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase'
 import { enrichEventDirect } from './anthropicDirect'
 import { enrichEventOpenAIDirect } from './openaiDirect'
 import { readSseStream } from './llmShared'
-import { getActiveCredential, getCredentialFor } from './userApiKey'
+import { getActiveModel } from './userApiKey'
 import { fetchWikipediaImage } from './wikipediaImage'
 import type { ByokProvider, EnrichmentStreamHandlers } from '@/types/ai'
 import type { EventSource, TimelineEvent } from '../types/event'
@@ -26,8 +26,10 @@ export async function fetchEventImage(title: string): Promise<{
  * Enrich an event with AI-generated description, sources, and image.
  *
  * Routing:
- *   - User has a BYOK key set → call that provider directly from the browser.
- *     Bypasses our edge function, our rate limit, and our billing.
+ *   - User has a BYOK key set → call the model they chose directly from the
+ *     browser, on that model's provider. Bypasses our edge function, our rate
+ *     limit, and our billing. The dropdown on `/` decides which model this is,
+ *     so changing it there changes the next description written here.
  *   - Signed-in user, no key → edge function authenticated via JWT.
  *   - Logged out with no key → server-funded enrichment is not available;
  *     the UI gates this path behind sign-in-or-BYOK before it gets here.
@@ -43,16 +45,16 @@ export async function enrichEvent(
   signal?: AbortSignal,
   providerOverride?: ByokProvider,
 ): Promise<void> {
-  const credential = providerOverride
-    ? getCredentialFor(providerOverride)
-    : getActiveCredential()
+  const active = getActiveModel(providerOverride)
 
-  if (credential) {
-    if (credential.provider === 'openai') {
+  if (active) {
+    const { model, credential } = active
+    if (model.provider === 'openai') {
       await enrichEventOpenAIDirect(
         event,
         timelineTitle,
         handlers,
+        model,
         credential.key,
         signal,
       )
@@ -61,6 +63,7 @@ export async function enrichEvent(
         event,
         timelineTitle,
         handlers,
+        model,
         credential.key,
         signal,
       )
