@@ -43,6 +43,17 @@ Deno.serve(async (req: Request) => {
 
   try {
     // 1. Parse request body
+    //
+    // `model` is deliberately NOT read, and must stay that way. The model
+    // selector on the client is a BYOK feature: every model it offers except
+    // Sonnet costs the user, never us, and BYOK generations never reach this
+    // function at all (the browser calls the provider directly). Free-tier
+    // users are the only callers here, and they are Sonnet-only by decision —
+    // enforced simply by this function not accepting a model. A body with a
+    // `model` field in it is ignored, silently and on purpose.
+    //
+    // See docs/2026-09-10-model-selector-prd.md §5 Step 3. Letting Free users
+    // past Sonnet is a pricing decision first and a change here second.
     const { subject, categories, mode } = await req.json();
 
     if (!subject || typeof subject !== "string" || !subject.trim()) {

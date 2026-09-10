@@ -1,12 +1,11 @@
 import { useState } from 'react'
-import { ByokDefaultProviderPicker } from './ByokDefaultProviderPicker'
+import { ModelSelector } from './ModelSelector'
 import { PROVIDER_META, PROVIDER_ORDER } from '@/constants/byokProviders'
 import {
   clearKey,
   hasAnyKey,
   maskKey,
   setKey,
-  setPreferredProvider,
   useByokCredential,
   useByokKeys,
   validateKeyFormat,
@@ -45,8 +44,6 @@ export function ApiKeySection({ defaultExpanded = false }: ApiKeySectionProps) {
     : user
       ? 'server'
       : 'none'
-
-  const bothPresent = Boolean(stored.anthropic && stored.openai)
 
   const startEdit = (provider: ByokProvider) => {
     setDraft('')
@@ -98,7 +95,12 @@ export function ApiKeySection({ defaultExpanded = false }: ApiKeySectionProps) {
         const meta = PROVIDER_META[provider]
         const savedKey = stored[provider]
         const isEditing = editing === provider
-        const isDefault = bothPresent && active?.provider === provider
+        // "Default" now means "the chosen model runs on this provider's key",
+        // which is a fact about the model rather than a separate preference —
+        // the picker that used to set it is gone.
+        const isDefault =
+          Boolean(stored.anthropic && stored.openai) &&
+          active?.provider === provider
 
         return (
           <div key={provider} className="flex flex-col gap-1.5">
@@ -173,12 +175,18 @@ export function ApiKeySection({ defaultExpanded = false }: ApiKeySectionProps) {
         )
       })}
 
-      {bothPresent && (
-        <ByokDefaultProviderPicker
-          value={stored.preferred ?? 'anthropic'}
-          onChange={setPreferredProvider}
-        />
-      )}
+      {/* Where the default-provider picker used to be. The model decides the
+          provider now, so a second control that also decided it would be a
+          contradiction waiting to happen. No unlock row here: the key fields
+          it would point at are already on this screen. */}
+      <div className="flex flex-col gap-1.5">
+        <span className="label-m-type2 text-[#9B9EA3]">Model</span>
+        <ModelSelector className="self-start" />
+        <p className="font-['Avenir',sans-serif] text-[12px] leading-[16px] text-[#6b6e73] m-0">
+          Answers every AI call made with your key, including event
+          descriptions.
+        </p>
+      </div>
 
       <p className="font-['Avenir',sans-serif] text-[12px] leading-[16px] text-[#6b6e73] m-0">
         Get a key at{' '}

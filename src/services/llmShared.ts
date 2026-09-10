@@ -7,6 +7,7 @@
 // module, so the duplication is deliberate; keep them behaviourally identical,
 // the same convention llmPrompts.ts follows for the prompt text.
 
+import { PROVIDER_META } from '@/constants/byokProviders'
 import type { ByokProvider, GeneratedTimeline } from '@/types/ai'
 
 /** An error that knows which BYOK provider produced it, so the UI can offer
@@ -28,12 +29,18 @@ export class ProviderError extends Error {
  * them. Pass `model` to get a specific message for the access failures that
  * look like app bugs otherwise: both providers gate models by account tier and
  * spend history, so a brand-new key with no billing set up gets a 403/404 that
- * would otherwise surface as a bare "API error (404)".
+ * would otherwise surface as a bare "API error (404)". This is also the
+ * sentence an account the GPT-6 Astra rollout has not reached will see.
+ *
+ * Pass `provider` for the same treatment on a 401, where the provider's own
+ * message ("Incorrect API key provided: sk-...") leaks part of the key into
+ * the UI and still doesn't say which of the two fields is wrong.
  */
 export async function readApiError(
   res: Response,
   label: string,
   model?: string,
+  provider?: ByokProvider,
 ): Promise<string> {
   let message = `${label} (${res.status})`
   try {
@@ -48,6 +55,9 @@ export async function readApiError(
     // ignore — we still have the status-code fallback
   }
 
+  if (provider && res.status === 401) {
+    return `Your ${PROVIDER_META[provider].label} key was rejected. Check it in settings, or replace it with a new one.`
+  }
   if (model && (res.status === 403 || res.status === 404)) {
     return `Your API key can't reach ${model}. The account may need billing set up, or may not have access to that model yet.`
   }

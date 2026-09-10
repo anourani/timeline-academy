@@ -102,6 +102,11 @@ export function AIModePage() {
           const subject = lastSubjectRef.current
           if (subject) void runGeneration(subject, provider)
         }}
+        // The dropdown's unlock row opens the same gate the Generate button
+        // does. No subject is stashed, so handleKeySaved simply closes it —
+        // adding a key from the dropdown should not start a generation the
+        // user never asked for.
+        onRequestApiKey={() => setShowApiKeyModal(true)}
       />
       <ApiKeyModal
         isOpen={showApiKeyModal}

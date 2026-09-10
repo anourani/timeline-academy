@@ -1,13 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Modal } from './Modal'
-import { ByokDefaultProviderPicker } from '@/components/Settings/ByokDefaultProviderPicker'
 import { PROVIDER_META, PROVIDER_ORDER } from '@/constants/byokProviders'
 import {
-  getPreferredProvider,
   hasAnyKey,
   maskKey,
   setKey,
-  setPreferredProvider,
   useByokKeys,
   validateKeyFormat,
 } from '@/services/userApiKey'
@@ -46,7 +43,6 @@ export function ApiKeyModal({
   // shouldn't pretend the key isn't there either.
   const [editing, setEditing] =
     useState<Record<ByokProvider, boolean>>(NOT_EDITING)
-  const [preferred, setPreferred] = useState<ByokProvider>('anthropic')
   const [errors, setErrors] = useState<FieldErrors>({})
 
   // Reset state every time the modal opens.
@@ -55,29 +51,23 @@ export function ApiKeyModal({
       setDrafts(EMPTY_DRAFTS)
       setEditing(NOT_EDITING)
       setErrors({})
-      setPreferred(getPreferredProvider() ?? 'anthropic')
     }
   }, [isOpen])
 
-  /** Would this provider have a key after a save? Reacts to drafts as well as
-   *  stored state, so the picker appears as the second key is typed rather
-   *  than only after a save. */
-  const willHaveKey = (provider: ByokProvider) =>
-    Boolean(drafts[provider].trim()) || Boolean(stored[provider])
-
-  const showPicker = willHaveKey('openai') && willHaveKey('anthropic')
-
+  // This modal is a gate, not a settings screen: it takes keys and gets out of
+  // the way. Which model those keys run is decided by the dropdown on the
+  // Create page behind it (and by the one in editor settings), so there is
+  // nothing to choose here — whichever provider's key is saved, the default
+  // model for it applies.
   const save = () => {
     const entries = PROVIDER_ORDER.map(
       (provider) => [provider, drafts[provider].trim()] as const,
     ).filter(([, value]) => value !== '')
 
     if (entries.length === 0) {
-      // Nothing typed. If keys are already saved this is a preference-only
-      // commit — the only way a two-key user can change their default from
-      // here — otherwise it's an empty submit.
+      // Nothing typed. A user who already has a key is simply continuing past
+      // the gate; anyone else has submitted an empty form.
       if (hasAnyKey()) {
-        if (showPicker) setPreferredProvider(preferred)
         onKeySaved()
         return
       }
@@ -100,11 +90,9 @@ export function ApiKeyModal({
 
     for (const [provider, value] of entries) setKey(provider, value)
 
-    // Keep the stored preference honest even with one key, so the Settings
-    // picker is already correct the moment a second key appears.
-    const present = PROVIDER_ORDER.filter(willHaveKey)
-    setPreferredProvider(present.length > 1 ? preferred : present[0])
-
+    // No model is written here. With no stored preference, the resolver falls
+    // back to the provider's default — Terra for an OpenAI-only key, Sonnet
+    // otherwise — which is exactly what the dropdown will show.
     onKeySaved()
   }
 
@@ -195,13 +183,6 @@ export function ApiKeyModal({
             </div>
           )
         })}
-
-        {showPicker && (
-          <ByokDefaultProviderPicker
-            value={preferred}
-            onChange={setPreferred}
-          />
-        )}
 
         {errors.form && (
           <p className="body-m text-destructive m-0">{errors.form}</p>

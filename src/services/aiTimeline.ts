@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { getActiveCredential, getCredentialFor } from './userApiKey';
+import { getActiveModel } from './userApiKey';
 import {
   classifySubjectDirect,
   generateTimelineDirect,
@@ -11,24 +11,21 @@ import {
 import { ProviderError } from './llmShared';
 import type { SubjectType, PillDefinition } from '../constants/pillDefinitions';
 import type {
-  ByokCredential,
   ByokProvider,
   ClassificationResult,
   GeneratedTimeline,
 } from '@/types/ai';
 
-/**
- * Which BYOK credential this call should use, or null for the server path.
- *
- * `override` exists for the retry-with-the-other-provider action: it targets
- * one provider for a single call without touching the stored default, so a
- * one-off retry never silently redefines which provider the user is on.
- */
-function resolveCredential(
-  override?: ByokProvider
-): ByokCredential | null {
-  return override ? getCredentialFor(override) : getActiveCredential();
-}
+// `getActiveModel()` resolves the model AND the key that pays for it, in one
+// call. That is the whole of "the chosen model answers every BYOK call": the
+// two functions below and enrichEvent() ask the same resolver, so classifying
+// a subject, generating the timeline and writing an event's description all
+// land on the model the user picked and the one account they picked it for.
+//
+// `providerOverride` is the retry-with-the-other-provider action. It targets
+// that provider's default model for a single call and leaves the stored
+// preference alone, so a one-off retry never silently redefines what the user
+// is on.
 
 // Moved to @/types/ai so llmShared.ts can reference GeneratedTimeline without
 // importing this module (which imports the direct clients, which import
@@ -36,7 +33,10 @@ function resolveCredential(
 export type { ClassificationResult, GeneratedTimeline } from '@/types/ai';
 
 /**
- * Classify a subject into a type. Uses the cheapest/fastest model.
+ * Classify a subject into a type.
+ *
+ * On BYOK this runs on whichever model the user chose, like every other AI
+ * call. The server-funded path still uses Haiku, pinned in the Edge Function.
  *
  * Routes via the BYOK key when present, otherwise hits our edge function
  * (which requires a signed-in user — supabase.functions.invoke attaches the
@@ -48,14 +48,15 @@ export async function classifySubject(
 ): Promise<ClassificationResult> {
   const validTypes: SubjectType[] = ['person', 'event', 'topic', 'organization'];
 
-  const credential = resolveCredential(providerOverride);
-  if (credential) {
+  const active = getActiveModel(providerOverride);
+  if (active) {
+    const { model, credential } = active;
     let type: string;
     try {
       type =
-        credential.provider === 'openai'
-          ? await classifySubjectOpenAIDirect(subject, credential.key)
-          : await classifySubjectDirect(subject, credential.key);
+        model.provider === 'openai'
+          ? await classifySubjectOpenAIDirect(subject, model, credential.key)
+          : await classifySubjectDirect(subject, model, credential.key);
     } catch (err) {
       // Wrapped here rather than inside each client so there is one wrap site
       // per call, and so the UI knows which provider to offer a retry against.
@@ -105,8 +106,9 @@ export async function generateTimeline(
   categories?: PillDefinition[],
   providerOverride?: ByokProvider
 ): Promise<GeneratedTimeline> {
-  const credential = resolveCredential(providerOverride);
-  if (credential) {
+  const active = getActiveModel(providerOverride);
+  if (active) {
+    const { model, credential } = active;
     const categoryDefs =
       categories && categories.length > 0
         ? categories.map((c) => ({
@@ -116,13 +118,19 @@ export async function generateTimeline(
           }))
         : undefined;
     try {
-      return credential.provider === 'openai'
+      return model.provider === 'openai'
         ? await generateTimelineOpenAIDirect(
             subject,
             categoryDefs,
+            model,
             credential.key
           )
-        : await generateTimelineDirect(subject, categoryDefs, credential.key);
+        : await generateTimelineDirect(
+            subject,
+            categoryDefs,
+            model,
+            credential.key
+          );
     } catch (err) {
       throw new ProviderError((err as Error).message, credential.provider);
     }

@@ -36,6 +36,8 @@ The tier model is unchanged. `byok_enabled` is still a boolean, no provider is r
 
 **Rejected: a user-facing model picker.** The API key is an authentication credential; the model is a per-request parameter. The app already chose per task — a capable model for generation and enrichment, a cheap one for classification — and that split is not a judgement a user can make better, since they cannot see which call is a one-word classification.
 
+> **Reversed 10 September 2026** by `docs/2026-09-10-model-selector-prd.md` (Alex's call), and shipped. The cost argument above still holds and is carried into that PRD's §3, which is why the default stays mid-tier and nobody moves off it without opening the dropdown. What changed is who decides: BYOK users spend their own tokens, so the choice is theirs to make. The per-task split named here is also gone — one chosen model now answers classify, generate *and* enrich, so there is no longer a call the user cannot see. The server-funded path is untouched and still splits Haiku/Sonnet.
+
 ---
 
 ## 3. The CORS question — unresolved, and it gates the transport
@@ -156,7 +158,7 @@ Following the convention in `2026-08-07-verification-runbook.md`: shipped is not
 
 ## 9. Decisions worth not re-litigating
 
-- **No user-facing model picker.** Rejected in section 2. The maintenance burden is permanent and the user has no basis for the choice.
+- ~~**No user-facing model picker.** Rejected in section 2. The maintenance burden is permanent and the user has no basis for the choice.~~ **Reversed 10 Sep 2026** — see the note in section 2 and `docs/2026-09-10-model-selector-prd.md`. The maintenance burden landed in one place, `src/constants/models.ts`, which is also where the per-model request differences live.
 - **No automatic failover between providers.** Silently spending on the user's other account is a surprise nobody asked for, and it masks an invalid key. The explicit retry action does the same job with the user's consent.
 - **The provider is not a tier axis.** Recording it in `app_metadata` would mean an SQL change and a migration for no behavioural difference, since limits are identical either way. `byok_enabled` stays boolean.
 - **The stored preference is not cleared when its provider's key is removed.** The one-key-wins branch in `getActiveCredential()` covers the gap, and re-adding that key restores what the user actually asked for.
