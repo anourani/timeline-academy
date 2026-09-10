@@ -28,7 +28,7 @@ Draft v1 assumed BYOK was Anthropic-only, keys lived in the database, and the Ed
 | A5 | "Sonnet is available to every tier" | Sonnet on BYOK runs on the **user's Anthropic key** like every other Anthropic model. An OpenAI-only BYOK user has no way to reach Sonnet: `resolveActive()` in `userApiKey.ts` routes them to OpenAI, where the current pin is `gpt-5.6-terra`. | Sonnet is locked for OpenAI-only users, and the default for them must be Terra (today's behaviour), not Sonnet. D7 amended. |
 | A6 | Guest and Free unlock differently ("Log in" vs "Add a key") | Signing in moves `trial` → `free`, which is **still Sonnet-only**. The only action that unlocks any model, for any tier, is adding a key. The key modal already offers sign-in as a secondary link. | The `login` lock reason is dropped. One footer copy for everyone without a key. D3 amended. |
 | A7 | Per-model request tweaks can wait until Step 8 | `claude-fable-5-1` **rejects `thinking: {type: 'disabled'}` with a 400**, and both generation calls send exactly that (`anthropicDirect.ts:179`, `llm-client.ts:129`). Picking Fable with today's request body fails every time. | Per-model `params` are part of the registry from Step 1, not a Step 8 afterthought. |
-| A8 | `gpt-6-astra` is available | The id is real (`gpt-6-astra`, $10/$50 per MTok) but it began a **staged rollout on 3 Sep** — enterprise Trusted Access first, then "over the coming days" to the API. Not confirmed reachable with an ordinary key as of this writing. `gpt-5.6-sol` ($4/$20 promotional through 21 Nov) is the GA frontier of the 5.6 family. | Blocking open question §9.1. `readApiError()` already turns a 403/404 into "Your API key can't reach *model*", so an unreachable model degrades gracefully — but it shouldn't be the one we advertise as "Most capable". |
+| A8 | `gpt-6-astra` is available | The id is real (`gpt-6-astra`, $10/$50 per MTok) but it began a **staged rollout on 3 Sep** — enterprise Trusted Access first, then "over the coming days" to the API. Whether a given ordinary key reaches it yet depends on the account. | **Astra ships anyway** (Alex, 10 Sep). `readApiError()` already turns a 403/404 into "Your API key can't reach *model*", so an account the rollout hasn't reached gets a clear sentence, not a generic failure. Step 0 confirms that sentence is what actually appears. |
 | A9 | The event-detail panels might share the generation function | They don't share the function. They share the **constant**: `MODEL_SONNET` in `anthropicDirect.ts:31` and `MODEL_MAIN` in `openaiDirect.ts:36` are read by generation *and* enrichment. Classification uses `MODEL_HAIKU` / `MODEL_CHEAP` with assistant prefill, which Sonnet-tier and above reject. | Generation reads the registry; enrichment and classification keep their pins. The dropdown cannot leak into the panels by construction. Non-blocking question 1 from v1 is answered: no. |
 | A10 | "Left of the generate button, matching the floating-toolbar / pill styling" | The Create page has no floating toolbar (that's the editor). The generate button is a blue ↵ **inside** the search field (`NewTimelineScreen.tsx:355`, desktop only, PR #107). The pill on this page is `glassButtonClass` (`src/components/ui/glassButton.ts`), used by the quick-search chips below the field. | Placement in §5 Step 4 rewritten around the actual layout. |
 | A11 | Nothing said about it | `docs/2026-08-12-openai-byok-prd.md` §2 and §9 **explicitly reject a user-facing model picker**, listing it under "Decisions worth not re-litigating". | This PRD reverses that on Alex's call. Step 6 amends that doc so the two don't contradict. The cost argument it made is still valid and is carried into §3 as context. |
@@ -46,7 +46,7 @@ Locked, with the audit's amendments marked. Amended rows need Alex's sign-off be
 | D1 | UI is a plain dropdown (shadcn `Select` — present at `src/components/ui/select.tsx` with `SelectGroup`, `SelectLabel`, `SelectItem`, `SelectSeparator`). No slider, no thinking-effort control. | Locked |
 | D2 | Guest and Free tiers are hard-locked to Claude Sonnet, enforced server-side. | Locked. **Already true**: the Edge Function reads only `subject`, `categories`, `mode` (`generate-timeline/index.ts:46`) and pins Sonnet. Enforcement = keep it that way (Step 3). |
 | D3 | Locked models still render in the dropdown, disabled, with a lock icon and an unlock CTA row. | **Amended (A6):** one unlock copy, "Add an API key to unlock more models", for every locked state. No login-specific copy. |
-| D4 | Six models, grouped by provider: Anthropic (Sonnet, Opus, Fable) and OpenAI (Luna, Terra, Astra-or-Sol). | Locked, with the sixth id pending §9.1. Group order follows `PROVIDER_ORDER` (`src/constants/byokProviders.ts`: OpenAI, then Anthropic) unless Alex wants the dropdown to differ from the key modal. |
+| D4 | Six models, grouped by provider: Anthropic (Sonnet, Opus, Fable) and OpenAI (Luna, Terra, Astra). | Locked. Astra stays in the list through its staged rollout (A8). Group order follows `PROVIDER_ORDER` (`src/constants/byokProviders.ts`: OpenAI, then Anthropic) unless Alex wants the dropdown to differ from the key modal. |
 | D5 | A provider's models unlock only with a key for that provider. | Locked. **Extends to Sonnet** (A5). |
 | D6 | The chosen model is remembered. | **Amended (A4):** `localStorage` slot `timeline_byok_model`, same pattern as `timeline_byok_provider`. No profile column, no migration. Rationale in §4. |
 | D7 | Default is Claude Sonnet. | **Amended (A5):** default is the provider's current pin — Sonnet for Anthropic, Terra for OpenAI — which is exactly what every existing user gets today. Nobody's generation changes model until they open the dropdown. |
@@ -68,9 +68,9 @@ Lives at `src/constants/models.ts` — beside `byokProviders.ts` and `plans.ts`,
 | Anthropic | Claude Fable | Most capable | `claude-fable-5-1` | $10 → $50 | Anthropic key |
 | OpenAI | GPT-5.6 Luna | Fastest | `gpt-5.6-luna` | $0.20 → $1.20 | OpenAI key |
 | OpenAI | GPT-5.6 Terra | Balanced | `gpt-5.6-terra` | $2 → $12 | OpenAI key |
-| OpenAI | GPT-6 Astra *(or GPT-5.6 Sol, §9.1)* | Most capable | `gpt-6-astra` *(or `gpt-5.6-sol`, $4 → $20)* | $10 → $50 | OpenAI key |
+| OpenAI | GPT-6 Astra | Most capable | `gpt-6-astra` | $10 → $50 | OpenAI key |
 
-Ids verified 10 Sep: the three Anthropic ids against Anthropic's current model list; `gpt-5.6-luna` and `gpt-5.6-terra` are already pinned in the code and were confirmed against OpenAI's pricing page; `gpt-6-astra` and `gpt-5.6-sol` against OpenAI's announcement and pricing pages. **Model ids are complete as written — never append date suffixes.**
+Ids verified 10 Sep: the three Anthropic ids against Anthropic's current model list; `gpt-5.6-luna` and `gpt-5.6-terra` are already pinned in the code and were confirmed against OpenAI's pricing page; `gpt-6-astra` against OpenAI's announcement and pricing pages. **Model ids are complete as written — never append date suffixes.**
 
 Prices are context for Alex, not UI (out of scope, §7). The point the 12 Aug PRD made still stands: this workload is bounded JSON. A generation on Sonnet costs roughly $0.02; the same generation on Fable or Astra costs roughly five times that, on the user's own account, for a difference they may not be able to see. That is the user's call to make now, and the "Fastest / Balanced / Most capable" descriptors are deliberately version-free so the dropdown copy survives the next id rotation.
 
@@ -112,7 +112,7 @@ The Anthropic generation call today sends `thinking: { type: 'disabled' }` and `
 
 `max_tokens` is a ceiling, not a charge. Raising it costs nothing unless the tokens are produced.
 
-The OpenAI side has fewer known hazards: all three run through Chat Completions with `response_format: { type: 'json_object' }` and `max_tokens: 8192`, no `temperature` (already removed for the reasoning-capable family). Astra/Sol's parameter contract is unverified — OpenAI's docs are egress-blocked from the dev container, same as on 12 Aug. Step 5 is where it gets checked.
+The OpenAI side has fewer known hazards: all three run through Chat Completions with `response_format: { type: 'json_object' }` and `max_tokens: 8192`, no `temperature` (already removed for the reasoning-capable family). Astra's parameter contract is unverified — it is a new generation, and OpenAI's docs are egress-blocked from the dev container, same as on 12 Aug. Step 5 is where it gets checked, and if the test key can't reach Astra yet, its `params` entry starts as a copy of Terra's and is marked unverified in a comment rather than guessed.
 
 Rule: **every per-model difference lives in `params`. The adapters apply `{ model: def.id, ...def.params }` and contain no per-model branches.** A future pin change is then a registry edit, not an adapter edit.
 
@@ -174,7 +174,7 @@ Dependency-ordered. Steps 1–3 are invisible to users and shippable on their ow
 
 The file-location audit is done (§1). Two things still need a real key, and cannot be checked from the dev container because OpenAI's domains are egress-blocked:
 
-- [ ] With an ordinary OpenAI key, `GET https://api.openai.com/v1/models` → is `gpt-6-astra` listed? Decides §9.1.
+- [ ] With an ordinary OpenAI key, `GET https://api.openai.com/v1/models` → is `gpt-6-astra` listed? If not, run one generation on it anyway and confirm the user-facing error is the "Your API key can't reach gpt-6-astra" sentence from `readApiError()`. Astra stays in the list either way (D4); this only checks that the not-yet-enabled case reads well.
 - [ ] With a real Anthropic key, one generation each on `claude-opus-5` and `claude-fable-5-1` using the §3 params. Confirms the thinking/`max_tokens` contract before it's encoded in the registry.
 
 ### Step 1 — Registry
@@ -226,7 +226,7 @@ Run the same three subjects (one history, one science, one biography) through al
 - [ ] `parseTimelineJson` accepts every response — no throw, ≥1 event after the category filter.
 - [ ] **Chapters come back from every model.** Their absence is silent (§1, chapters note): check `result.chapters` is populated, 3–5 entries, first-of-month `startDate`s, labels ≤ 30 chars.
 - [ ] Opus and Fable: no `<thinking>` text in the JSON block; `stop_reason` is `end_turn`, never `max_tokens` (raise the `params` ceiling if it is).
-- [ ] Astra/Sol: `response_format: json_object` and `max_tokens` accepted, or note which parameter the family renamed.
+- [ ] Astra: `response_format: json_object` and `max_tokens` accepted, or note which parameter the new generation renamed. If the test key cannot reach Astra yet, record that here and re-run this row when it can — do not ship a guessed `params` entry as verified.
 - [ ] Any per-model prompt tweak found here goes into `params`, not into the prompt files, which are shared with enrichment and the server.
 
 ### Step 6 — Documentation
@@ -257,7 +257,7 @@ Manual, in a real browser against `npm run dev` (no test framework exists — ev
 - [ ] Trial (no account, no key): dropdown shows Sonnet selected, five locked, footer "Add an API key to unlock more models"; click opens the key modal.
 - [ ] Free (signed in, no key): identical to trial. Generate runs on our server on Sonnet.
 - [ ] Anthropic key only: Sonnet, Opus, Fable selectable; three OpenAI models locked; footer present.
-- [ ] OpenAI key only: **Sonnet locked**, Terra selected by default, Luna and Astra/Sol selectable.
+- [ ] OpenAI key only: **Sonnet locked**, Terra selected by default, Luna and Astra selectable.
 - [ ] Both keys: all six selectable, no footer. Pick Opus with preferred-provider set to OpenAI → the classify *and* generate calls both go to `api.anthropic.com` (DevTools → Network). This is D8.
 - [ ] Pick Opus, reload → Opus still selected. Open a second tab → Opus selected there too.
 - [ ] Pick Opus, remove the Anthropic key → dropdown falls back to Terra (OpenAI key present) or Sonnet-locked-with-gate (no key). Re-add the key → Opus again.
@@ -282,23 +282,21 @@ Manual, in a real browser against `npm run dev` (no test framework exists — ev
 - A one-line "why pick this" tooltip per model.
 - Remembering the model per timeline rather than per browser.
 - Syncing the preference to the account, if and when a profiles table exists for some other reason.
-- Updating the `ByokDefaultProviderPicker` helper text to say it now governs enrichment only (see §9.3 — depends on the answer).
+- Updating the `ByokDefaultProviderPicker` helper text to say it now governs enrichment only (see §9.2 — depends on the answer).
 
 ## 9. Open questions
 
-**Blocking — answer before Step 1:**
-
-1. **Alex — Astra or Sol as OpenAI's "Most capable"?** `gpt-6-astra` may not be reachable from an ordinary key yet (A8). Options: (a) ship Sol now, swap the id to Astra when Step 0 confirms it's GA — one registry line; (b) ship Astra and rely on the existing "Your API key can't reach gpt-6-astra" error for users who aren't in the rollout yet. Recommendation: (a). A locked-looking row that is actually just broken for most people is the wrong first impression for the model we call "Most capable".
+**Resolved 10 Sep:** Astra, not Sol, is OpenAI's "Most capable" (Alex). Its rollout is staged, so some keys won't reach it for a while; the existing "can't reach *model*" error covers that case, and Step 0 confirms it reads well.
 
 **Blocking — answer before Step 4:**
 
-2. **Alex — confirm the amended decisions D3, D6, D7 and the new D8.** Each is a consequence of the code, not a preference, but they change what v1 said and should not be silently adopted.
+1. **Alex — confirm the amended decisions D3, D6, D7 and the new D8.** Each is a consequence of the code, not a preference, but they change what v1 said and should not be silently adopted.
 
 **Non-blocking:**
 
-3. **Alex — does the model selector replace the default-provider picker?** With the dropdown choosing the generation key (D8), the picker's remaining job is event enrichment. Keeping it (D9) means two controls that both say "which account gets billed", for different actions. Replacing it means enrichment follows the generation model's provider, and the picker component and its `timeline_byok_provider` slot go away — but the slot cannot simply be deleted (it is read by `resolveActive()` for every BYOK user today), so that is a small read-old/write-new step. Recommendation for v1: keep both; revisit once there is a second thing the dropdown could govern.
-4. **Alex — group order.** D4 lists Anthropic first; `PROVIDER_ORDER` lists OpenAI first everywhere both providers are shown today. Using `PROVIDER_ORDER` keeps the dropdown and the key modal in the same order. Default: follow `PROVIDER_ORDER`.
-5. **Claude Code, at Step 0** — is `gpt-6-astra` listed for an ordinary key, and do Opus 5 / Fable 5.1 accept the §3 params unchanged?
+2. **Alex — does the model selector replace the default-provider picker?** With the dropdown choosing the generation key (D8), the picker's remaining job is event enrichment. Keeping it (D9) means two controls that both say "which account gets billed", for different actions. Replacing it means enrichment follows the generation model's provider, and the picker component and its `timeline_byok_provider` slot go away — but the slot cannot simply be deleted (it is read by `resolveActive()` for every BYOK user today), so that is a small read-old/write-new step. Recommendation for v1: keep both; revisit once there is a second thing the dropdown could govern.
+3. **Alex — group order.** D4 lists Anthropic first; `PROVIDER_ORDER` lists OpenAI first everywhere both providers are shown today. Using `PROVIDER_ORDER` keeps the dropdown and the key modal in the same order. Default: follow `PROVIDER_ORDER`.
+4. **Claude Code, at Step 0** — does the test key reach `gpt-6-astra` yet (and if not, does the error read well), and do Opus 5 / Fable 5.1 accept the §3 params unchanged?
 
 ---
 
@@ -312,4 +310,5 @@ Carried from the 12 Aug PRD where still true, plus this one's own.
 - **Classification stays on Haiku and Luna.** Assistant prefill only works there, and the user cannot see that call anyway.
 - **Enrichment does not follow the dropdown.** It is the most expensive call in the product (web search, up to three per event) and the dropdown says "generates your timeline". Changing what it bills should be its own decision.
 - **The stale model preference is not cleared when its key is removed.** Same rule, same reason, as the provider preference.
+- **Astra is in the list from day one.** Its rollout is staged, so some keys will get "can't reach gpt-6-astra" for a while. Listing a lower model to avoid that would mean swapping it back within weeks, and the error already says exactly what is wrong.
 - **Descriptors carry no version numbers.** "Most capable" is still true after the id underneath it rotates; "GPT-6" is not.
