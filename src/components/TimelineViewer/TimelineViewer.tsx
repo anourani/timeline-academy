@@ -8,7 +8,7 @@ import { SCALES } from '../../constants/scales';
 import { VERTICAL_SCALES } from '../../constants/verticalScales';
 import { DEFAULT_CATEGORIES } from '../../constants/categories';
 import { TimelineEvent, CategoryConfig } from '../../types/event';
-import type { TimelineChapter } from '../../types/timeline';
+import type { ScrollTarget, TimelineChapter } from '../../types/timeline';
 import { ChaptersStrip } from '../Timeline/ChaptersStrip';
 import { findChapterAtMonth, normalizeChapters } from '../../utils/chapters';
 import { computeDominantCategoryColor } from '../../utils/dominantCategory';
@@ -36,7 +36,7 @@ export function TimelineViewer() {
   const [error, setError] = useState<string | null>(null);
   const [detailPanelEvent, setDetailPanelEvent] = useState<TimelineEvent | null>(null);
   const [currentMonthIndex, setCurrentMonthIndex] = useState(0);
-  const [pendingScrollDate, setPendingScrollDate] = useState<string | null>(null);
+  const [pendingScrollTarget, setPendingScrollTarget] = useState<ScrollTarget | null>(null);
 
   useEffect(() => {
     const loadTimeline = async () => {
@@ -206,7 +206,7 @@ export function TimelineViewer() {
           months={months}
           currentMonthIndex={currentMonthIndex}
           accentColor={accentColor}
-          onSelect={setPendingScrollDate}
+          onSelect={setPendingScrollTarget}
         />
         <Timeline
           events={timeline.events}
@@ -218,8 +218,8 @@ export function TimelineViewer() {
           onOpenDetails={(event) => setDetailPanelEvent(event)}
           onVisibleMonthChange={handleVisibleMonthChange}
           chapterLabel={activeChapter?.label}
-          pendingScrollDate={pendingScrollDate}
-          onScrollComplete={() => setPendingScrollDate(null)}
+          pendingScrollTarget={pendingScrollTarget}
+          onScrollComplete={() => setPendingScrollTarget(null)}
         />
       </main>
 

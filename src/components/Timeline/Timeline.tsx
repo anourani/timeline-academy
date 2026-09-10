@@ -7,12 +7,12 @@ import { TimelineEvent } from './TimelineEvent';
 import { TimelineScrollIndicator } from './TimelineScrollIndicator';
 import { EventHoverCursor, EventHoverCursorHandle } from './EventHoverCursor';
 import { TimelineEvent as ITimelineEvent, CategoryConfig } from '../../types/event';
-import { TimelineScale, TimelineVerticalScale } from '../../types/timeline';
+import { ScrollTarget, TimelineScale, TimelineVerticalScale } from '../../types/timeline';
 import { findMonthIndex, formatYMD, getTimelineRange, shiftEventDates } from '../../utils/dateUtils';
 import { calculateEventStacks, StackedEvent } from '../../utils/eventStacking';
 import { useTimelineScroll } from '../../hooks/useTimelineScroll';
 import { useEventDrag } from '../../hooks/useEventDrag';
-import { CATEGORY_PADDING, CATEGORY_MIN_HEIGHT, SCROLL_INDICATOR_HEIGHT, HEADER_HEIGHT } from '../../constants/timeline';
+import { CATEGORY_PADDING, CATEGORY_MIN_HEIGHT, SCROLL_INDICATOR_HEIGHT, HEADER_HEIGHT, SCROLL_LEAD_IN_MONTHS } from '../../constants/timeline';
 import { EventForm } from '../EventForm/EventForm';
 import {
   Dialog,
@@ -33,12 +33,12 @@ interface TimelineProps {
   scale: TimelineScale;
   verticalScale: TimelineVerticalScale;
   groupByCategory?: boolean;
-  pendingScrollDate?: string | null;
+  pendingScrollTarget?: ScrollTarget | null;
   onScrollComplete?: () => void;
   /** Id of an event the page wants edited — set by the detail panel's Edit
    *  action, which lives outside this subtree but needs the EventForm dialog
    *  this component owns. Cleared via `onEditRequestHandled`, mirroring the
-   *  `pendingScrollDate` / `onScrollComplete` pair above. */
+   *  `pendingScrollTarget` / `onScrollComplete` pair above. */
   pendingEditEventId?: string | null;
   onEditRequestHandled?: () => void;
   /** Left-most visible month, reported on every scroll. The chapters strip
@@ -77,7 +77,7 @@ export function Timeline({
   scale,
   verticalScale,
   groupByCategory = false,
-  pendingScrollDate,
+  pendingScrollTarget,
   onScrollComplete,
   pendingEditEventId,
   onEditRequestHandled,
@@ -179,21 +179,30 @@ export function Timeline({
     };
   }, []);
 
-  const scrollToDate = useCallback((dateStr: string) => {
-    if (!months.length || !scrollContainerRef.current) return;
+  const scrollToTarget = useCallback((target: ScrollTarget) => {
+    const el = scrollContainerRef.current;
+    if (!months.length || !el) return;
 
     // `findMonthIndex` rather than an exact match: it clamps a date outside
     // the rendered range to the nearest edge. Chapter boundaries sit near the
     // padded ends of that range, and an exact lookup silently no-ops there —
     // which reads as a dead chip.
-    const monthIndex = findMonthIndex(months, dateStr);
+    const monthIndex = findMonthIndex(months, typeof target === 'string' ? target : target.date);
     if (monthIndex === -1) return;
 
     const pixelOffset = monthIndex * scale.monthWidth;
-    const viewportWidth = scrollContainerRef.current.clientWidth;
-    const targetLeft = pixelOffset - (viewportWidth / 2) + (scale.monthWidth / 2);
+    const targetLeft = typeof target === 'string'
+      // Centre the month, which is what a single-date jump has always meant.
+      ? pixelOffset - (el.clientWidth / 2) + (scale.monthWidth / 2)
+      // Park it at the left edge, so the whole chapter sits ahead of you
+      // rather than behind. The lead-in keeps a sliver of the previous
+      // chapter on screen, so the boundary reads as a boundary.
+      : pixelOffset - (SCROLL_LEAD_IN_MONTHS * scale.monthWidth);
 
-    scrollContainerRef.current.scrollTo({ left: targetLeft, behavior: 'smooth' });
+    // The browser clamps to `scrollWidth - clientWidth` on its own, so a
+    // chapter near the end of the canvas lands as far left as the canvas
+    // allows rather than flush. Floor at 0 for the same reason at the start.
+    el.scrollTo({ left: Math.max(0, targetLeft), behavior: 'smooth' });
   }, [months, scale.monthWidth]);
 
   // Drag-and-drop event repositioning
@@ -209,15 +218,16 @@ export function Timeline({
 
   const { dragState, handlePointerDown, justDraggedRef } = useEventDrag(scale, scrollContainerRef, handleDragEnd);
 
-  // Handle bulk-add scroll target from EventTableEditor
+  // Handle a scroll target from outside this subtree — bulk-add in
+  // EventTableEditor, the first-event jump after a generation, or a chapter chip.
   useEffect(() => {
-    if (pendingScrollDate) {
+    if (pendingScrollTarget) {
       requestAnimationFrame(() => {
-        scrollToDate(pendingScrollDate);
+        scrollToTarget(pendingScrollTarget);
         onScrollComplete?.();
       });
     }
-  }, [pendingScrollDate, scrollToDate, onScrollComplete]);
+  }, [pendingScrollTarget, scrollToTarget, onScrollComplete]);
 
   // Compute layout: either one band per visible category (grouped mode)
   // or a single band containing all visible events (default).
@@ -314,7 +324,7 @@ export function Timeline({
     setSelectedDate(null);
 
     requestAnimationFrame(() => {
-      scrollToDate(eventData.startDate);
+      scrollToTarget(eventData.startDate);
     });
 
     if (newEventId) {
@@ -322,7 +332,7 @@ export function Timeline({
       // and rendered DOM node we can scroll to.
       setPendingScrollEventId(newEventId);
     }
-  }, [editingEvent, onAddEvent, onUpdateEvent, scrollToDate]);
+  }, [editingEvent, onAddEvent, onUpdateEvent, scrollToTarget]);
 
   // --- Hover cursor (concept 3a) -----------------------------------------
   // One delegated listener on the grid container regardless of event count.
@@ -412,7 +422,7 @@ export function Timeline({
     if (!node) return;
     if (eventId === pendingScrollEventId) {
       // scrollIntoView handles vertical scroll on the page; horizontal scroll
-      // is handled separately by scrollToDate.
+      // is handled separately by scrollToTarget.
       node.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
       setPendingScrollEventId(null);
     }

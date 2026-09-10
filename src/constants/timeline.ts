@@ -10,3 +10,6 @@ export const EVENT_MIN_WIDTH = 120;       // Minimum width for event title visib
 // Category lane dimensions
 export const CATEGORY_PADDING = 8;        // Vertical padding within a category lane
 export const CATEGORY_MIN_HEIGHT = 80;    // Minimum height of an empty category lane
+
+// Scroll behaviour
+export const SCROLL_LEAD_IN_MONTHS = 2;   // Months of the previous chapter left visible when jumping to a chapter's head

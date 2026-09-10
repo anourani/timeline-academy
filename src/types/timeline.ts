@@ -25,6 +25,17 @@ export interface TimelineVerticalScale {
 }
 
 /**
+ * A request to scroll the canvas to a date.
+ *
+ * A bare string centres that month, which is what bulk-add and the
+ * first-event jump after a generation have always wanted. The object form
+ * parks the date at the left edge instead, for jumping to the head of a
+ * chapter: centring there would fill half the viewport with the chapter you
+ * just left, and you want to be looking at the one you picked.
+ */
+export type ScrollTarget = string | { date: string; align: 'start' };
+
+/**
  * A named span of a timeline — "Sputnik Shock", "Race to the Moon".
  *
  * Generated alongside the events by the AI pass and persisted as JSONB on
