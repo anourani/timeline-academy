@@ -39,7 +39,7 @@ Draft v1 assumed BYOK was Anthropic-only, keys lived in the database, and the Ed
 
 ## 2. Decisions
 
-Locked, with the audit's amendments marked. D3, D6 and D7 were confirmed by Alex on 10 Sep; D8 and D9 are still proposed.
+Locked, with the audit's amendments marked. D3, D6, D7 and D8 were confirmed by Alex on 10 Sep; D9 is still proposed.
 
 | # | Decision | Status |
 |---|---|---|
@@ -50,7 +50,7 @@ Locked, with the audit's amendments marked. D3, D6 and D7 were confirmed by Alex
 | D5 | A provider's models unlock only with a key for that provider. | Locked. **Extends to Sonnet** (A5). |
 | D6 | The chosen model is remembered. | **Amended (A4), confirmed 10 Sep:** `localStorage` slot `timeline_byok_model`, same pattern as `timeline_byok_provider`. No profile column, no migration. Rationale in §4. |
 | D7 | Default is Claude Sonnet. | **Amended (A5), confirmed 10 Sep:** default is the provider's current pin — Sonnet for Anthropic, Terra for OpenAI — which is exactly what every existing user gets today. Nobody's generation changes model until they open the dropdown. |
-| D8 *(new)* | The chosen model's provider decides which key the **whole Create flow** uses — classification and generation together. | Proposed. Without this, a user with both keys and preferred-provider OpenAI who picks Opus would bill OpenAI for the classify call and Anthropic for the generate call in one click. The 12 Aug PRD's own rule: spending on an account the user didn't pick for this request is a surprise. |
+| D8 *(new)* | The chosen model's provider decides which key the **whole Create flow** uses — classification and generation together. | **Confirmed 10 Sep.** Without this, a user with both keys and preferred-provider OpenAI who picks Opus would bill OpenAI for the classify call and Anthropic for the generate call in one click. The 12 Aug PRD's own rule: spending on an account the user didn't pick for this request is a surprise. |
 | D9 *(new)* | The default-provider picker stays. It keeps governing event enrichment, which this PRD does not touch. | Proposed. See §9.3 for the alternative. |
 
 ---
@@ -282,21 +282,19 @@ Manual, in a real browser against `npm run dev` (no test framework exists — ev
 - A one-line "why pick this" tooltip per model.
 - Remembering the model per timeline rather than per browser.
 - Syncing the preference to the account, if and when a profiles table exists for some other reason.
-- Updating the `ByokDefaultProviderPicker` helper text to say it now governs enrichment only (see §9.2 — depends on the answer).
+- Updating the `ByokDefaultProviderPicker` helper text to say it now governs enrichment only (see §9.1 — depends on the answer).
 
 ## 9. Open questions
 
 **Resolved 10 Sep:** Astra, not Sol, is OpenAI's "Most capable" (Alex). Its rollout is staged, so some keys won't reach it for a while; the existing "can't reach *model*" error covers that case, and Step 0 confirms it reads well.
 
-**Blocking — answer before Step 4:**
-
-1. **Alex — confirm D8** (the chosen model's provider decides the key for classify and generate together). D3, D6 and D7 were confirmed on 10 Sep.
+**Resolved 10 Sep:** D3, D6, D7 and D8 confirmed (Alex).
 
 **Non-blocking:**
 
-2. **Alex — does the model selector replace the default-provider picker?** With the dropdown choosing the generation key (D8), the picker's remaining job is event enrichment. Keeping it (D9) means two controls that both say "which account gets billed", for different actions. Replacing it means enrichment follows the generation model's provider, and the picker component and its `timeline_byok_provider` slot go away — but the slot cannot simply be deleted (it is read by `resolveActive()` for every BYOK user today), so that is a small read-old/write-new step. Recommendation for v1: keep both; revisit once there is a second thing the dropdown could govern.
-3. **Alex — group order.** D4 lists Anthropic first; `PROVIDER_ORDER` lists OpenAI first everywhere both providers are shown today. Using `PROVIDER_ORDER` keeps the dropdown and the key modal in the same order. Default: follow `PROVIDER_ORDER`.
-4. **Claude Code, at Step 0** — does the test key reach `gpt-6-astra` yet (and if not, does the error read well), and do Opus 5 / Fable 5.1 accept the §3 params unchanged?
+1. **Alex — does the model selector replace the default-provider picker?** With the dropdown choosing the generation key (D8), the picker's remaining job is event enrichment. Keeping it (D9) means two controls that both say "which account gets billed", for different actions. Replacing it means enrichment follows the generation model's provider, and the picker component and its `timeline_byok_provider` slot go away — but the slot cannot simply be deleted (it is read by `resolveActive()` for every BYOK user today), so that is a small read-old/write-new step. Recommendation for v1: keep both; revisit once there is a second thing the dropdown could govern.
+2. **Alex — group order.** D4 lists Anthropic first; `PROVIDER_ORDER` lists OpenAI first everywhere both providers are shown today. Using `PROVIDER_ORDER` keeps the dropdown and the key modal in the same order. Default: follow `PROVIDER_ORDER`.
+3. **Claude Code, at Step 0** — does the test key reach `gpt-6-astra` yet (and if not, does the error read well), and do Opus 5 / Fable 5.1 accept the §3 params unchanged?
 
 ---
 
