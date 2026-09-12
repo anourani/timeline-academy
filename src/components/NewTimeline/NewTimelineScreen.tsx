@@ -403,9 +403,24 @@ export function NewTimelineScreen({
                   )}
 
                   {renderDropdown && (
+                    /* The backdrop blur belongs to the panel's design but has
+                       to be applied here, on the wrapper, and the reason is
+                       worth keeping: `animate-in` runs a keyframe that sets a
+                       transform, `fill-mode-forwards` leaves it applied after
+                       the animation ends, and a transformed element is a
+                       backdrop root. So anything inside this box sees an empty
+                       backdrop — a blur on `SubjectSuggestions` itself filters
+                       nothing at any radius, which is exactly the bug this
+                       fixes: the model tab underneath was showing through the
+                       panel's 4%-opacity fill completely unblurred.
+
+                       On the wrapper the filter is resolved against the parent
+                       instead, which does contain the tab. `rounded-[8px]`
+                       matches the panel inside it so the blurred region takes
+                       the same corners rather than squaring them off. */
                     <div
                       data-state={dropdownVisible ? 'open' : 'closed'}
-                      className="absolute left-0 right-0 top-[calc(100%+4px)] z-20 duration-150 ease-in fill-mode-forwards data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-1 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-1 data-[state=closed]:pointer-events-none"
+                      className="absolute left-0 right-0 top-[calc(100%+4px)] z-20 rounded-[8px] backdrop-blur-[4px] duration-150 ease-in fill-mode-forwards data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-1 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-1 data-[state=closed]:pointer-events-none"
                     >
                       <SubjectSuggestions
                         query={name}
