@@ -42,17 +42,66 @@ interface ModelSelectorProps {
    * already on screen there.
    */
   onRequestApiKey?: () => void
+  /**
+   * How the trigger presents itself.
+   *
+   * `chip` is the glass pill the editor's settings panel mounts. `tab` is the
+   * Create page's: small type tucked into the bottom-right of the plate the
+   * search field sits on, carrying no fill of its own because the plate
+   * already supplies one.
+   *
+   * A variant rather than a `className` the caller passes, because the two
+   * differ in *content* as well as geometry — the tab spells out "Model"
+   * where the chip leans on an icon — and because half the tab's classes
+   * exist only to cancel the base trigger's own border, radius and shadow,
+   * which is not a job to leave to whoever mounts it.
+   */
+  variant?: 'chip' | 'tab'
   className?: string
+}
+
+const TRIGGER_VARIANTS: Record<'chip' | 'tab', string> = {
+  // The `glassButtonClass` geometry. It was written to make this sit in the
+  // Create page's quick-search row as a fourth chip; the tab has taken that
+  // spot, but the settings panel's own buttons are the same glass, so the
+  // recipe is still the right one there. Values come from glassButton.ts
+  // rather than being new hex: that file is the one place it is written down.
+  chip: cn(
+    'gap-[6px] px-[11px] py-[6px] rounded-[10px]',
+    'backdrop-blur-[12px] bg-white/10 border-white/[0.15]',
+    'shadow-[0px_8px_32px_rgba(0,0,0,0.4),inset_0px_1px_0px_rgba(255,255,255,0.1)]',
+    "font-['Avenir',sans-serif] font-medium text-[14px] text-text-secondary",
+    'hover:bg-white/20 transition-all',
+  ),
+  // Flat and fill-less on purpose: the plate under the search field is what
+  // this reads against, so a border or a shadow here would draw a second box
+  // inside the first. `border-0 shadow-none rounded-none` are cancelling the
+  // base trigger's, not choices of their own.
+  tab: cn(
+    'gap-[4px] px-[16px] py-[8px]',
+    'border-0 bg-transparent shadow-none rounded-none',
+    "font-['Avenir',sans-serif] text-[12px] leading-[18px]",
+    // The base trigger appends a 16px chevron at half opacity. The tab's is
+    // 12px and solid, so it sits on the same optical weight as the 12px type
+    // beside it rather than reading as a separate, heavier control.
+    '[&>svg]:size-3 [&>svg]:opacity-100 [&>svg]:text-text-tertiary',
+    // `[&:hover>svg]`, not `hover:[&>svg]`. The latter compiles to
+    // `.class > svg:hover` — the chevron lighting up only when the pointer is
+    // on the chevron itself, which is a 12px target and not the affordance.
+    // This one is `.class:hover > svg`: hovering anywhere on the tab.
+    '[&:hover>svg]:text-text-secondary [&>svg]:transition-colors',
+  ),
 }
 
 /**
  * Which model answers this visitor's AI calls.
  *
- * Mounted in two places over one persisted value: the Create page, beside the
- * quick-search chips, and the editor's settings panel, where the removed
- * default-provider picker used to sit. Settings needs it because the chosen
- * model now also writes event descriptions, and the editor has no other way
- * to change that without leaving.
+ * Mounted in two places over one persisted value: the Create page, as a tab
+ * tucked into the bottom-right of the search field's plate, and the editor's
+ * settings panel, where the removed default-provider picker used to sit.
+ * Settings needs it because the chosen model now also writes event
+ * descriptions, and the editor has no other way to change that without
+ * leaving. The two look nothing alike — see `variant`.
  *
  * The dropdown lists what the visitor's keys can reach and locks the rest in
  * place rather than hiding them — for someone without a key, the locked rows
@@ -61,6 +110,7 @@ interface ModelSelectorProps {
 export function ModelSelector({
   disabled = false,
   onRequestApiKey,
+  variant = 'chip',
   className,
 }: ModelSelectorProps) {
   const tier = useAccountTier()
@@ -103,26 +153,46 @@ export function ModelSelector({
       disabled={disabled || tier === 'loading'}
     >
       <SelectTrigger
-        aria-label="Model"
+        // The chip needs the label: all it shows is the model name, and the
+        // "Model" heading `ApiKeySection` puts above it is not associated with
+        // it. The tab must *not* have it — its visible text already reads
+        // "Model <name>", and an `aria-label` overrides contents, so keeping
+        // one here would drop the selected model out of the accessible name
+        // while it sits on screen (WCAG 2.5.3). Letting the name compute from
+        // the contents is both correct and richer.
+        aria-label={variant === 'chip' ? 'Model' : undefined}
         className={cn(
-          // The quick-search chips' geometry, so this sits in their row as one
-          // of them. Values come from glassButton.ts rather than being new
-          // hex: that file is the one place the glass recipe is written down.
-          'w-auto h-auto min-w-0 shrink-0 gap-[6px] whitespace-nowrap',
-          'px-[11px] py-[6px] rounded-[10px]',
-          'backdrop-blur-[12px] bg-white/10 border-white/[0.15]',
-          'shadow-[0px_8px_32px_rgba(0,0,0,0.4),inset_0px_1px_0px_rgba(255,255,255,0.1)]',
-          "font-['Avenir',sans-serif] font-medium text-[14px] text-text-secondary",
-          'hover:bg-white/20 transition-all',
+          'w-auto h-auto min-w-0 shrink-0 whitespace-nowrap',
           'disabled:opacity-50 disabled:pointer-events-none',
+          TRIGGER_VARIANTS[variant],
           className,
         )}
       >
-        <Sparkles className="size-4 shrink-0" aria-hidden="true" />
-        <SelectValue>{selected?.label}</SelectValue>
+        {variant === 'tab' ? (
+          // The tab names the setting because nothing around it does: it sits
+          // alone on the field's plate, where the chip had the settings
+          // panel's own section heading directly above it.
+          <span className="text-text-tertiary">Model</span>
+        ) : (
+          <Sparkles className="size-4 shrink-0" aria-hidden="true" />
+        )}
+        {/* A literal, not `CATEGORIES[0].color`, which is the same hex. The
+            category palette is user-facing data that can be rethemed; the
+            model label is chrome. Coupling them would drag one into the
+            other's redesign. */}
+        <SelectValue className={variant === 'tab' ? 'text-[#A770EC]' : undefined}>
+          {selected?.label}
+        </SelectValue>
       </SelectTrigger>
 
-      <SelectContent className="min-w-[240px]">
+      <SelectContent
+        className="min-w-[240px]"
+        // The tab hangs off the field's right edge, so the menu hangs from the
+        // same edge. Left-aligning a 240px menu off a ~167px trigger sitting
+        // there leaves the overflow to collision detection at every width;
+        // this gives the same answer at all of them.
+        align={variant === 'tab' ? 'end' : 'start'}
+      >
         {MODEL_GROUP_ORDER.map((provider, groupIndex) => (
           <SelectGroup key={provider}>
             {groupIndex > 0 && <SelectSeparator />}
