@@ -458,17 +458,27 @@ export function NewTimelineScreen({
                   — but that only settles which control the Enter key reaches,
                   not what a click on a chip does.
 
-                  `invisible` rather than a fade, because it also takes the chips
-                  out of the tab order — right for controls sitting under an open
-                  panel. Keyed to `renderDropdown`, not `dropdownVisible`, so they
-                  stay hidden through the exit animation rather than reappearing
-                  under a panel that is still fading. The row keeps its space
-                  either way, so opening the panel reflows nothing. */}
+                The row recedes behind the open panel rather than vanishing, the
+                  way the model tab does: it keeps its place and fades, so the
+                  layout under the field stays the same shape whether you are
+                  typing or not. It used to be `invisible`, which read as the
+                  chips being destroyed and rebuilt every time a query started.
+
+                  `pointer-events-none` and `tabIndex={-1}` carry the part of
+                  `invisible` that was doing real work. A chip is a one-click
+                  generation of a *different* subject, so one left live under a
+                  half-covering panel is a mis-click that throws away whatever
+                  the user was typing — and focus should not land on something
+                  sitting behind a panel either.
+
+                  Keyed to `renderDropdown`, not `dropdownVisible`, so the fade
+                  holds through the panel's exit animation instead of the chips
+                  brightening under a panel that is still on screen. */}
               <div
                 role="group"
                 aria-label="Quick searches"
-                className={`w-full flex flex-row flex-wrap items-start gap-[8px] ${
-                  renderDropdown ? 'invisible' : ''
+                className={`w-full flex flex-row flex-wrap items-start gap-[8px] transition-opacity duration-150 ${
+                  renderDropdown ? 'opacity-40 pointer-events-none' : ''
                 }`}
               >
                 {quickSearches.map((subject) => (
@@ -476,6 +486,10 @@ export function NewTimelineScreen({
                     key={subject}
                     type="button"
                     disabled={isWorking}
+                    // `pointer-events-none` on the row stops the mouse; this
+                    // stops the keyboard. React 18 has no `inert` prop, which
+                    // would otherwise do both on the container in one word.
+                    tabIndex={renderDropdown ? -1 : undefined}
                     onClick={() => handleQuickSearch(subject)}
                     className={`${glassButtonClass} shrink-0 whitespace-nowrap disabled:opacity-50 disabled:pointer-events-none`}
                   >
