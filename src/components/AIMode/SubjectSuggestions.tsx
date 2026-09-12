@@ -41,8 +41,16 @@ export function SubjectSuggestions({
   if (!isLoading && suggestions.length === 0) return null
 
   return (
+    /* The 4px backdrop blur this surface is specced with is deliberately NOT
+       here — it lives on the positioning wrapper in `NewTimelineScreen`, which
+       is the only place it can do anything. A blur on this element has an
+       empty backdrop to work on; the wrapper's entrance animation leaves a
+       transform on it, and a transformed element is a backdrop root, so
+       nothing painted outside it is visible to a filter inside it. Measured,
+       not deduced: with the blur here, the tab behind this panel is
+       pixel-for-pixel identical at blur(4px) and blur(20px) and none. */
     <div
-      className="flex flex-col items-start gap-[2px] w-full max-h-[270px] overflow-y-auto py-[12px] px-[8px] rounded-[8px] border border-[#262626] bg-[rgba(184,184,184,0.04)] backdrop-blur-[4px] shadow-[0px_8px_32px_0px_rgba(155,158,163,0.04)]"
+      className="flex flex-col items-start gap-[2px] w-full max-h-[270px] overflow-y-auto py-[12px] px-[8px] rounded-[8px] border border-[#262626] bg-[rgba(184,184,184,0.04)] shadow-[0px_8px_32px_0px_rgba(155,158,163,0.04)]"
       role="listbox"
       aria-busy={isLoading ? 'true' : 'false'}
     >

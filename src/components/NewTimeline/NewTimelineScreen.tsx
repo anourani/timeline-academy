@@ -67,9 +67,9 @@ const SEARCH_FIELD_PADDING = 'px-[11px] py-[9px] md:p-[11px]'
  * Input-only, deliberately not folded into `SEARCH_FIELD_PADDING`: the ghost
  * overlay renders only while the field is empty and the button only while it is
  * not, so the ghost has no button to make room for — and taking the reserve
- * anyway would narrow the box its placeholder animates in from 416px to 367px,
+ * anyway would narrow the box its placeholder animates in from 456px to 407px,
  * cutting the longest name's headroom ('Civil Rights Movement', ~302px) from
- * 114px to 65px to buy nothing. Right padding cannot move left-anchored text,
+ * 154px to 105px to buy nothing. Right padding cannot move left-anchored text,
  * so the two still agree on every metric the ghost actually depends on: type,
  * left padding, vertical padding.
  */
@@ -290,7 +290,15 @@ export function NewTimelineScreen({
       <BackgroundGrid />
       <BackgroundPattern />
       <div className="relative z-10">
-        <div className="flex flex-col items-center gap-[40px] px-[var(--page-gutter)] pt-[160px] pb-[64px] md:pt-[200px] md:pb-[120px]">
+        {/* The label is the first thing in the form and the form is this box's
+            only child, so this padding *is* the viewport-top-to-label-top
+            distance the design asks for: 40% of the viewport, never under
+            200px. The floor is what keeps the field clear of the 80px
+            `GlobalNav` that `AIModePage` paints over this screen — 40vh alone
+            would tuck under it below a 200px-tall window. The screen root is
+            `min-h-screen overflow-auto`, so a window too short for the sum
+            scrolls rather than clipping. */}
+        <div className="flex flex-col items-center gap-[40px] px-[var(--page-gutter)] pt-[max(40vh,200px)] pb-[64px] md:pb-[120px]">
           <form
             ref={formRef}
             onSubmit={handleSubmit}
@@ -303,96 +311,143 @@ export function NewTimelineScreen({
 
             {/* One column, so the chips and any error hang off the field's left
                 edge. The suggestions panel is not part of it — it anchors to the
-                field itself and covers the chips. */}
-            <div className="w-full max-w-[440px] flex flex-col items-start gap-[8px]">
-              <div className="relative w-full">
-                {/* Fill and border are constant by design — the component carries
-                    them on its base and varies only the shadow between resting and
-                    typed. Not duplication waiting to be folded away: those two
-                    shadows are the whole of the state difference. */}
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={name}
-                  onChange={(e) => {
-                    setName(e.target.value)
-                    if (!isWorking) setShowSuggestions(true)
-                  }}
-                  onFocus={() => setHasEngaged(true)}
-                  onBlur={() => {
-                    if (name.trim().length === 0) setHasEngaged(false)
-                  }}
-                  placeholder=""
+                field itself and covers both the model tab and the chips. */}
+            <div className="w-full max-w-[480px] flex flex-col items-start gap-[8px]">
+              {/* The plate the field sits on, and the whole of what makes the model
+                  control read as a tab rather than a fourth chip: an opaque fill
+                  under both, so the band below the field reads as the same object
+                  the field is part of rather than as page background. The band runs
+                  the full width even though the tab only occupies its right end —
+                  that is the mockup, and it is what hides the background grid line
+                  that would otherwise cross behind the tab.
+
+                  The inner wrapper is kept as its own positioning context rather
+                  than folded into this one, because the suggestions panel anchors
+                  to it at `top-[calc(100%+4px)]`. Measured against the plate that
+                  4px would become 4px below the *tab*, dropping the panel 34px and
+                  leaving a gap the mockup does not have. */}
+              <div className="w-full flex flex-col items-end rounded-[8px] bg-surface-primary">
+                <div className="relative w-full">
+                  {/* Fill and border are constant by design — the component carries
+                      them on its base and varies only the shadow between resting and
+                      typed. Not duplication waiting to be folded away: those two
+                      shadows are the whole of the state difference. */}
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={name}
+                    onChange={(e) => {
+                      setName(e.target.value)
+                      if (!isWorking) setShowSuggestions(true)
+                    }}
+                    onFocus={() => setHasEngaged(true)}
+                    onBlur={() => {
+                      if (name.trim().length === 0) setHasEngaged(false)
+                    }}
+                    placeholder=""
+                    disabled={isWorking}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    enterKeyHint="search"
+                    className={`w-full rounded-[8px] border border-[#404040] bg-surface-secondary outline-none transition-shadow text-text-secondary focus-visible:ring-1 focus-visible:ring-white/40 disabled:opacity-70 ${SEARCH_FIELD_PADDING} ${SEARCH_FIELD_ENTER_RESERVE} ${SEARCH_FIELD_FONT} ${
+                      hasEngaged
+                        ? 'shadow-[0px_8px_16px_0px_rgba(155,158,163,0.04)]'
+                        : 'shadow-[0px_8px_16px_0px_rgba(0,0,0,0.4)]'
+                    }`}
+                    aria-label="Subject for timeline generation"
+                  />
+
+                  {/* `type="submit"` is the whole point: the Enter key and this
+                      button reach `handleSubmit` through one path — the form's
+                      default button — rather than two copies of it that could
+                      drift.
+
+                      Which is also why it must never be `disabled`. A disabled
+                      default button has no activation behaviour, so implicit
+                      submission fires nothing and the Enter key dies with it —
+                      including below `md`, where the button is not even rendered.
+                      Empty and in-flight queries are already refused inside
+                      `handleSubmit`; visibility is carried by `invisible` (the
+                      chips' idiom, which drops it from hit-testing and the tab
+                      order in one property) so the control stays mounted and the
+                      Enter path never changes shape.
+
+                      `top-[12px] h-[40px]` measures the input's *content* box —
+                      1px border plus 11px padding, then 32px type at 1.25
+                      line-height — rather than stretching to the wrapper, whose
+                      height an inline-block input can pad with a baseline
+                      descender. Tied to `SEARCH_FIELD_FONT`'s `md` metrics; if
+                      those move, this moves with them. */}
+                  <button
+                    type="submit"
+                    aria-label="Generate timeline"
+                    className={`hidden md:flex absolute right-[12px] top-[12px] h-[40px] items-center justify-center px-[9px] rounded-[6px] bg-[rgba(37,99,235,0.8)] border border-white/[0.15] shadow-[0px_8px_32px_rgba(0,0,0,0.4),inset_0px_1px_0px_rgba(255,255,255,0.1)] text-[#dadee5] hover:bg-[rgba(37,99,235,0.9)] transition-colors outline-none focus-visible:ring-1 focus-visible:ring-white/40 ${
+                      showEnterButton ? '' : 'invisible'
+                    }`}
+                  >
+                    <CornerDownLeft size={20} aria-hidden="true" />
+                  </button>
+
+                  {/* `border border-transparent` is load-bearing: the input has a
+                      1px border and an inset-0 overlay does not, so without it the
+                      ghost sits a pixel up and left of the real caret. */}
+                  {!hasEngaged && name === '' && (
+                    <div
+                      aria-hidden="true"
+                      className={`pointer-events-none absolute inset-0 flex items-center border border-transparent overflow-hidden whitespace-nowrap select-none text-text-tertiary ${SEARCH_FIELD_PADDING} ${SEARCH_FIELD_FONT}`}
+                    >
+                      {placeholderText}
+                      <span className="animate-blink-caret">|</span>
+                    </div>
+                  )}
+
+                  {renderDropdown && (
+                    /* The backdrop blur belongs to the panel's design but has
+                       to be applied here, on the wrapper, and the reason is
+                       worth keeping: `animate-in` runs a keyframe that sets a
+                       transform, `fill-mode-forwards` leaves it applied after
+                       the animation ends, and a transformed element is a
+                       backdrop root. So anything inside this box sees an empty
+                       backdrop — a blur on `SubjectSuggestions` itself filters
+                       nothing at any radius, which is exactly the bug this
+                       fixes: the model tab underneath was showing through the
+                       panel's 4%-opacity fill completely unblurred.
+
+                       On the wrapper the filter is resolved against the parent
+                       instead, which does contain the tab. `rounded-[8px]`
+                       matches the panel inside it so the blurred region takes
+                       the same corners rather than squaring them off. */
+                    <div
+                      data-state={dropdownVisible ? 'open' : 'closed'}
+                      className="absolute left-0 right-0 top-[calc(100%+4px)] z-20 rounded-[8px] backdrop-blur-[4px] duration-150 ease-in fill-mode-forwards data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-1 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-1 data-[state=closed]:pointer-events-none"
+                    >
+                      <SubjectSuggestions
+                        query={name}
+                        suggestions={suggestions}
+                        isLoading={suggestionsLoading}
+                        onSelect={handleSelectSuggestion}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Sits on the plate, not inside the field: the enter button already
+                    owns the field's right edge, and a second control there would
+                    break the reserve-width arithmetic documented at
+                    SEARCH_FIELD_ENTER_RESERVE.
+
+                    Deliberately *not* hidden with the chips when the suggestions
+                    panel opens. The panel is translucent over a 4px blur and covers
+                    this exactly, so the tab reads through it — which is the mockup,
+                    and it means nothing appears or disappears as the panel comes and
+                    goes. The panel wins the paint order on its `z-20` alone: it is
+                    positioned and this is not. */}
+                <ModelSelector
+                  variant="tab"
                   disabled={isWorking}
-                  autoComplete="off"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  enterKeyHint="search"
-                  className={`w-full rounded-[8px] border border-[#404040] bg-surface-secondary outline-none transition-shadow text-text-secondary focus-visible:ring-1 focus-visible:ring-white/40 disabled:opacity-70 ${SEARCH_FIELD_PADDING} ${SEARCH_FIELD_ENTER_RESERVE} ${SEARCH_FIELD_FONT} ${
-                    hasEngaged
-                      ? 'shadow-[0px_8px_16px_0px_rgba(155,158,163,0.04)]'
-                      : 'shadow-[0px_8px_16px_0px_rgba(0,0,0,0.4)]'
-                  }`}
-                  aria-label="Subject for timeline generation"
+                  onRequestApiKey={onRequestApiKey}
                 />
-
-                {/* `type="submit"` is the whole point: the Enter key and this
-                    button reach `handleSubmit` through one path — the form's
-                    default button — rather than two copies of it that could
-                    drift.
-
-                    Which is also why it must never be `disabled`. A disabled
-                    default button has no activation behaviour, so implicit
-                    submission fires nothing and the Enter key dies with it —
-                    including below `md`, where the button is not even rendered.
-                    Empty and in-flight queries are already refused inside
-                    `handleSubmit`; visibility is carried by `invisible` (the
-                    chips' idiom, which drops it from hit-testing and the tab
-                    order in one property) so the control stays mounted and the
-                    Enter path never changes shape.
-
-                    `top-[12px] h-[40px]` measures the input's *content* box —
-                    1px border plus 11px padding, then 32px type at 1.25
-                    line-height — rather than stretching to the wrapper, whose
-                    height an inline-block input can pad with a baseline
-                    descender. Tied to `SEARCH_FIELD_FONT`'s `md` metrics; if
-                    those move, this moves with them. */}
-                <button
-                  type="submit"
-                  aria-label="Generate timeline"
-                  className={`hidden md:flex absolute right-[12px] top-[12px] h-[40px] items-center justify-center px-[9px] rounded-[6px] bg-[rgba(37,99,235,0.8)] border border-white/[0.15] shadow-[0px_8px_32px_rgba(0,0,0,0.4),inset_0px_1px_0px_rgba(255,255,255,0.1)] text-[#dadee5] hover:bg-[rgba(37,99,235,0.9)] transition-colors outline-none focus-visible:ring-1 focus-visible:ring-white/40 ${
-                    showEnterButton ? '' : 'invisible'
-                  }`}
-                >
-                  <CornerDownLeft size={20} aria-hidden="true" />
-                </button>
-
-                {/* `border border-transparent` is load-bearing: the input has a
-                    1px border and an inset-0 overlay does not, so without it the
-                    ghost sits a pixel up and left of the real caret. */}
-                {!hasEngaged && name === '' && (
-                  <div
-                    aria-hidden="true"
-                    className={`pointer-events-none absolute inset-0 flex items-center border border-transparent overflow-hidden whitespace-nowrap select-none text-text-tertiary ${SEARCH_FIELD_PADDING} ${SEARCH_FIELD_FONT}`}
-                  >
-                    {placeholderText}
-                    <span className="animate-blink-caret">|</span>
-                  </div>
-                )}
-
-                {renderDropdown && (
-                  <div
-                    data-state={dropdownVisible ? 'open' : 'closed'}
-                    className="absolute left-0 right-0 top-[calc(100%+4px)] z-20 duration-150 ease-in fill-mode-forwards data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-1 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-1 data-[state=closed]:pointer-events-none"
-                  >
-                    <SubjectSuggestions
-                      query={name}
-                      suggestions={suggestions}
-                      isLoading={suggestionsLoading}
-                      onSelect={handleSelectSuggestion}
-                    />
-                  </div>
-                )}
               </div>
 
               {/* `type="button"` is required, not tidiness: a chip left as the
@@ -403,38 +458,38 @@ export function NewTimelineScreen({
                   — but that only settles which control the Enter key reaches,
                   not what a click on a chip does.
 
-                  `invisible` rather than a fade, because it also takes the chips
-                  out of the tab order — right for controls sitting under an open
-                  panel. Keyed to `renderDropdown`, not `dropdownVisible`, so they
-                  stay hidden through the exit animation rather than reappearing
-                  under a panel that is still fading. The row keeps its space
-                  either way, so opening the panel reflows nothing. */}
+                The row recedes behind the open panel rather than vanishing, the
+                  way the model tab does: it keeps its place and fades, so the
+                  layout under the field stays the same shape whether you are
+                  typing or not. It used to be `invisible`, which read as the
+                  chips being destroyed and rebuilt every time a query started.
+
+                  `pointer-events-none` and `tabIndex={-1}` carry the part of
+                  `invisible` that was doing real work. A chip is a one-click
+                  generation of a *different* subject, so one left live under a
+                  half-covering panel is a mis-click that throws away whatever
+                  the user was typing — and focus should not land on something
+                  sitting behind a panel either.
+
+                  Keyed to `renderDropdown`, not `dropdownVisible`, so the fade
+                  holds through the panel's exit animation instead of the chips
+                  brightening under a panel that is still on screen. */}
               <div
                 role="group"
-                // The row holds the model dropdown as well as the chips now,
-                // so the label names both rather than mislabelling the first
-                // control in it.
-                aria-label="Model and quick searches"
-                className={`w-full flex flex-row flex-wrap items-start gap-[8px] ${
-                  renderDropdown ? 'invisible' : ''
+                aria-label="Quick searches"
+                className={`w-full flex flex-row flex-wrap items-start gap-[8px] transition-opacity duration-150 ${
+                  renderDropdown ? 'opacity-40 pointer-events-none' : ''
                 }`}
               >
-                {/* First in the row rather than inside the field: the enter
-                    button already owns the field's right edge, and a second
-                    control there would break the reserve-width arithmetic
-                    documented at SEARCH_FIELD_ENTER_RESERVE. Sitting with the
-                    chips means it wraps with them on narrow screens and hides
-                    with them under the suggestions panel. */}
-                <ModelSelector
-                  disabled={isWorking}
-                  onRequestApiKey={onRequestApiKey}
-                />
-
                 {quickSearches.map((subject) => (
                   <button
                     key={subject}
                     type="button"
                     disabled={isWorking}
+                    // `pointer-events-none` on the row stops the mouse; this
+                    // stops the keyboard. React 18 has no `inert` prop, which
+                    // would otherwise do both on the container in one word.
+                    tabIndex={renderDropdown ? -1 : undefined}
                     onClick={() => handleQuickSearch(subject)}
                     className={`${glassButtonClass} shrink-0 whitespace-nowrap disabled:opacity-50 disabled:pointer-events-none`}
                   >
