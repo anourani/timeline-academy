@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Modal } from './Modal'
 import { PROVIDER_META, PROVIDER_ORDER } from '@/constants/byokProviders'
+import { useAccountTier } from '@/hooks/useAccountTier'
 import {
   hasAnyKey,
   maskKey,
@@ -17,8 +18,9 @@ interface ApiKeyModalProps {
    *  resume whatever AI generation triggered the modal. */
   onKeySaved: () => void
   /** Called when the user picks "Sign in instead". The parent should close
-   *  this modal and open AuthModal. */
-  onRequestSignIn: () => void
+   *  this modal and open AuthModal. Only offered while no one is signed in —
+   *  a signed-in user opening this modal just wants to add a key. */
+  onRequestSignIn?: () => void
 }
 
 type DraftMap = Record<ByokProvider, string>
@@ -37,6 +39,14 @@ export function ApiKeyModal({
   onRequestSignIn,
 }: ApiKeyModalProps) {
   const stored = useByokKeys()
+  // Two audiences share this modal. Signed out, it is the gate on the Create
+  // page: "sign in or bring a key". Signed in, it is reached from the side
+  // panel's "Add API Key" link and the model dropdown's unlock row, where a
+  // sign-in offer is noise — the user already has an account and only wants
+  // the key fields. `loading` deliberately lands in the signed-out branch: an
+  // extra sign-in link is harmless, a missing one is not.
+  const tier = useAccountTier()
+  const signedIn = tier === 'free' || tier === 'byok'
   const [drafts, setDrafts] = useState<DraftMap>(EMPTY_DRAFTS)
   // A field with a saved key shows the masked value until the user chooses to
   // replace it — we never prefill an input with a secret, but the modal
@@ -103,15 +113,14 @@ export function ApiKeyModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Generate with AI"
+      title={signedIn ? 'Add API Key' : 'Generate with AI'}
       size="compact"
     >
       <div className="space-y-4">
         <p className="body-m text-[#c9ced4] m-0">
-          Timeline Academy uses AI to generate event details and timelines. Add
-          your own OpenAI or Anthropic key to generate without an account —
-          usage is billed to that provider account, not to us. Or sign in to
-          use ours.
+          {signedIn
+            ? 'Add your own OpenAI or Anthropic key to unlock higher limits and more models. Usage is billed to that provider account, not to us.'
+            : 'Timeline Academy uses AI to generate event details and timelines. Add your own OpenAI or Anthropic key to generate without an account — usage is billed to that provider account, not to us. Or sign in to use ours.'}
         </p>
 
         {PROVIDER_ORDER.map((provider) => {
@@ -208,14 +217,16 @@ export function ApiKeyModal({
 
         <div className="flex flex-col gap-2">
           <button onClick={save} className={glassPrimary}>
-            Save &amp; continue
+            {signedIn ? 'Save' : 'Save & continue'}
           </button>
-          <button
-            onClick={onRequestSignIn}
-            className="self-center font-['Avenir',sans-serif] text-[14px] leading-[20px] text-[#9B9EA3] underline hover:text-[#DADEE5] transition-colors"
-          >
-            Sign in instead
-          </button>
+          {!signedIn && onRequestSignIn && (
+            <button
+              onClick={onRequestSignIn}
+              className="self-center font-['Avenir',sans-serif] text-[14px] leading-[20px] text-[#9B9EA3] underline hover:text-[#DADEE5] transition-colors"
+            >
+              Sign in instead
+            </button>
+          )}
         </div>
       </div>
     </Modal>
