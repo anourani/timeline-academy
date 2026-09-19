@@ -38,6 +38,11 @@ export function useLocalDraft(store: DraftStore) {
       verticalScale: draft.verticalScale ?? 'medium',
       groupByCategory: draft.groupByCategory ?? false,
       categories: draft.categories,
+      // Same `??` rule as the fields above: App.tsx hydrates a draft with no
+      // stored origin as 'manual' and writes 'manual' straight back, so the
+      // baseline has to normalise the same way or every such draft
+      // fingerprints dirty the moment it is opened.
+      origin: draft.origin ?? 'manual',
     }),
     events: eventsFpRef.current(draft.events),
   }), []);

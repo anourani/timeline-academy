@@ -17,6 +17,8 @@ import {
   getCachedEvent,
   setCachedEvent,
 } from '../../services/viewerEventCache';
+import { ProvenanceBadge } from '../Provenance/ProvenanceBadge';
+import type { TimelineOrigin } from '../../types/timeline';
 
 interface TimelineData {
   title: string;
@@ -24,6 +26,7 @@ interface TimelineData {
   events: TimelineEvent[];
   categories: CategoryConfig[];
   chapters: TimelineChapter[];
+  origin: TimelineOrigin;
   scale: 'large' | 'medium' | 'small';
   verticalScale: 'small' | 'medium';
   groupByCategory: boolean;
@@ -121,6 +124,11 @@ export function TimelineViewer() {
           // `get_public_timeline` recreated with the column — an older RPC
           // simply omits the key, and the viewer shows no strip.
           chapters: normalizeChapters(timelineData.chapters),
+          // Same migration caveat as chapters: an RPC predating the origin
+          // column omits the key entirely, and 'manual' renders no badge —
+          // so the viewer degrades to exactly its old behaviour rather than
+          // labelling every shared timeline as hand-built.
+          origin: (timelineData.origin as TimelineOrigin | undefined) ?? 'manual',
           scale: timelineData.scale || 'large',
           verticalScale: timelineData.vertical_scale ?? 'medium',
           groupByCategory: timelineData.group_by_category ?? false
@@ -191,6 +199,11 @@ export function TimelineViewer() {
           events={timeline.events}
           showDescription
         />
+        {/* No unlock handler: a reader following a share link does not own
+            this timeline and has nothing here to unlock. The badge is the
+            whole point of the shared view — it is the reader, not the author,
+            who would otherwise take a hand-edited timeline for model output. */}
+        <ProvenanceBadge origin={timeline.origin} className="mt-4 max-w-[640px]" />
       </div>
 
       <main className="timeline-container relative mt-4">

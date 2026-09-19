@@ -1,5 +1,5 @@
 import type { TimelineEvent, CategoryConfig } from '../types/event'
-import type { TimelineChapter } from '../types/timeline'
+import type { TimelineChapter, TimelineOrigin } from '../types/timeline'
 import { DEFAULT_CATEGORIES } from '../constants/categories'
 import { DEFAULT_TIMELINE_TITLE } from '../constants/defaults'
 import { PLAN_LIMITS } from '../constants/plans'
@@ -12,6 +12,9 @@ export interface LocalDraft {
   categories: CategoryConfig[]
   /** Optional: drafts written before chapters existed simply don't have them. */
   chapters?: TimelineChapter[]
+  /** Optional for the same reason as `chapters` — a draft written before
+   *  provenance existed has none, and reads back as 'manual'. */
+  origin?: TimelineOrigin
   scale: 'large' | 'medium' | 'small'
   verticalScale?: 'small' | 'medium'
   groupByCategory?: boolean
@@ -114,6 +117,9 @@ export function createDraftStore(config: DraftStoreConfig): DraftStore {
         events: [],
         categories: [...DEFAULT_CATEGORIES],
         chapters: [],
+        // A blank draft is the user's own. The AI hand-off in App.tsx
+        // overwrites this to 'ai' immediately after creating the draft.
+        origin: 'manual',
         scale: 'large',
         verticalScale: 'medium',
         groupByCategory: false,

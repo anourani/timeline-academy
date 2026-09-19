@@ -1,5 +1,5 @@
 import type { TimelineEvent, CategoryConfig } from '../types/event';
-import type { TimelineChapter } from '../types/timeline';
+import type { TimelineChapter, TimelineOrigin } from '../types/timeline';
 
 /**
  * Fingerprints for deciding whether a timeline actually changed.
@@ -38,6 +38,16 @@ interface MetaInput {
   categories?: CategoryConfig[];
   /** Both stores persist chapters, so both must fingerprint them. */
   chapters?: TimelineChapter[];
+  /**
+   * Guest drafts persist provenance and so must fingerprint it — unlocking a
+   * generated draft changes nothing else, and an unfingerprinted field never
+   * arms a write.
+   *
+   * Signed-in timelines deliberately omit it: `origin` lives on the row but is
+   * written directly by `setTimelineOrigin`, never by autosave, so putting it
+   * in that fingerprint would arm a write that carries no origin.
+   */
+  origin?: TimelineOrigin;
 }
 
 /**
@@ -67,6 +77,10 @@ export function metaFingerprint(input: MetaInput): string {
     input.chapters
       ? input.chapters.map(c => [c.id, c.label, c.startDate, c.endDate])
       : null,
+    // Appended last so the callers that don't pass it keep their existing
+    // serialisation with a trailing null. Fingerprints are in-memory only,
+    // so there is no stored form to stay compatible with.
+    input.origin ?? null,
   ]);
 }
 

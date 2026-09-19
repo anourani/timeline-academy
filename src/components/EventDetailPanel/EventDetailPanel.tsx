@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { X } from 'lucide-react'
+import { Pencil, Trash2, X } from 'lucide-react'
 import { ConfirmationModal } from '../Modal/ConfirmationModal'
+import { ProvenanceBadge } from '../Provenance/ProvenanceBadge'
 import { PanelResizeHandle } from '../ui/PanelResizeHandle'
 import { Skeleton, SkeletonText } from '../ui/skeleton'
 import { usePanelWidth } from '@/hooks/usePanelWidth'
@@ -13,6 +14,8 @@ import {
   fetchEventImage,
 } from '@/services/eventEnrichment'
 import type { EventSource, TimelineEvent } from '@/types/event'
+import type { TimelineOrigin } from '@/types/timeline'
+import { canEditEvents } from '@/types/timeline'
 import type { ByokProvider } from '@/types/ai'
 import { PROVIDER_META } from '@/constants/byokProviders'
 import { getKey } from '@/services/userApiKey'
@@ -24,6 +27,17 @@ interface EventDetailPanelProps {
   mode: 'edit' | 'view'
   onClose: () => void
   onEventChange: (updated: TimelineEvent) => void
+  /** Provenance of the timeline this event belongs to. An 'ai' timeline
+   *  hides the authoring actions below — see `canEditEvents`. */
+  origin?: TimelineOrigin
+  /** Edit-mode authoring actions. Since clicking an event opens this panel
+   *  rather than an actions menu, the panel header is where Edit and Delete
+   *  live. Omitted in view mode. */
+  onEdit?: () => void
+  onDelete?: () => void
+  /** Spend the 'ai' label to re-enable the actions above. Omitted where the
+   *  reader doesn't own the timeline. */
+  onRequestUnlock?: () => void
 }
 
 type PanelState = 'idle' | 'generating' | 'loaded' | 'error'
@@ -65,6 +79,10 @@ export function EventDetailPanel({
   mode,
   onClose,
   onEventChange,
+  origin = 'manual',
+  onEdit,
+  onDelete,
+  onRequestUnlock,
 }: EventDetailPanelProps) {
   const [state, setState] = useState<PanelState>('idle')
   const [streamedDescription, setStreamedDescription] = useState('')
@@ -76,6 +94,7 @@ export function EventDetailPanel({
   const [errorMessage, setErrorMessage] = useState('')
   const [errorProvider, setErrorProvider] = useState<ByokProvider | null>(null)
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isResizing, setIsResizing] = useState(false)
 
   // Shared by the editor and the viewer — this is one component mounted from
@@ -237,7 +256,7 @@ export function EventDetailPanel({
       if (e.key === 'Escape') onClose()
     }
     const handleMouseDown = (e: MouseEvent) => {
-      if (showRegenerateConfirm) return
+      if (showRegenerateConfirm || showDeleteConfirm) return
       const node = panelRef.current
       if (!node) return
       const target = e.target as Node | null
@@ -253,12 +272,15 @@ export function EventDetailPanel({
       document.removeEventListener('keydown', handleKey)
       document.removeEventListener('mousedown', handleMouseDown)
     }
-  }, [open, onClose, showRegenerateConfirm])
+  }, [open, onClose, showRegenerateConfirm, showDeleteConfirm])
 
   // A confirmation left open when the panel closes would reappear over the next
   // event opened.
   useEffect(() => {
-    if (!open) setShowRegenerateConfirm(false)
+    if (!open) {
+      setShowRegenerateConfirm(false)
+      setShowDeleteConfirm(false)
+    }
   }, [open])
 
   function runGeneration(
@@ -369,6 +391,16 @@ export function EventDetailPanel({
   if (typeof document === 'undefined') return null
 
   const showFooter = mode === 'edit' && open && !!event
+  // Edit and Delete used to live in the click-path actions menu. That menu is
+  // gone — a click opens this panel — so the header carries them instead.
+  //
+  // `canEditEvents` is the gate: on a generated timeline these are withheld,
+  // so the events stay as the model produced them until the user says
+  // otherwise. The badge below the date row is what tells them why, and
+  // carries the way out.
+  const showAuthoringActions =
+    mode === 'edit' && !!event && !!onEdit && !!onDelete && canEditEvents(origin)
+  const showProvenance = mode === 'edit' && !!event && origin !== 'manual'
   const description = state === 'loaded' ? event?.description ?? streamedDescription : streamedDescription
   const displayImageUrl = state === 'loaded' ? event?.imageUrl ?? imageUrl : imageUrl
   const displayAttribution = state === 'loaded' ? event?.imageAttribution ?? imageAttribution : imageAttribution
@@ -451,6 +483,20 @@ export function EventDetailPanel({
                     {formatDateRange(event)}
                   </p>
                   <div className="flex items-center gap-2 shrink-0">
+                    {showAuthoringActions && (
+                      <>
+                        <HeaderIconButton onClick={onEdit} label="Edit event">
+                          <Pencil size={16} strokeWidth={1.25} />
+                        </HeaderIconButton>
+                        <HeaderIconButton
+                          onClick={() => setShowDeleteConfirm(true)}
+                          label="Delete event"
+                          destructive
+                        >
+                          <Trash2 size={16} strokeWidth={1.25} />
+                        </HeaderIconButton>
+                      </>
+                    )}
                     <button
                       onClick={onClose}
                       className="md:hidden flex items-center justify-center p-1.5 rounded-lg border border-white/15 bg-white/10 backdrop-blur-[12px] text-[#c9ced4] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4),inset_0px_1px_0px_0px_rgba(255,255,255,0.1)] hover:bg-white/20 hover:text-[#dadee5] transition-colors"
@@ -460,6 +506,10 @@ export function EventDetailPanel({
                     </button>
                   </div>
                 </div>
+
+                {showProvenance && (
+                  <ProvenanceBadge origin={origin} onUnlock={onRequestUnlock} />
+                )}
 
                 {/* Photo frame. Fluid rather than a fixed 274px so it follows
                     a resized panel; the 274/205 ratio is preserved.
@@ -610,8 +660,52 @@ export function EventDetailPanel({
         confirmLabel="Regenerate"
         cancelLabel="Cancel"
       />
+
+      <ConfirmationModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={() => {
+          setShowDeleteConfirm(false)
+          onDelete?.()
+        }}
+        title="Delete event"
+        message={
+          event
+            ? `"${event.title}" will be removed from the timeline. This cannot be undone.`
+            : ''
+        }
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+      />
     </>,
     document.body,
+  )
+}
+
+function HeaderIconButton({
+  children,
+  onClick,
+  label,
+  destructive,
+}: {
+  children: React.ReactNode
+  onClick?: () => void
+  label: string
+  destructive?: boolean
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className={`flex items-center justify-center p-1.5 rounded-lg border border-white/15 bg-white/10 backdrop-blur-[12px] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4),inset_0px_1px_0px_0px_rgba(255,255,255,0.1)] hover:bg-white/20 transition-colors ${
+        destructive
+          ? 'text-destructive hover:text-destructive'
+          : 'text-[#c9ced4] hover:text-[#dadee5]'
+      }`}
+    >
+      {children}
+    </button>
   )
 }
 

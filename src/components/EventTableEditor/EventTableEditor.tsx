@@ -1,5 +1,8 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import { TimelineEvent, CategoryConfig } from '../../types/event'
+import type { TimelineOrigin } from '../../types/timeline'
+import { canEditEvents } from '../../types/timeline'
+import { ProvenanceBadge } from '../Provenance/ProvenanceBadge'
 import { Trash2, GripVertical } from 'lucide-react'
 import { parseDate, formatDateToString, formatDateDisplay, darkCalendarClassNames } from '@/utils/dateUtils'
 import {
@@ -62,6 +65,15 @@ interface EventTableEditorProps {
    * the dock keeps its Events button while presenting.
    */
   mode?: 'edit' | 'view'
+  /**
+   * Provenance of the timeline being edited. An 'ai' timeline presents this
+   * editor exactly as view mode does — static cells, no delete column, no
+   * Categories page — because this table is the widest door into the events
+   * and gating only the detail panel would leave it standing open.
+   */
+  origin?: TimelineOrigin
+  /** Spend the 'ai' label and re-enable editing. */
+  onRequestUnlock?: () => void
 }
 
 interface DraftEvent extends Omit<TimelineEvent, 'id'> {
@@ -404,8 +416,16 @@ export function EventTableEditor({
   categories,
   onCategoriesChange,
   mode = 'edit',
+  origin = 'manual',
+  onRequestUnlock,
 }: EventTableEditorProps) {
-  const isEditing = mode === 'edit'
+  // Two independent reasons this table can be read-only: the dock keeps its
+  // Events button while presenting (`mode`), and a generated timeline is
+  // locked until its owner unlocks it (`origin`). Both land on the same flag
+  // deliberately — one read-only path is one path to get right.
+  const isEditing = mode === 'edit' && canEditEvents(origin)
+  // The badge belongs to the owner's editor, not to a presentation.
+  const showProvenance = mode === 'edit' && origin !== 'manual'
   const [activePageTab, setActivePageTab] = useState<'events' | 'categories'>('events')
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [emptyRows, setEmptyRows] = useState<DraftEvent[]>([])
@@ -706,6 +726,13 @@ export function EventTableEditor({
               <div className="flex h-full">
                 {/* Table Area */}
                 <div className="flex-1 flex flex-col min-w-0">
+                  {showProvenance && (
+                    <ProvenanceBadge
+                      origin={origin}
+                      onUnlock={onRequestUnlock}
+                      className="mb-3 shrink-0"
+                    />
+                  )}
                   {/* Header Row */}
                   <div
                     className="flex items-center pl-[16px] pr-[10px] pb-2 gap-[22px] border-b border-[rgba(210,210,210,0.2)]"
