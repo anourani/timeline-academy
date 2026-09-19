@@ -11,6 +11,7 @@ import { ApiKeySection } from './ApiKeySection';
 import { SidePanelActionButton } from '../SidePanel/SidePanelActionButton';
 import { PanelResizeHandle } from '../ui/PanelResizeHandle';
 import { usePanelWidth } from '../../hooks/usePanelWidth';
+import { useWindowResizing } from '../../hooks/useWindowResizing';
 import { SETTINGS_PANEL_DEFAULT_WIDTH } from '../../constants/panels';
 import { DEFAULT_TIMELINE_DESCRIPTION } from '../../constants/defaults';
 import {
@@ -58,6 +59,13 @@ export function TimelineSettingsPanel({
 }: TimelineSettingsPanelProps) {
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
+  // The closed position now differs per breakpoint — below the viewport on a
+  // phone, off the right edge on desktop. Without this skip, dragging the
+  // window across 768px while the panel is closed would tween it diagonally
+  // through the visible bottom-right corner for 300ms. `EventDetailPanel`
+  // drops its easing for the same window drag, for the width's sake.
+  const isWindowResizing = useWindowResizing();
+  const skipTransition = isResizing || isWindowResizing;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const maxDescriptionLength = 260;
 
@@ -163,10 +171,23 @@ export function TimelineSettingsPanel({
             aria-hidden="true"
           />
           <aside
-            className={`fixed inset-y-0 right-0 z-50 pr-[6px] py-[6px] ${
-              isResizing ? '' : 'transition-[transform,width] duration-300 ease-out'
-            } ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
-            style={{ width: `${width}px` }}
+            // Width travels as a custom property rather than an inline `width`
+            // so it stays behind the `md:` prefix — an inline width outranks
+            // every class and would shrink the full-bleed drawer below the
+            // breakpoint. Same reason as `GlobalLayout`, which explains it.
+            style={{ '--settings-panel-width': `${width}px` } as React.CSSProperties}
+            className={`fixed inset-0 md:inset-y-0 md:right-0 md:left-auto md:w-[var(--settings-panel-width)] md:pr-[6px] md:py-[6px] z-50 ${
+              skipTransition ? '' : 'transition-[transform,width] duration-300 ease-out motion-reduce:transition-none'
+            } ${
+              isOpen
+                ? 'translate-x-0 translate-y-0'
+                // Tailwind keeps the two axes in separate custom properties
+                // composed into one transform, each defaulting to 0. So below
+                // `md` the drawer parks a full viewport height below the
+                // screen and rises; at `md` and up it parks off the right
+                // edge and slides in, exactly as before.
+                : 'translate-y-full md:translate-y-0 md:translate-x-full'
+            }`}
             aria-hidden={!isOpen}
             aria-label="Settings side panel"
           >
@@ -180,7 +201,7 @@ export function TimelineSettingsPanel({
                 label="Resize settings panel"
               />
             )}
-            <div className="h-full w-full bg-[#171717] rounded-[6px] border border-[#262626] flex flex-col overflow-hidden">
+            <div className="h-full w-full bg-[#171717] flex flex-col overflow-hidden border-0 md:border md:border-[#262626] rounded-none md:rounded-[6px]">
               {/* Header */}
               <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-2 border-b border-[#404040] shrink-0">
                 <h2 className="header-xsmall text-[#c9ced4] m-0">Settings</h2>

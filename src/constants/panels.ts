@@ -34,10 +34,11 @@ export const PANEL_RESIZE_BREAKPOINT = 768
  * Content that must stay visible beside a panel below the breakpoint, so a
  * stored desktop width can't leave a phone with nothing but panel.
  *
- * Applies to Settings and Feedback, which stay narrow rails at every width. The
- * left panel and the event details panel go full-bleed below the breakpoint and
- * ignore their width there, so for those two the clamp now only costs the
- * stored preference — see `usePanelWidth`, which persists the clamped value.
+ * Applies to Feedback, the only panel left that stays a narrow rail at every
+ * width. The left panel, the event details panel and Settings all go full-bleed
+ * below the breakpoint and ignore their width there, so for those three the
+ * clamp now only costs the stored preference — see `usePanelWidth`, which
+ * persists the clamped value.
  */
 export const MIN_CONTENT_GUTTER = 64
 
