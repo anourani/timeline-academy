@@ -109,6 +109,11 @@ export const EventHoverCursor = memo(
     /** Last value painted, so the disc's transition duration can distinguish a
      *  press (90ms) from an enter/exit (160ms). */
     const paintedPressRef = useRef(false);
+    /** Last visibility painted. The disc and dots are permanent nodes that only
+     *  fade on `hide`, so they still sit at the previous event's coordinates —
+     *  the frame the cursor reappears has to teleport rather than transition in
+     *  from there. */
+    const paintedVisibleRef = useRef(false);
     // Read inside the rAF, which is not re-created when the media query flips.
     const reducedRef = useRef(reducedMotion);
     reducedRef.current = reducedMotion;
@@ -119,9 +124,22 @@ export const EventHoverCursor = memo(
       rafRef.current = null;
       const st = stateRef.current;
       const reduced = reducedRef.current;
+      const enterMs = reduced ? 0 : ENTER_MS;
+      const followMs = reduced ? 0 : DISC_FOLLOW_MS;
+
+      // Snapping is one frame only: the next paint restores the follow duration
+      // in the same style flush that writes the next coordinates, so the follow
+      // transition runs from the already-teleported position. No reflow needed.
+      const isAppearing = st.visible && !paintedVisibleRef.current;
+      paintedVisibleRef.current = st.visible;
 
       const pos = discPosRef.current;
       if (pos) {
+        // Rewritten whole rather than through `transitionDuration`, which would
+        // take the opacity fade with it.
+        pos.style.transition = `transform ${
+          isAppearing ? 0 : followMs
+        }ms ${EASE}, opacity ${enterMs}ms linear`;
         pos.style.transform = `translate3d(${st.x}px, ${st.y}px, 0)`;
         pos.style.opacity = st.visible ? '1' : '0';
       }
@@ -156,6 +174,9 @@ export const EventHoverCursor = memo(
           st.visible && !reduced
             ? `timeline-cursor-breathe 1.4s ease-in-out ${spec.breatheDelayMs}ms infinite`
             : 'none';
+        dot.style.transition = `transform ${
+          isAppearing ? 0 : spec.followMs
+        }ms ${EASE}, opacity 180ms linear ${EXIT_TRAIL_DELAY_MS}ms`;
         dot.style.transform = `translate3d(${st.x}px, ${st.y}px, 0) scale(${
           st.visible ? 1 : 0.4
         })`;
