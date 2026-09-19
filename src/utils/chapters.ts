@@ -1,5 +1,6 @@
 import type { TimelineEvent } from '../types/event'
 import type { Month, TimelineChapter } from '../types/timeline'
+import { SCROLL_LEAD_IN_MONTHS } from '../constants/timeline'
 import { findMonthIndex, parseDateParts } from './dateUtils'
 
 /**
@@ -104,13 +105,38 @@ export const CHAPTER_ACTIVE_LEAD_MONTHS = 6
  * Separate from `findChapterAtMonth` so that helper stays an honest answer to
  * "which chapter contains this month" — the lead is a presentation rule, and
  * baking it in would quietly skew every other caller.
+ *
+ * The lead is bounded twice over, because an unbounded one lights the wrong
+ * chip immediately after a jump. Jumping to a chapter parks its start
+ * `SCROLL_LEAD_IN_MONTHS` past the left edge, so a full six months of lead
+ * probes four months *into* the chapter — and anything shorter than that
+ * lights its successor's chip, which reads as the jump having missed.
  */
 export function findActiveChapter(
   chapters: TimelineChapter[],
   months: Month[],
   monthIndex: number
 ): TimelineChapter | null {
-  return findChapterAtMonth(chapters, months, monthIndex + CHAPTER_ACTIVE_LEAD_MONTHS)
+  if (!chapters.length || !months.length) return null
+
+  const starts = chapters
+    .map(c => findMonthIndex(months, c.startDate))
+    .filter(start => start !== -1 && start > monthIndex)
+    .sort((a, b) => a - b)
+
+  // A jump lands the left edge exactly `SCROLL_LEAD_IN_MONTHS` short of its
+  // chapter's start, so a start inside that window is almost always the chip
+  // just clicked. Where two land there — a chapter shorter than the lead-in
+  // wedged in front of the target — the later one is both the likelier target
+  // and the one whose events actually fill the screen.
+  const landed = starts.filter(start => start <= monthIndex + SCROLL_LEAD_IN_MONTHS).pop()
+  if (landed !== undefined) return findChapterAtMonth(chapters, months, landed)
+
+  // Otherwise the lead runs its full length, capped at the next chapter's start
+  // so that it can pull that chapter forward — the whole point — without ever
+  // clearing a short one entirely.
+  const led = monthIndex + CHAPTER_ACTIVE_LEAD_MONTHS
+  return findChapterAtMonth(chapters, months, starts.length ? Math.min(led, starts[0]) : led)
 }
 
 /** How far through a chapter a month index sits, as 0–1. */

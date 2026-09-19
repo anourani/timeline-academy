@@ -11,7 +11,7 @@ import { findMonthIndex, formatYMD, getTimelineRange, shiftEventDates } from '..
 import { calculateEventStacks, StackedEvent } from '../../utils/eventStacking';
 import { useTimelineScroll } from '../../hooks/useTimelineScroll';
 import { useEventDrag } from '../../hooks/useEventDrag';
-import { CATEGORY_PADDING, CATEGORY_MIN_HEIGHT, HEADER_HEIGHT, SCROLL_LEAD_IN_MONTHS } from '../../constants/timeline';
+import { CATEGORY_PADDING, CATEGORY_MIN_HEIGHT, HEADER_HEIGHT, SCROLL_LEAD_IN_MONTHS, WHEEL_SUPPRESS_MS } from '../../constants/timeline';
 import { EventForm } from '../EventForm/EventForm';
 import {
   Dialog,
@@ -114,6 +114,21 @@ export function Timeline({
   const hoverCursorRef = useRef<EventHoverCursorHandle>(null);
   const hoveredEventIdRef = useRef<string | null>(null);
 
+  // The wheel lerp's state, held in refs rather than as locals of the effect
+  // that uses them, so `scrollToTarget` can reach in and stop the loop.
+  // Assigning `scrollLeft` aborts an in-flight smooth scroll — so a lerp still
+  // running from a recent wheel tick used to overwrite a chapter jump frame by
+  // frame and haul the canvas back to its own stale target. That reads as a
+  // dead chip, and only ever after you had just scrolled.
+  const wheelTargetRef = useRef(0);
+  const wheelRafRef = useRef<number | null>(null);
+  // Deadline until which wheel events are swallowed, so the tail of a trackpad
+  // flick can't cancel the jump the click after it asked for.
+  const wheelSuppressUntilRef = useRef(0);
+  // The last `pendingScrollTarget` already acted on, so a re-render mid-scroll
+  // doesn't re-issue a jump that is already under way.
+  const handledScrollTargetRef = useRef<ScrollTarget | null>(null);
+
   const { scrollLeft } = useTimelineScroll(scrollContainerRef, months.length * 4);
 
   // Straight from `scrollLeft` against the month width the grid is actually
@@ -140,23 +155,38 @@ export function Timeline({
     const el = scrollContainerRef.current;
     if (!el) return;
 
-    let target = el.scrollLeft;
-    let rafId: number | null = null;
+    wheelTargetRef.current = el.scrollLeft;
 
     const step = () => {
       const current = el.scrollLeft;
-      const diff = target - current;
+      const diff = wheelTargetRef.current - current;
       if (Math.abs(diff) < 0.5) {
-        el.scrollLeft = target;
-        rafId = null;
+        el.scrollLeft = wheelTargetRef.current;
+        wheelRafRef.current = null;
         return;
       }
       el.scrollLeft = current + diff * 0.18;
-      rafId = requestAnimationFrame(step);
+      wheelRafRef.current = requestAnimationFrame(step);
     };
 
     const onWheel = (e: WheelEvent) => {
       if (e.ctrlKey || e.metaKey) return;
+
+      // A jump was kicked off moments ago. A trackpad keeps delivering inertial
+      // wheel events for a second or more after the fingers lift, and any one of
+      // them would abort the smooth scroll — so the click would lose to the
+      // gesture that preceded it. Swallow them, rolling the deadline forward
+      // while the stream stays unbroken: that continuity is what marks it as
+      // inertia. A deliberate scroll arrives after a pause and gets through.
+      const now = performance.now();
+      if (now < wheelSuppressUntilRef.current) {
+        // Without this the browser scrolls the container natively, which aborts
+        // the jump just as surely as the lerp would.
+        e.preventDefault();
+        wheelSuppressUntilRef.current = now + WHEEL_SUPPRESS_MS;
+        return;
+      }
+
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
       if (e.deltaY === 0) return;
 
@@ -169,16 +199,22 @@ export function Timeline({
         : e.deltaY;
 
       const maxScroll = el.scrollWidth - el.clientWidth;
-      if (rafId === null) target = el.scrollLeft;
-      target = Math.max(0, Math.min(maxScroll, target + delta));
+      // Resyncing whenever the loop is idle is also what lets a wheel interrupt
+      // a jump: `scrollToTarget` leaves the ref null, so this picks up the live
+      // mid-flight position rather than wherever the last wheel was headed.
+      if (wheelRafRef.current === null) wheelTargetRef.current = el.scrollLeft;
+      wheelTargetRef.current = Math.max(0, Math.min(maxScroll, wheelTargetRef.current + delta));
 
-      if (rafId === null) rafId = requestAnimationFrame(step);
+      if (wheelRafRef.current === null) wheelRafRef.current = requestAnimationFrame(step);
     };
 
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => {
       el.removeEventListener('wheel', onWheel);
-      if (rafId !== null) cancelAnimationFrame(rafId);
+      if (wheelRafRef.current !== null) {
+        cancelAnimationFrame(wheelRafRef.current);
+        wheelRafRef.current = null;
+      }
     };
   }, []);
 
@@ -202,9 +238,24 @@ export function Timeline({
       // chapter on screen, so the boundary reads as a boundary.
       : pixelOffset - (SCROLL_LEAD_IN_MONTHS * scale.monthWidth);
 
+    // One scroll authority at a time. The wheel lerp writes `scrollLeft`
+    // directly, which aborts an in-flight smooth scroll, so a jump issued
+    // within a second of a wheel tick would be overwritten frame by frame and
+    // dragged back to the wheel's target. Deliberately not resyncing
+    // `wheelTargetRef` here: leaving the loop idle is what lets the next wheel
+    // tick pick up the live position and interrupt this jump cleanly.
+    if (wheelRafRef.current !== null) {
+      cancelAnimationFrame(wheelRafRef.current);
+      wheelRafRef.current = null;
+    }
+    wheelSuppressUntilRef.current = performance.now() + WHEEL_SUPPRESS_MS;
+
     // The browser clamps to `scrollWidth - clientWidth` on its own, so a
     // chapter near the end of the canvas lands as far left as the canvas
     // allows rather than flush. Floor at 0 for the same reason at the start.
+    // Native rather than the lerp above, which would have to clamp by hand
+    // against a width that is still animating after a scale change, has no
+    // ease-in over a long jump, and ignores `prefers-reduced-motion`.
     el.scrollTo({ left: Math.max(0, targetLeft), behavior: 'smooth' });
   }, [months, scale.monthWidth]);
 
@@ -223,13 +274,21 @@ export function Timeline({
 
   // Handle a scroll target from outside this subtree — bulk-add in
   // EventTableEditor, the first-event jump after a generation, or a chapter chip.
+  // `onScrollComplete` is an inline arrow in both hosts and this component is
+  // not memoised, so while a target is set this re-runs on every render — and
+  // renders arrive every frame while anything is scrolling. Deduping on the
+  // target's identity keeps that to one `scrollToTarget` per request. A
+  // cleanup that cancelled the pending frame instead would be worse than the
+  // duplicates: each render would cancel and reschedule, so a jump requested
+  // mid-scroll could be starved of the frame it needs indefinitely.
   useEffect(() => {
-    if (pendingScrollTarget) {
-      requestAnimationFrame(() => {
-        scrollToTarget(pendingScrollTarget);
-        onScrollComplete?.();
-      });
-    }
+    if (!pendingScrollTarget) return;
+    if (handledScrollTargetRef.current === pendingScrollTarget) return;
+    handledScrollTargetRef.current = pendingScrollTarget;
+    requestAnimationFrame(() => {
+      scrollToTarget(pendingScrollTarget);
+      onScrollComplete?.();
+    });
   }, [pendingScrollTarget, scrollToTarget, onScrollComplete]);
 
   // Compute layout: either one band per visible category (grouped mode)

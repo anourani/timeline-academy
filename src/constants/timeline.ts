@@ -13,3 +13,4 @@ export const CATEGORY_MIN_HEIGHT = 80;    // Minimum height of an empty category
 
 // Scroll behaviour
 export const SCROLL_LEAD_IN_MONTHS = 2;   // Months of the previous chapter left visible when jumping to a chapter's head
+export const WHEEL_SUPPRESS_MS = 150;     // Wheel events swallowed after a programmatic jump, so trackpad inertia can't abort it
