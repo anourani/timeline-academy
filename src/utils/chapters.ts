@@ -84,6 +84,35 @@ export function findChapterAtMonth(
   return fallback
 }
 
+/**
+ * Months of lead-in on the active chapter.
+ *
+ * The active chapter is resolved from the left-most visible month, but events
+ * enter from the right and scroll left — so a chapter's opening events are on
+ * screen well before its start date reaches the left edge. Half a year of lead
+ * lights the chip while those events are still visible, rather than after the
+ * reader has already scrolled past them.
+ *
+ * `months` is dense (one entry per month, see `generateMonthsRange`), so half a
+ * year is exactly six indices with no gaps to account for.
+ */
+export const CHAPTER_ACTIVE_LEAD_MONTHS = 6
+
+/**
+ * The chapter to show as active, given the left-most visible month.
+ *
+ * Separate from `findChapterAtMonth` so that helper stays an honest answer to
+ * "which chapter contains this month" — the lead is a presentation rule, and
+ * baking it in would quietly skew every other caller.
+ */
+export function findActiveChapter(
+  chapters: TimelineChapter[],
+  months: Month[],
+  monthIndex: number
+): TimelineChapter | null {
+  return findChapterAtMonth(chapters, months, monthIndex + CHAPTER_ACTIVE_LEAD_MONTHS)
+}
+
 /** How far through a chapter a month index sits, as 0–1. */
 export function chapterProgress(
   chapter: TimelineChapter,

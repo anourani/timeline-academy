@@ -6,7 +6,7 @@ import {
   chapterStartYear,
   chapterYearRange,
   countEventsInChapter,
-  findChapterAtMonth,
+  findActiveChapter,
 } from '@/utils/chapters'
 
 interface ChaptersStripProps {
@@ -23,13 +23,14 @@ interface ChaptersStripProps {
 /**
  * The chapters strip — a table of contents for the timeline.
  *
- * One chip per chapter, showing its name, span and event count. The chip whose
- * chapter contains the left edge of the viewport is filled with the timeline's
- * accent and carries a progress rule showing how far through it you are.
+ * One chip per chapter, showing its name, span and event count. The chip for the
+ * chapter the viewport is reading — the left edge plus half a year of lead, see
+ * `findActiveChapter` — is filled with the timeline's accent and carries a
+ * progress rule showing how far through it you actually are.
  *
- * Lives in the band between GlobalNav and the year readout, which was already
- * empty — so a timeline with no chapters renders nothing here and the canvas
- * sits exactly where it always did.
+ * Lives in the band between GlobalNav and the canvas, which was already empty
+ * — so a timeline with no chapters renders nothing here and the canvas sits
+ * exactly where it always did.
  */
 export const ChaptersStrip = memo(function ChaptersStrip({
   chapters,
@@ -47,10 +48,13 @@ export const ChaptersStrip = memo(function ChaptersStrip({
   const [overflow, setOverflow] = useState({ start: false, end: false })
 
   const active = useMemo(
-    () => findChapterAtMonth(chapters, months, currentMonthIndex),
+    () => findActiveChapter(chapters, months, currentMonthIndex),
     [chapters, months, currentMonthIndex],
   )
 
+  // Progress reads the true position, not the led one: during the lead-in the
+  // ratio is negative and clamps to 0, so the chip lights up with an empty rule
+  // and starts filling exactly when the chapter's start crosses the left edge.
   const progress = active ? chapterProgress(active, months, currentMonthIndex) : 0
 
   // Keep the current chip visible as the canvas scrolls past it. `nearest`

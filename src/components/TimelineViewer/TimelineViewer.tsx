@@ -10,7 +10,7 @@ import { DEFAULT_CATEGORIES } from '../../constants/categories';
 import { TimelineEvent, CategoryConfig } from '../../types/event';
 import type { ScrollTarget, TimelineChapter } from '../../types/timeline';
 import { ChaptersStrip } from '../Timeline/ChaptersStrip';
-import { findChapterAtMonth, normalizeChapters } from '../../utils/chapters';
+import { normalizeChapters } from '../../utils/chapters';
 import { computeDominantCategoryColor } from '../../utils/dominantCategory';
 import { getTimelineRange } from '../../utils/dateUtils';
 import {
@@ -145,10 +145,6 @@ export function TimelineViewer() {
     () => computeDominantCategoryColor(viewerEvents, timeline?.categories ?? []),
     [viewerEvents, timeline]
   );
-  const activeChapter = useMemo(
-    () => findChapterAtMonth(timeline?.chapters ?? [], months, currentMonthIndex),
-    [timeline, months, currentMonthIndex]
-  );
   const handleVisibleMonthChange = useCallback((monthIndex: number) => {
     setCurrentMonthIndex(monthIndex);
   }, []);
@@ -217,7 +213,6 @@ export function TimelineViewer() {
           mode="view"
           onOpenDetails={(event) => setDetailPanelEvent(event)}
           onVisibleMonthChange={handleVisibleMonthChange}
-          chapterLabel={activeChapter?.label}
           pendingScrollTarget={pendingScrollTarget}
           onScrollComplete={() => setPendingScrollTarget(null)}
         />

@@ -1,5 +1,5 @@
 // Layout dimensions
-export const SCROLL_INDICATOR_HEIGHT = 36;  // Height of the year indicator row above the grid
+export const SCROLL_INDICATOR_HEIGHT = 36;  // Year indicator row above the grid — currently unmounted, see TimelineScrollIndicator
 export const HEADER_HEIGHT = 64;            // Height of year labels (32px) + month labels (32px)
 
 // Event row dimensions
