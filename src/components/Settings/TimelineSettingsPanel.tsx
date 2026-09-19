@@ -5,8 +5,7 @@ import { TimelineEvent, CategoryConfig } from '../../types/event';
 import type { AddEventsResult } from '../../hooks/useEvents';
 import { exportEventsToExcel } from '../../utils/excelExport';
 import { ConfirmationModal } from '../Modal/ConfirmationModal';
-import { ScaleSelector } from './ScaleSelector';
-import { VerticalScaleSelector } from './VerticalScaleSelector';
+import { SegmentedControl, type SegmentedOption } from '../ui/SegmentedControl';
 import { ApiKeySection } from './ApiKeySection';
 import { SidePanelActionButton } from '../SidePanel/SidePanelActionButton';
 import { PanelResizeHandle } from '../ui/PanelResizeHandle';
@@ -20,6 +19,23 @@ import {
   toDateString,
 } from '../../utils/excelSheet';
 
+type TimelineScale = 'large' | 'medium' | 'small';
+type VerticalScale = 'small' | 'medium';
+
+// Single glyphs, because the row is a label and a control side by side and the
+// words crowded it. `name` carries the word through to the tooltip and the
+// accessible name, so nothing is lost — see `SegmentedControl`.
+const SCALE_OPTIONS: SegmentedOption<TimelineScale>[] = [
+  { value: 'small', label: 'S', name: 'Small' },
+  { value: 'medium', label: 'M', name: 'Medium' },
+  { value: 'large', label: 'L', name: 'Large' },
+];
+
+const VERTICAL_SCALE_OPTIONS: SegmentedOption<VerticalScale>[] = [
+  { value: 'small', label: 'S', name: 'Small' },
+  { value: 'medium', label: 'M', name: 'Medium' },
+];
+
 interface TimelineSettingsPanelProps {
   isOpen: boolean;
   onClose: () => void;
@@ -29,10 +45,10 @@ interface TimelineSettingsPanelProps {
   onImportEvents: (events: Omit<TimelineEvent, 'id'>[]) => AddEventsResult;
   onClearTimeline: () => void;
   onDescriptionChange: (description: string) => void;
-  scale: 'large' | 'medium' | 'small';
-  onScaleChange: (scale: 'large' | 'medium' | 'small') => void;
-  verticalScale: 'small' | 'medium';
-  onVerticalScaleChange: (scale: 'small' | 'medium') => void;
+  scale: TimelineScale;
+  onScaleChange: (scale: TimelineScale) => void;
+  verticalScale: VerticalScale;
+  onVerticalScaleChange: (scale: VerticalScale) => void;
   groupByCategory: boolean;
   onGroupByCategoryChange: (value: boolean) => void;
   categories: CategoryConfig[];
@@ -236,18 +252,31 @@ export function TimelineSettingsPanel({
                     <span className="label-m-type2 text-[#9B9EA3]">Visual Settings</span>
                     <div className="h-px bg-[#262626] w-full" />
 
-                    {/* Timeline scale row */}
-                    <div className="flex flex-row items-center justify-between h-10">
+                    {/* `min-h-12` rather than the old fixed `h-10`: a segment
+                        is 40px of hit area, and the track's padding and border
+                        put the control at 50. A floor rather than a height so
+                        the row follows the control instead of clipping it. */}
+                    <div className="flex flex-row items-center justify-between gap-3 min-h-12">
                       <span className="label-m-type2 text-[#9B9EA3]">Scale</span>
-                      <ScaleSelector value={scale} onChange={onScaleChange} />
+                      <SegmentedControl
+                        label="Scale"
+                        options={SCALE_OPTIONS}
+                        value={scale}
+                        onChange={onScaleChange}
+                      />
                     </div>
 
                     <div className="h-px bg-[#262626] w-full" />
 
                     {/* Event height row */}
-                    <div className="flex flex-row items-center justify-between h-10">
+                    <div className="flex flex-row items-center justify-between gap-3 min-h-12">
                       <span className="label-m-type2 text-[#9B9EA3]">Row height</span>
-                      <VerticalScaleSelector value={verticalScale} onChange={onVerticalScaleChange} />
+                      <SegmentedControl
+                        label="Row height"
+                        options={VERTICAL_SCALE_OPTIONS}
+                        value={verticalScale}
+                        onChange={onVerticalScaleChange}
+                      />
                     </div>
 
                     <div className="h-px bg-[#262626] w-full" />
