@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Pencil, Trash2, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { ConfirmationModal } from '../Modal/ConfirmationModal'
 import { PanelResizeHandle } from '../ui/PanelResizeHandle'
 import { Skeleton, SkeletonText } from '../ui/skeleton'
@@ -24,11 +24,6 @@ interface EventDetailPanelProps {
   mode: 'edit' | 'view'
   onClose: () => void
   onEventChange: (updated: TimelineEvent) => void
-  /** Edit-mode authoring actions. Since clicking an event opens this panel
-   *  rather than an actions menu, the panel header is where Edit and Delete
-   *  live. Omitted in view mode. */
-  onEdit?: () => void
-  onDelete?: () => void
 }
 
 type PanelState = 'idle' | 'generating' | 'loaded' | 'error'
@@ -70,8 +65,6 @@ export function EventDetailPanel({
   mode,
   onClose,
   onEventChange,
-  onEdit,
-  onDelete,
 }: EventDetailPanelProps) {
   const [state, setState] = useState<PanelState>('idle')
   const [streamedDescription, setStreamedDescription] = useState('')
@@ -82,9 +75,7 @@ export function EventDetailPanel({
   const [sources, setSources] = useState<EventSource[]>([])
   const [errorMessage, setErrorMessage] = useState('')
   const [errorProvider, setErrorProvider] = useState<ByokProvider | null>(null)
-  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false)
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false)
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isResizing, setIsResizing] = useState(false)
 
   // Shared by the editor and the viewer — this is one component mounted from
@@ -246,7 +237,7 @@ export function EventDetailPanel({
       if (e.key === 'Escape') onClose()
     }
     const handleMouseDown = (e: MouseEvent) => {
-      if (showRemoveConfirm || showRegenerateConfirm || showDeleteConfirm) return
+      if (showRegenerateConfirm) return
       const node = panelRef.current
       if (!node) return
       const target = e.target as Node | null
@@ -262,12 +253,12 @@ export function EventDetailPanel({
       document.removeEventListener('keydown', handleKey)
       document.removeEventListener('mousedown', handleMouseDown)
     }
-  }, [open, onClose, showRemoveConfirm, showRegenerateConfirm, showDeleteConfirm])
+  }, [open, onClose, showRegenerateConfirm])
 
   // A confirmation left open when the panel closes would reappear over the next
   // event opened.
   useEffect(() => {
-    if (!open) setShowDeleteConfirm(false)
+    if (!open) setShowRegenerateConfirm(false)
   }, [open])
 
   function runGeneration(
@@ -375,24 +366,9 @@ export function EventDetailPanel({
     setShowRegenerateConfirm(true)
   }
 
-  function handleRemove() {
-    if (!event) return
-    onEventChange({
-      ...event,
-      description: null,
-      imageUrl: null,
-      imageAttribution: null,
-      sources: null,
-    })
-    onClose()
-  }
-
   if (typeof document === 'undefined') return null
 
   const showFooter = mode === 'edit' && open && !!event
-  // Edit and Delete used to live in the click-path actions menu. That menu is
-  // gone — a click opens this panel — so the header carries them instead.
-  const showAuthoringActions = mode === 'edit' && !!event && !!onEdit && !!onDelete
   const description = state === 'loaded' ? event?.description ?? streamedDescription : streamedDescription
   const displayImageUrl = state === 'loaded' ? event?.imageUrl ?? imageUrl : imageUrl
   const displayAttribution = state === 'loaded' ? event?.imageAttribution ?? imageAttribution : imageAttribution
@@ -475,20 +451,6 @@ export function EventDetailPanel({
                     {formatDateRange(event)}
                   </p>
                   <div className="flex items-center gap-2 shrink-0">
-                    {showAuthoringActions && (
-                      <>
-                        <HeaderIconButton onClick={onEdit} label="Edit event">
-                          <Pencil size={16} strokeWidth={1.25} />
-                        </HeaderIconButton>
-                        <HeaderIconButton
-                          onClick={() => setShowDeleteConfirm(true)}
-                          label="Delete event"
-                          destructive
-                        >
-                          <Trash2 size={16} strokeWidth={1.25} />
-                        </HeaderIconButton>
-                      </>
-                    )}
                     <button
                       onClick={onClose}
                       className="md:hidden flex items-center justify-center p-1.5 rounded-lg border border-white/15 bg-white/10 backdrop-blur-[12px] text-[#c9ced4] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4),inset_0px_1px_0px_0px_rgba(255,255,255,0.1)] hover:bg-white/20 hover:text-[#dadee5] transition-colors"
@@ -634,40 +596,10 @@ export function EventDetailPanel({
               <FooterButton onClick={handleRegenerate} disabled={state === 'generating'}>
                 Regenerate
               </FooterButton>
-              <FooterButton onClick={() => setShowRemoveConfirm(true)} disabled={state === 'generating'}>
-                Remove
-              </FooterButton>
             </div>
           )}
         </div>
       </aside>
-
-      <ConfirmationModal
-        isOpen={showRemoveConfirm}
-        onClose={() => setShowRemoveConfirm(false)}
-        onConfirm={handleRemove}
-        title="Remove event details"
-        message="This will clear the description, image, and sources for this event. The event itself will not be deleted."
-        confirmLabel="Remove"
-        cancelLabel="Cancel"
-      />
-
-      <ConfirmationModal
-        isOpen={showDeleteConfirm}
-        onClose={() => setShowDeleteConfirm(false)}
-        onConfirm={() => {
-          setShowDeleteConfirm(false)
-          onDelete?.()
-        }}
-        title="Delete event"
-        message={
-          event
-            ? `"${event.title}" will be removed from the timeline. This cannot be undone.`
-            : ''
-        }
-        confirmLabel="Delete"
-        cancelLabel="Cancel"
-      />
 
       <ConfirmationModal
         isOpen={showRegenerateConfirm}
@@ -680,33 +612,6 @@ export function EventDetailPanel({
       />
     </>,
     document.body,
-  )
-}
-
-function HeaderIconButton({
-  children,
-  onClick,
-  label,
-  destructive,
-}: {
-  children: React.ReactNode
-  onClick?: () => void
-  label: string
-  destructive?: boolean
-}) {
-  return (
-    <button
-      onClick={onClick}
-      aria-label={label}
-      title={label}
-      className={`flex items-center justify-center p-1.5 rounded-lg border border-white/15 bg-white/10 backdrop-blur-[12px] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4),inset_0px_1px_0px_0px_rgba(255,255,255,0.1)] hover:bg-white/20 transition-colors ${
-        destructive
-          ? 'text-destructive hover:text-destructive'
-          : 'text-[#c9ced4] hover:text-[#dadee5]'
-      }`}
-    >
-      {children}
-    </button>
   )
 }
 

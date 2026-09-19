@@ -289,8 +289,8 @@ export function Timeline({
   }, [months, onAddEvent, justDraggedRef, isEditing]);
 
   // One click, one outcome, in both modes: open the detail panel. The panel
-  // itself handles cached content vs. fresh generation. Edit and Delete now
-  // live in the panel's header rather than on the click path.
+  // itself handles cached content vs. fresh generation. The panel is read-only
+  // authoring-wise — editing and deleting events live in the table editor.
   const handleEventClick = useCallback(
     (event: ITimelineEvent) => {
       if (justDraggedRef.current) return;

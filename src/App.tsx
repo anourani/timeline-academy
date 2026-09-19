@@ -960,10 +960,6 @@ export function App() {
     updateEvent(updatedEvent);
   };
 
-  const handleDeleteEvent = (eventId: string) => {
-    setEvents(events.filter(e => e.id !== eventId));
-  };
-
   const handleBulkEventsChange = (newEvents: TimelineEvent[]) => {
     const currentIds = new Set(events.map(e => e.id));
     const addedEvents = newEvents.filter(e => !currentIds.has(e.id));
@@ -1107,24 +1103,6 @@ export function App() {
           handleUpdateEvent(updated);
           setDetailPanelEvent(updated);
         }}
-        onEdit={
-          mode === 'edit'
-            ? () => {
-                if (!detailPanelEvent) return;
-                setPendingEditEventId(detailPanelEvent.id);
-                setDetailPanelEvent(null);
-              }
-            : undefined
-        }
-        onDelete={
-          mode === 'edit'
-            ? () => {
-                if (!detailPanelEvent) return;
-                handleDeleteEvent(detailPanelEvent.id);
-                setDetailPanelEvent(null);
-              }
-            : undefined
-        }
       />
     </div>
   );
