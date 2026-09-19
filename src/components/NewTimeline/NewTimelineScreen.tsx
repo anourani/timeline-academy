@@ -286,19 +286,24 @@ export function NewTimelineScreen({
   }, [dropdownVisible, renderDropdown])
 
   return (
-    <div className="relative min-h-screen bg-surface-primary overflow-auto [--page-gutter:16px] sm:[--page-gutter:40px] md:[--page-gutter:64px] lg:[--page-gutter:120px]">
+    <div className="relative h-screen overflow-hidden bg-surface-primary [--page-gutter:16px] sm:[--page-gutter:40px] md:[--page-gutter:64px] lg:[--page-gutter:120px]">
       <BackgroundGrid />
       <BackgroundPattern />
-      <div className="relative z-10">
-        {/* The label is the first thing in the form and the form is this box's
-            only child, so this padding *is* the viewport-top-to-label-top
-            distance the design asks for: 40% of the viewport, never under
-            200px. The floor is what keeps the field clear of the 80px
-            `GlobalNav` that `AIModePage` paints over this screen — 40vh alone
-            would tuck under it below a 200px-tall window. The screen root is
-            `min-h-screen overflow-auto`, so a window too short for the sum
-            scrolls rather than clipping. */}
-        <div className="flex flex-col items-center gap-[40px] px-[var(--page-gutter)] pt-[max(40vh,200px)] pb-[64px] md:pb-[120px]">
+      <div className="relative z-10 h-full">
+        {/* The screen is exactly one viewport tall and never scrolls, so the
+            form is centred in the space left below the nav rather than pushed
+            down by a fixed offset. `pt-[80px]` is the height of the
+            `GlobalNav` that `AIModePage` paints over this screen: reserving it
+            here is what makes the centring measure the *clear* area rather
+            than the whole viewport, so the label can never tuck under the nav.
+
+            This replaced a `pt-[max(40vh,200px)]` offset that put the label at
+            40% of the viewport and let the page scroll when the sum overran.
+            With `overflow-hidden` a fixed offset has nowhere to put content
+            that no longer fits, so a short window would clip the quick-search
+            chips off the bottom instead of scrolling to them. Centred, the
+            block gives back its own slack from both ends and stays whole. */}
+        <div className="h-full flex flex-col items-center justify-center gap-[40px] px-[var(--page-gutter)] pt-[80px] pb-[40px]">
           <form
             ref={formRef}
             onSubmit={handleSubmit}
