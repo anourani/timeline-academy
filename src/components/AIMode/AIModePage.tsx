@@ -85,7 +85,7 @@ export function AIModePage() {
   }
 
   return (
-    <div className="relative min-h-screen bg-surface-primary">
+    <div className="relative h-screen overflow-hidden bg-surface-primary">
       <div className="absolute top-0 left-0 right-0 z-20">
         <GlobalNav />
       </div>
