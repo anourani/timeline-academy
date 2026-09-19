@@ -312,7 +312,7 @@ export function ModelSelector({
                       // row's searchable name should be the model, not the
                       // model plus an annotation about it.
                       textValue={model.label}
-                      onSelect={() => setPreferredModel(model.id)}
+                      onSelect={() => void setPreferredModel(model.id)}
                     >
                       {model.label}
 

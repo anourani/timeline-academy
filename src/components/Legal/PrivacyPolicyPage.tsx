@@ -39,7 +39,8 @@ export function PrivacyPolicyPage() {
       <ul>
         <li>
           <strong>Supabase</strong> — hosts our database and sign-in system;
-          stores your email and saved timelines.
+          stores your email, your saved timelines, and — if you are signed in
+          and have added one — your encrypted API key.
         </li>
         <li>
           <strong>Netlify</strong> — hosts and serves the website.
@@ -61,27 +62,49 @@ export function PrivacyPolicyPage() {
 
       <h2>If you use your own API key</h2>
       <p>
-        You can bring your own OpenAI or Anthropic API key. It is stored only
-        in your browser's local storage — it is never sent to our servers. AI
-        requests then go directly from your browser to the provider whose key
-        you supplied, which means that provider sees your IP address for those
-        requests, and bills the usage to your account with them rather than to
-        us. Anyone with access to your device and browser profile could read
-        the stored key; remove it in Settings any time.
+        You can bring your own OpenAI or Anthropic API key. Where it is kept
+        depends on whether you are signed in.
+      </p>
+      <p>
+        <strong>Signed out</strong> — the key is stored only in your browser's
+        local storage and is never sent to our servers.
+      </p>
+      <p>
+        <strong>Signed in</strong> — the key is sent to our server once, when
+        you save it, and stored against your account. It is encrypted before
+        it is written down, with a key held only in our server configuration
+        and never in the database, so it is not readable from a copy of the
+        database alone. We store it so that it works on every device you sign
+        in on rather than only the one you pasted it into. A copy is also kept
+        in that browser's local storage, which is what the app reads from.
+      </p>
+      <p>
+        Either way, AI requests themselves go directly from your browser to
+        the provider whose key you supplied — they do not pass through our
+        servers. That provider sees your IP address for those requests, and
+        bills the usage to your account with them rather than to us.
+      </p>
+      <p>
+        Anyone with access to your device and browser profile could read the
+        stored key. Signing out removes it from that browser but leaves it on
+        your account; removing it in Settings deletes it from your account and
+        from the browser; deleting your account deletes it along with
+        everything else.
       </p>
       <p>
         Requests we send to OpenAI on your behalf are marked not to be stored,
         so they do not accumulate in your OpenAI dashboard. If you save keys
-        for both providers, you choose which one is used by default, and only
-        that provider receives your requests.
+        for both providers, the model you pick decides which provider receives
+        your requests, and only that provider receives them.
       </p>
 
       <h2>What we store in your browser</h2>
       <p>
         Local storage on your device may hold: unsaved timeline drafts, your
-        optional OpenAI or Anthropic API keys, AI-generated content for shared timelines
-        you've viewed, your session sign-in token, and interface preferences.
-        Clearing your browser's site data removes all of it.
+        optional OpenAI or Anthropic API keys (which are also stored on your
+        account while you are signed in), AI-generated content for shared
+        timelines you've viewed, your session sign-in token, and interface
+        preferences. Clearing your browser's site data removes all of it.
       </p>
 
       <h2>Sharing timelines</h2>

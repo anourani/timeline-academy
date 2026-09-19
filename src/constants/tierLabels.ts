@@ -29,11 +29,11 @@ export const TIER_DESCRIPTIONS: Record<Exclude<AccountTier, 'loading'>, string> 
   trial:
     'Timelines you build stay in this tab and are lost when it closes. Sign in or add an API key to keep them.',
   'byok-anon':
-    'Drafts are saved in this browser only, and AI runs on your own API key. Sign in to save them to your account.',
+    'Drafts and your API key are saved in this browser only, and AI runs on that key. Sign in to save them to your account.',
   free:
     'Timelines are saved to your account. AI generation runs on our budget, within a daily limit.',
   byok:
-    'Timelines are saved to your account, and AI runs on your own API key rather than our budget.',
+    'Timelines and your API key are saved to your account, and AI runs on that key rather than our budget.',
 }
 
 /**

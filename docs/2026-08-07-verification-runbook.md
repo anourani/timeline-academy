@@ -25,6 +25,11 @@ features in the first place.
 | Anonymous sign-in-or-BYOK gate | **NOT TESTED** |
 | `/privacy` and `/terms` rendering | **NOT TESTED** |
 | `set-byok-flag` | **NOT TESTED** |
+| `byok-keys` — curl round trip (set / get / set-model / delete) | **NOT TESTED** — added 19 Sep |
+| `byok-keys` — `byok_enabled` derived correctly from key rows | **NOT TESTED** — added 19 Sep |
+| BYOK key syncs across two browsers on one account | **NOT TESTED** — added 19 Sep |
+| Sign-out clears the device but not the account's key | **NOT TESTED** — added 19 Sep |
+| `user_byok_keys` / `user_byok_settings` locked down (RLS on, no grants) | **NOT TESTED** — added 19 Sep |
 | Security headers on production responses | **NOT TESTED** |
 | `events` realtime subscription honours RLS | **NOT TESTED** |
 | Second Supabase project — custom SMTP disabled | **NOT DONE** |
@@ -667,3 +672,83 @@ Deliberately not changed yet — the point of this session is evidence first.
 4. **The save-status indicator is off** (`SHOW_SAVE_STATUS = false`). It is the
    reason three months of data loss went unnoticed, and it is still off. Turning
    it back on is the cheapest possible insurance against a repeat.
+
+---
+
+## 5. Account-synced BYOK keys — added 19 September 2026
+
+Six rows added to the ledger above. The migration
+(`20260919000000_byok_keys.sql`) and the `BYOK_ENCRYPTION_KEY` secret are both
+hand-applied, so *none* of this is verified by the PR merging. Run the steps in
+order; each one is a row.
+
+**Before anything:** `openssl rand -base64 32` → Supabase → Edge Functions →
+Secrets → `BYOK_ENCRYPTION_KEY`. Keep a copy in a password manager — rotating
+it invalidates every stored key. Then paste the migration into the SQL editor.
+
+**Lockdown check** (two rows: RLS and grants):
+
+```sql
+select relname, relrowsecurity from pg_class where relname like 'user_byok%';
+-- both tables, relrowsecurity = true
+
+select grantee, privilege_type from information_schema.role_table_grants
+where table_name like 'user_byok%';
+-- no rows for anon or authenticated
+```
+
+**curl round trip.** Per CLAUDE.md, curl before the browser — it separates "the
+server is broken" from "the browser refused to send". Take a JWT from the
+browser's `sb-…-auth-token` localStorage entry and use a fake but
+prefix-valid key (`sk-ant-test123`); it is never called, only stored.
+
+```
+set  → get (key comes back)  → set-model → get (model comes back)
+     → delete → get (that provider is null)
+```
+
+Negative cases, each of which must fail in its own way:
+
+- no `Authorization` header → **401**
+- `{"action":"nope"}` → **400** (this is also what protects against a cached
+  old bundle's `{"enabled":false}` body)
+- `provider: "openai"` with an `sk-ant-` key → **400**
+
+**Flag derivation.** After the `set`, and again after the final `delete`:
+
+```sql
+select raw_app_meta_data from auth.users where id = '<user id>';
+-- true after set, false after the last delete
+```
+
+**Two-browser test** (the behaviour this whole change exists for). Add a key in
+browser A → sign in on browser B → the key is present, the model matches, the
+pill reads "Using your Anthropic key", and the premium models are unlocked.
+Then remove it in B → reload A → gone. Sign out in A → tier drops to trial and
+the key slots are empty. Sign back in → restored.
+
+**Promotion path.** From a signed-out fresh profile: add a key, pick a model,
+then sign in. Both tables should have rows, `byok_enabled` should be true, and
+a second browser should see both.
+
+**Regression for the demotion bug.** Sign in on a device that has never held a
+key *and whose account already has a key row*. `byok_enabled` must stay
+`true`. This is the failure the change was written to remove, so it is the one
+row worth re-running after any future change to `userApiKey.ts`.
+
+### One-time migration behaviour — expect this, it is not a bug
+
+Existing BYOK users have a key in localStorage and no row on their account.
+The row is created by the first sync, which runs when they next load the site
+**on the browser that holds the key** — nothing migrates them server-side,
+because the server has never seen their key and by design cannot.
+
+Until that first load happens, a second browser sees no key, and the `get`
+there will set `byok_enabled` to `false` (correctly: there is no key on the
+account). That is the same demotion they already had, not a new one, and it
+reverses itself the moment the key-holding browser loads once. Worth knowing
+before reading the first support email about it.
+
+Client-side limits are unaffected either way: `lib/limits.ts` derives the plan
+from `hasAnyKey()` in localStorage, not from `byok_enabled`. The flag only
+gates the server-side `get_plan_limits`.

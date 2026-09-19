@@ -21,6 +21,18 @@ import { useHasByokKey } from '@/services/userApiKey'
  *
  * Only the last three are `Plan`s in constants/plans.ts. Trial has no limits to
  * enforce and no row in the tier table — it is a state, not a tier.
+ *
+ * One deliberate gap: BYOK keys are stored on the account now, and on a fresh
+ * device the first sync lands a beat after auth does. In that window a
+ * signed-in BYOK user reads `free`, and briefly sees Free's limits. That is
+ * safe — `free` and `byok` share the Supabase store, so the storage
+ * reconciliation in App.tsx points at the same place either way, and the key
+ * arriving fires `byok:changed`, which moves the tier on its own.
+ *
+ * Do NOT widen `'loading'` to cover the sync. It is awaited by the one caller
+ * that genuinely cannot proceed without it (the Generate button, via
+ * awaitByokSync), and gating the tier on it would put a network round trip in
+ * front of editor hydration on every single page load.
  */
 export type AccountTier = 'loading' | 'trial' | 'byok-anon' | 'free' | 'byok'
 

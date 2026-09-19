@@ -167,3 +167,11 @@ It purges the user's timelines (events and categories cascade), then rate-limit 
 - **Default timeline scale `large`**, set across five places plus the column default.
 - **BYOK keys stay in localStorage**, disclosed in the UI. CSP is the mitigation, not re-architecture.
 - **No analytics, ever.** The absence of any tracking is the product's strongest privacy property.
+
+**Superseded 19 Sep 2026 — "BYOK keys stay in localStorage".**
+
+That decision held while keys were a device-local convenience. It stopped holding once the same account was used from two browsers: the key stayed on the one it was pasted into, and — worse — `reconcileBYOKMetadata()` reported `byok_enabled: false` up from the key-less device, silently demoting the account from BYOK limits (1200 events / 25 timelines) to Free (300 / 10) until the first device re-saved. That is not a disclosure problem CSP mitigates; it is the key and the account being stored in different places.
+
+Keys for signed-in users now live on the account, encrypted at rest with `BYOK_ENCRYPTION_KEY` and reachable only through the `byok-keys` Edge Function under the service role. `localStorage` stays as the synchronous cache, so the disclosure profile on the device is unchanged and CSP is still the mitigation *there*. Signed-out users (trial / byok-anon) keep the original browser-only behaviour exactly. `byok_enabled` is derived from whether key rows exist, so the demotion bug is gone structurally rather than patched.
+
+The bullet above is left as written: it was the right call for the model in place at the time, and rewriting it would hide why this changed. The privacy copy that promised "never sent to our servers" was updated, because it is no longer true for signed-in users.
