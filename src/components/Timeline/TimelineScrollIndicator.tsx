@@ -5,15 +5,21 @@ import { SCROLL_INDICATOR_HEIGHT } from '../../constants/timeline'
 interface TimelineScrollIndicatorProps {
   months: Month[]
   visibleRange: { start: number; end: number }
-  /** The chapter the viewport is inside, shown after the year. Absent on a
-   *  timeline with no chapters, which leaves the bare year as before. */
-  chapterLabel?: string
 }
 
+/**
+ * The year readout that used to sit above the canvas.
+ *
+ * Deliberately mounted nowhere: it duplicated the grid's own year labels
+ * directly below it and the chapters strip directly above, so the row was
+ * removed and the 36px given back to the canvas. Kept intact — rather than
+ * deleted — because the year is hidden for now, not ruled out; re-rendering it
+ * in `Timeline` and restoring `SCROLL_INDICATOR_HEIGHT` to the category-label
+ * offset there is the whole of bringing it back.
+ */
 export const TimelineScrollIndicator = memo(function TimelineScrollIndicator({
   months,
-  visibleRange,
-  chapterLabel
+  visibleRange
 }: TimelineScrollIndicatorProps) {
   const startMonthIndex = Math.max(0, Math.floor(visibleRange.start / 4))
   const leftYear = months[startMonthIndex]?.year
@@ -24,14 +30,6 @@ export const TimelineScrollIndicator = memo(function TimelineScrollIndicator({
       style={{ height: SCROLL_INDICATOR_HEIGHT }}
     >
       {leftYear != null && <span>{leftYear}</span>}
-      {leftYear != null && chapterLabel && (
-        <>
-          <span className="text-[#4E5052] px-[8px] md:px-[10px]">·</span>
-          {/* Truncates rather than pushing the row wide: this sits above the
-              canvas, and a long chapter name must not introduce a scrollbar. */}
-          <span className="text-[#DADEE5] truncate">{chapterLabel}</span>
-        </>
-      )}
     </div>
   )
 })

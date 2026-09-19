@@ -25,7 +25,7 @@ import { supabase } from './lib/supabase';
 import { DEFAULT_TIMELINE_TITLE } from './constants/defaults';
 import { DEFAULT_CATEGORIES } from './constants/categories';
 import { ChaptersStrip } from './components/Timeline/ChaptersStrip';
-import { findChapterAtMonth, normalizeChapters } from './utils/chapters';
+import { normalizeChapters } from './utils/chapters';
 import { getTimelineRange } from './utils/dateUtils';
 
 function limitReachedMessage(kind: 'event' | 'timeline'): string {
@@ -147,11 +147,6 @@ export function App() {
   // the identical dependency, and passing it down would put the grid's geometry
   // on a prop where a stale render could disagree with the canvas.
   const { months } = useMemo(() => getTimelineRange(events), [events]);
-
-  const activeChapter = useMemo(
-    () => findChapterAtMonth(chapters, months, currentMonthIndex),
-    [chapters, months, currentMonthIndex],
-  );
 
   // Stable identity: Timeline fires this from an effect keyed on the callback,
   // so an inline arrow would re-run it on every render of the editor.
@@ -1080,7 +1075,6 @@ export function App() {
             pendingEditEventId={pendingEditEventId}
             onEditRequestHandled={() => setPendingEditEventId(null)}
             onVisibleMonthChange={handleVisibleMonthChange}
-            chapterLabel={activeChapter?.label}
             mode={mode}
           />
         </main>

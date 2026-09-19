@@ -4,7 +4,6 @@ import { TimelineGrid } from './TimelineGrid';
 import { TimelineVerticalLines } from './TimelineVerticalLines';
 import { TimelineCategoryLabels } from './TimelineCategoryLabels';
 import { TimelineEvent } from './TimelineEvent';
-import { TimelineScrollIndicator } from './TimelineScrollIndicator';
 import { EventHoverCursor, EventHoverCursorHandle } from './EventHoverCursor';
 import { TimelineEvent as ITimelineEvent, CategoryConfig } from '../../types/event';
 import { ScrollTarget, TimelineScale, TimelineVerticalScale } from '../../types/timeline';
@@ -12,7 +11,7 @@ import { findMonthIndex, formatYMD, getTimelineRange, shiftEventDates } from '..
 import { calculateEventStacks, StackedEvent } from '../../utils/eventStacking';
 import { useTimelineScroll } from '../../hooks/useTimelineScroll';
 import { useEventDrag } from '../../hooks/useEventDrag';
-import { CATEGORY_PADDING, CATEGORY_MIN_HEIGHT, SCROLL_INDICATOR_HEIGHT, HEADER_HEIGHT, SCROLL_LEAD_IN_MONTHS } from '../../constants/timeline';
+import { CATEGORY_PADDING, CATEGORY_MIN_HEIGHT, HEADER_HEIGHT, SCROLL_LEAD_IN_MONTHS } from '../../constants/timeline';
 import { EventForm } from '../EventForm/EventForm';
 import {
   Dialog,
@@ -46,8 +45,6 @@ interface TimelineProps {
    *  privately owns — same shape as the two callbacks above, so nothing has to
    *  lift `scrollContainerRef` out. */
   onVisibleMonthChange?: (monthIndex: number) => void;
-  /** Rendered beside the year in the readout — the chapter you are inside. */
-  chapterLabel?: string;
   /**
    * Edit/View mode. In view mode, edit affordances (drag-to-reschedule,
    * hover-to-add cursor, click-to-edit) are suppressed.
@@ -82,7 +79,6 @@ export function Timeline({
   pendingEditEventId,
   onEditRequestHandled,
   onVisibleMonthChange,
-  chapterLabel,
   mode = 'edit',
 }: TimelineProps) {
   const isEditing = mode === 'edit';
@@ -118,13 +114,20 @@ export function Timeline({
   const hoverCursorRef = useRef<EventHoverCursorHandle>(null);
   const hoveredEventIdRef = useRef<string | null>(null);
 
-  const { visibleRange } = useTimelineScroll(scrollContainerRef, months.length * 4);
+  const { scrollLeft } = useTimelineScroll(scrollContainerRef, months.length * 4);
 
-  // `visibleRange` counts quarter-columns; the readout below does the same
-  // conversion to reach a month. Reported through an effect rather than from
-  // the scroll handler so subscribers only hear about it once per settled
-  // render, whatever the wheel lerp is doing.
-  const visibleMonthIndex = Math.max(0, Math.floor(visibleRange.start / 4));
+  // Straight from `scrollLeft` against the month width the grid is actually
+  // laid out with, rather than via `visibleRange`. That counts quarter-columns
+  // sized from the container's measured `scrollWidth`, which runs a pixel wider
+  // than the grid's own `minWidth` — enough, once floored to a quarter and
+  // floored again to a month, to report the left edge a whole month early at a
+  // boundary. The chapters strip reads this to decide which chip is active, so
+  // that month came straight off the lead in `findActiveChapter`.
+  //
+  // Reported through an effect rather than from the scroll handler so
+  // subscribers only hear about it once per settled render, whatever the wheel
+  // lerp is doing.
+  const visibleMonthIndex = Math.max(0, Math.floor(scrollLeft / scale.monthWidth));
   useEffect(() => {
     onVisibleMonthChange?.(visibleMonthIndex);
   }, [visibleMonthIndex, onVisibleMonthChange]);
@@ -436,7 +439,7 @@ export function Timeline({
       {showCategoryLabels && (
         <div
           className="absolute left-0 z-10 pointer-events-none"
-          style={{ top: SCROLL_INDICATOR_HEIGHT + HEADER_HEIGHT, height: layout.totalHeight, transition: 'height 220ms ease' }}
+          style={{ top: HEADER_HEIGHT, height: layout.totalHeight, transition: 'height 220ms ease' }}
         >
           <TimelineCategoryLabels
             categories={layout.bands.map(b => ({ id: b.id, height: b.height }))}
@@ -446,11 +449,6 @@ export function Timeline({
       )}
 
       <div className="relative flex-1 min-h-0 flex flex-col">
-        <TimelineScrollIndicator
-          months={months}
-          visibleRange={visibleRange}
-          chapterLabel={chapterLabel}
-        />
         <div
           ref={scrollContainerRef}
           className="flex-1 min-h-0 overflow-auto scrollbar-hide"
