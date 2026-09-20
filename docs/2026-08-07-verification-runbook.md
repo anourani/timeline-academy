@@ -689,12 +689,18 @@ it invalidates every stored key. Then paste the migration into the SQL editor.
 **Lockdown check** (two rows: RLS and grants):
 
 ```sql
-select relname, relrowsecurity from pg_class where relname like 'user_byok%';
+-- relkind = 'r' keeps this to tables. Without it you also get the two _pkey
+-- indexes, which always read false because an index has no RLS of its own —
+-- it looks like a failure and is not one.
+select relname, relrowsecurity from pg_class
+where relname like 'user_byok%' and relkind = 'r';
 -- both tables, relrowsecurity = true
 
+-- Filtered to the two roles that matter, so the correct answer is zero rows
+-- rather than "scan this list and check nothing bad is in it".
 select grantee, privilege_type from information_schema.role_table_grants
-where table_name like 'user_byok%';
--- no rows for anon or authenticated
+where table_name like 'user_byok%' and grantee in ('anon', 'authenticated');
+-- no rows
 ```
 
 **curl round trip.** Per CLAUDE.md, curl before the browser — it separates "the
