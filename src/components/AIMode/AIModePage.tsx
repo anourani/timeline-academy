@@ -6,7 +6,7 @@ import { AuthModal } from '@/components/Auth/AuthModal'
 import { ApiKeyModal } from '@/components/Modal/ApiKeyModal'
 import { useAIMode } from '@/hooks/useAIMode'
 import { useAuth } from '@/hooks/useAuth'
-import { hasAnyKey } from '@/services/userApiKey'
+import { awaitByokSync, hasAnyKey } from '@/services/userApiKey'
 import type { ByokProvider } from '@/types/ai'
 
 export function AIModePage() {
@@ -54,6 +54,13 @@ export function AIModePage() {
   }
 
   const handleAIGenerate = async (subject: string) => {
+    // On a fresh device the account's key is still being pulled into the
+    // local cache when the page finishes loading. Without this wait, a
+    // Generate clicked inside that window reads no key and quietly takes the
+    // server-funded path — spending our budget, on Sonnet, for a user who
+    // brought Opus. Resolves immediately once the sync has landed.
+    if (user) await awaitByokSync()
+
     if (!user && !hasAnyKey()) {
       pendingSubjectRef.current = subject
       setShowApiKeyModal(true)

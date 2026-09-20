@@ -98,7 +98,16 @@ export function ApiKeyModal({
       return
     }
 
-    for (const [provider, value] of entries) setKey(provider, value)
+    // Fire-and-forget on purpose. This modal is the gate standing between a
+    // visitor and the generation they asked for, so its job is to get out of
+    // the way: setKey() writes the cache synchronously, which is everything
+    // the generation needs, and the push to the account settles behind it.
+    // A push that fails here is picked up by the next sign-in sync.
+    for (const [provider, value] of entries) {
+      setKey(provider, value).catch((err) => {
+        console.warn('BYOK key push to account failed:', err)
+      })
+    }
 
     // No model is written here. With no stored preference, the resolver falls
     // back to the provider's default — Terra for an OpenAI-only key, Sonnet
@@ -212,7 +221,10 @@ export function ApiKeyModal({
               </a>
             </span>
           ))}
-          . Stored only in this browser.
+          .{' '}
+          {signedIn
+            ? 'Saved to your account, encrypted, so it works on every device you sign in on.'
+            : 'Kept only in this browser until you sign in.'}
         </p>
 
         <div className="flex flex-col gap-2">

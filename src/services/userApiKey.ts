@@ -29,36 +29,13 @@ const SLOT: Record<ByokProvider, string> = {
   openai: KEY_OPENAI,
 }
 
+// Iteration order for "do this for both providers". Derived from SLOT rather
+// than written out again, so a third provider cannot be added to the slot map
+// and quietly skipped by the sync. Not PROVIDER_ORDER from byokProviders.ts —
+// that one is a display decision and is free to change.
+const PROVIDER_SLOTS = Object.keys(SLOT) as ByokProvider[]
+
 const WATCHED = new Set([KEY_ANTHROPIC, KEY_OPENAI, KEY_MODEL, KEY_PREFERRED])
-
-// Brings the server-side byok_enabled flag in sync with whether ANY BYOK key
-// exists in localStorage. The flag lives in app_metadata (which the client
-// cannot write directly — plan limits are derived from it server-side), so
-// the sync goes through the set-byok-flag edge function. Idempotent and
-// best-effort: no-op when already in sync, no-op when logged out, errors are
-// logged not thrown.
-//
-// The flag stays a plain boolean: limits do not vary by provider, so recording
-// which provider a user brought would mean an app_metadata migration and an
-// SQL change for no behavioural gain.
-async function reconcileBYOKMetadata(): Promise<void> {
-  try {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    const hasKey = hasAnyKey()
-    const currentFlag = !!user.app_metadata?.byok_enabled
-    if (hasKey === currentFlag) return
-    await supabase.functions.invoke('set-byok-flag', {
-      body: { enabled: hasKey },
-    })
-  } catch (err) {
-    console.warn('BYOK metadata sync failed:', err)
-  }
-}
-
-supabase.auth.onAuthStateChange((event) => {
-  if (event === 'SIGNED_IN') void reconcileBYOKMetadata()
-})
 
 function readSlot(name: string): string | null {
   try {
@@ -66,6 +43,25 @@ function readSlot(name: string): string | null {
     return v && v.trim() ? v : null
   } catch {
     return null
+  }
+}
+
+// Both swallow their errors: storage can be full or disabled entirely, and
+// neither is worth failing a key save over — the in-memory value the caller
+// just used still works for this page load.
+function writeSlot(name: string, value: string): void {
+  try {
+    localStorage.setItem(name, value)
+  } catch {
+    // ignore — quota or disabled storage
+  }
+}
+
+function removeSlot(name: string): void {
+  try {
+    localStorage.removeItem(name)
+  } catch {
+    // ignore
   }
 }
 
@@ -78,6 +74,215 @@ function notifyChanged(): void {
 }
 
 // ---------------------------------------------------------------------------
+// Where a key actually lives
+// ---------------------------------------------------------------------------
+//
+// localStorage is the *cache*, not the store. For a signed-in user the store
+// is the account: the `byok-keys` Edge Function holds the key as ciphertext
+// and hands it back on every device they sign in on. Everything downstream —
+// getActiveModel(), the hooks, lib/limits.ts — keeps reading localStorage
+// synchronously and is untouched by that, which is the point of the split.
+//
+// Signed-out users (trial / byok-anon) are unchanged: browser only, nothing
+// sent anywhere.
+//
+// This replaces reconcileBYOKMetadata(), which reported byok_enabled up from
+// whatever localStorage happened to hold. On a second browser that was
+// `false`, so signing in silently demoted the account from BYOK limits (1200
+// events / 25 timelines) to Free (300 / 10) until the first browser re-saved
+// the key. The flag is now derived server-side from whether key rows exist,
+// so there is no longer a client claim that can be wrong.
+
+type ByokRequest =
+  | { action: 'get' }
+  | { action: 'set'; provider: ByokProvider; key: string }
+  | { action: 'delete'; provider: ByokProvider }
+  | { action: 'set-model'; model: string | null }
+
+interface ByokGetResponse {
+  keys?: Partial<Record<ByokProvider, string | null>>
+  model?: string | null
+}
+
+/** The function's own `{ error }` body, which carries the message worth
+ *  showing. supabase-js only surfaces the status text on a non-2xx. */
+async function readErrorMessage(error: unknown): Promise<string | null> {
+  const context = (error as { context?: unknown }).context
+  if (!(context instanceof Response)) return null
+  try {
+    const body = await context.clone().json()
+    return typeof body?.error === 'string' ? body.error : null
+  } catch {
+    return null
+  }
+}
+
+async function callByokKeys(body: ByokRequest): Promise<unknown> {
+  const { data, error } = await supabase.functions.invoke('byok-keys', { body })
+  if (error) {
+    throw new Error((await readErrorMessage(error)) ?? error.message)
+  }
+  if (data && typeof data === 'object' && 'error' in data) {
+    throw new Error(String((data as { error: unknown }).error))
+  }
+  return data
+}
+
+/** Local session read — no network, so it is cheap enough to gate every
+ *  write on. */
+async function isSignedIn(): Promise<boolean> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    return Boolean(session)
+  } catch {
+    return false
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Account sync
+// ---------------------------------------------------------------------------
+
+let syncInFlight: Promise<void> | null = null
+let syncedUserId: string | null = null
+
+// Whether this page has ever seen a session. SIGNED_OUT clears the device,
+// and a stray SIGNED_OUT with no preceding sign-in would otherwise wipe a
+// byok-anon visitor's key — someone who never had an account for it to sync
+// to in the first place.
+let sawSession = false
+
+/**
+ * Resolves when the in-flight sign-in sync has landed, or immediately when
+ * there is none.
+ *
+ * One caller: the Generate button, which would otherwise take the
+ * server-funded path in the sub-second window on a fresh device where the
+ * account has a key but the cache does not yet.
+ */
+export function awaitByokSync(): Promise<void> {
+  return syncInFlight ?? Promise.resolve()
+}
+
+/** Wipes the cache. The account keeps its rows — signing out is leaving this
+ *  device, not giving up the key. KEY_PREFERRED is not a key and is left
+ *  alone. */
+export function clearLocalKeys(): void {
+  removeSlot(KEY_ANTHROPIC)
+  removeSlot(KEY_OPENAI)
+  removeSlot(KEY_MODEL)
+  notifyChanged()
+}
+
+/**
+ * Pulls the account's keys into the cache, and pushes anything the account is
+ * missing upward.
+ *
+ * Nothing is ever deleted by a sync. The account wins where it has a value,
+ * the device fills the gaps, and a provider absent from both stays absent —
+ * so a sync can promote a byok-anon user's key to their new account, but can
+ * never be the reason a key disappears. Deletion is only ever an explicit
+ * Remove.
+ *
+ * Every failure path is a warning and a return: a 404 before the function is
+ * deployed, a 503 before the secret is set, or a dropped connection all leave
+ * the user exactly where they were, on browser-only keys.
+ */
+async function syncFromAccount(userId: string): Promise<void> {
+  let response: unknown
+  try {
+    response = await callByokKeys({ action: 'get' })
+  } catch (err) {
+    console.warn('BYOK account sync failed; keeping browser-only keys:', err)
+    return
+  }
+
+  // The session can change while the request is in flight — sign out, sign
+  // straight back in as someone else. Writing the first account's keys into
+  // the second account's browser is the worst outcome available here, so a
+  // stale answer is discarded rather than applied.
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.user?.id !== userId) return
+  } catch {
+    return
+  }
+
+  const remote = (response ?? {}) as ByokGetResponse
+  const pushes: Array<Promise<unknown>> = []
+  let moved = false
+
+  for (const provider of PROVIDER_SLOTS) {
+    const remoteKey = remote.keys?.[provider] ?? null
+    const localKey = readSlot(SLOT[provider])
+    if (remoteKey) {
+      if (remoteKey !== localKey) {
+        writeSlot(SLOT[provider], remoteKey)
+        moved = true
+      }
+    } else if (localKey) {
+      pushes.push(callByokKeys({ action: 'set', provider, key: localKey }))
+    }
+  }
+
+  // getPreferredModel() already filters to ids this build knows, so a
+  // preference from a newer bundle is left on the account rather than written
+  // into a cache that would resolve it to the provider default anyway.
+  const remoteModel = typeof remote.model === 'string' ? remote.model : null
+  const localModel = getPreferredModel()
+  if (remoteModel && getModelById(remoteModel)) {
+    if (remoteModel !== localModel) {
+      writeSlot(KEY_MODEL, remoteModel)
+      moved = true
+    }
+  } else if (!remoteModel && localModel) {
+    pushes.push(callByokKeys({ action: 'set-model', model: localModel }))
+  }
+
+  // Once, after every local write: `byok:changed` is what moves the tier, the
+  // model dropdown and lib/limits.ts, and firing it per slot would re-render
+  // all three up to three times for one sync.
+  if (moved) notifyChanged()
+
+  for (const result of await Promise.allSettled(pushes)) {
+    if (result.status === 'rejected') {
+      console.warn('BYOK account sync push failed:', result.reason)
+    }
+  }
+}
+
+supabase.auth.onAuthStateChange((event, session) => {
+  // Deferred to the next macrotask. supabase-js holds an internal lock for
+  // the duration of this callback and warns against calling its auth methods
+  // from inside it; the sync needs getSession() for its stale guard.
+  setTimeout(() => {
+    if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
+      const userId = session?.user?.id
+      if (!userId) return
+      sawSession = true
+      // SIGNED_IN fires again on tab focus and on every token refresh, so the
+      // id guard is what keeps this to one sync per account per page load.
+      if (userId === syncedUserId) return
+      syncedUserId = userId
+      const run = syncFromAccount(userId)
+      syncInFlight = run
+      void run.finally(() => {
+        if (syncInFlight === run) syncInFlight = null
+      })
+      return
+    }
+
+    if (event === 'SIGNED_OUT') {
+      syncedUserId = null
+      // Covers explicit sign-out, cross-tab sign-out, an expired refresh
+      // token, and delete-account — all of which should leave the key behind
+      // on the account and nothing behind on the device.
+      if (sawSession) clearLocalKeys()
+    }
+  }, 0)
+})
+
+// ---------------------------------------------------------------------------
 // Per-provider access
 // ---------------------------------------------------------------------------
 
@@ -85,30 +290,45 @@ export function getKey(provider: ByokProvider): string | null {
   return readSlot(SLOT[provider])
 }
 
-export function setKey(provider: ByokProvider, key: string): void {
+/**
+ * Local first, then the account.
+ *
+ * The cache write is what the UI and any generation started in the next tick
+ * read, so it must not wait on a round trip. The push is awaited and its
+ * error deliberately propagates: the caller's job is to say "saved here, not
+ * on your account", which is true and actionable. A push that never lands
+ * self-heals anyway — the next sign-in sync sees a key the account lacks and
+ * pushes it upward.
+ */
+export async function setKey(provider: ByokProvider, key: string): Promise<void> {
   const trimmed = key.trim()
   if (!trimmed) {
-    clearKey(provider)
+    await clearKey(provider)
     return
   }
-  try {
-    localStorage.setItem(SLOT[provider], trimmed)
-    notifyChanged()
-  } catch {
-    // ignore — quota or disabled storage
-  }
-  // Must run after the write: reconcile reads storage to decide the flag.
-  void reconcileBYOKMetadata()
+
+  writeSlot(SLOT[provider], trimmed)
+  notifyChanged()
+
+  if (!(await isSignedIn())) return
+  await callByokKeys({ action: 'set', provider, key: trimmed })
 }
 
-export function clearKey(provider: ByokProvider): void {
-  try {
-    localStorage.removeItem(SLOT[provider])
-    notifyChanged()
-  } catch {
-    // ignore
+/**
+ * Account first, then local — the opposite order to setKey, on purpose.
+ *
+ * Local-first would let a failed delete resurrect the key: gone from the
+ * browser, still a row on the account, pulled back down by the next sign-in
+ * sync with nothing in between to explain it. Throwing before the local
+ * removal leaves the user looking at the key they asked to remove, which is
+ * at least honest about what happened.
+ */
+export async function clearKey(provider: ByokProvider): Promise<void> {
+  if (await isSignedIn()) {
+    await callByokKeys({ action: 'delete', provider })
   }
-  void reconcileBYOKMetadata()
+  removeSlot(SLOT[provider])
+  notifyChanged()
 }
 
 export function hasAnyKey(): boolean {
@@ -155,31 +375,31 @@ export function getPreferredModel(): string | null {
 
   if (!stored && getPreferredProvider() === 'openai') {
     const seeded = DEFAULT_MODEL_BY_PROVIDER.openai
-    try {
-      localStorage.setItem(KEY_MODEL, seeded)
-    } catch {
-      // ignore — quota or disabled storage; the fallback still resolves
-    }
+    writeSlot(KEY_MODEL, seeded)
     return seeded
   }
 
   return null
 }
 
-export function setPreferredModel(id: string): void {
+export async function setPreferredModel(id: string): Promise<void> {
   // Refuse an id the registry does not know: a stale value would resolve to
   // the provider default on every read, which looks like the choice silently
   // not sticking.
   if (!getModelById(id)) return
+
+  writeSlot(KEY_MODEL, id)
+  notifyChanged()
+
+  if (!(await isSignedIn())) return
   try {
-    localStorage.setItem(KEY_MODEL, id)
-    notifyChanged()
-  } catch {
-    // ignore
+    // Swallowed rather than propagated, unlike setKey. A dropdown selection
+    // has no error surface to put this in, and the worst case is a preference
+    // that stays on this device — the next sync pushes it up.
+    await callByokKeys({ action: 'set-model', model: id })
+  } catch (err) {
+    console.warn('BYOK model preference push failed:', err)
   }
-  // Deliberately no reconcile call: a model preference cannot change whether
-  // a key exists, so byok_enabled cannot have moved. Skipping it saves a
-  // getUser() round-trip on every change.
 }
 
 // ---------------------------------------------------------------------------

@@ -22,14 +22,21 @@ export function ApiKeySection({ defaultExpanded = false }: ApiKeySectionProps) {
   const active = useByokCredential()
   const { user } = useAuth()
 
-  // Only one row edits at a time, so a single draft/error pair still models
-  // the state correctly — the same shape this section always had, widened
-  // from a boolean to "which provider".
+  // Only one row edits at a time, so a single draft still models the state
+  // correctly — the same shape this section always had, widened from a
+  // boolean to "which provider".
   const [editing, setEditing] = useState<ByokProvider | null>(
     defaultExpanded && !hasAnyKey() ? 'openai' : null,
   )
   const [draft, setDraft] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  // Which row the message belongs to, not just the message. A failed Remove
+  // has no open input to render under, so the paragraph has to live outside
+  // the editing branch — and outside it, a bare string would print under both
+  // providers.
+  const [error, setError] = useState<{
+    provider: ByokProvider
+    message: string
+  } | null>(null)
 
   // Three states, not two. A key always wins, signed in or not — that's how the
   // AI routing itself decides. Without one, whether there's a fallback depends
@@ -57,26 +64,51 @@ export function ApiKeySection({ defaultExpanded = false }: ApiKeySectionProps) {
     setError(null)
   }
 
-  const save = () => {
+  const save = async () => {
     if (!editing) return
+    const provider = editing
     const trimmed = draft.trim()
-    const message = validateKeyFormat(editing, trimmed)
+    const message = validateKeyFormat(provider, trimmed)
     if (message) {
-      setError(message)
+      setError({ provider, message })
       return
     }
-    setKey(editing, trimmed)
+
+    // Close the input before awaiting. setKey() writes the cache
+    // synchronously, so the row is already showing the real saved key while
+    // the push to the account is still in flight.
     setEditing(null)
     setDraft('')
     setError(null)
+    try {
+      await setKey(provider, trimmed)
+    } catch {
+      setError({
+        provider,
+        message:
+          "Saved in this browser, but it couldn't be saved to your account. It will retry the next time you load the page.",
+      })
+    }
   }
 
-  const remove = (provider: ByokProvider) => {
+  const remove = async (provider: ByokProvider) => {
     // Removing the non-active key of two does not change tier — hasAnyKey()
     // stays true. Removing the last one drops a signed-out visitor back to
     // trial, which leaves their localStorage drafts dormant, not deleted.
-    clearKey(provider)
+    //
+    // clearKey() goes to the account first and throws without touching the
+    // cache, so a failure here leaves the key visible — which is the truth.
     setEditing(null)
+    setError(null)
+    try {
+      await clearKey(provider)
+    } catch {
+      setError({
+        provider,
+        message:
+          "Couldn't remove the key from your account. Check your connection and try again.",
+      })
+    }
   }
 
   return (
@@ -126,7 +158,7 @@ export function ApiKeySection({ defaultExpanded = false }: ApiKeySectionProps) {
                     Replace
                   </button>
                   <button
-                    onClick={() => remove(provider)}
+                    onClick={() => void remove(provider)}
                     className={glassButton}
                   >
                     Remove
@@ -152,7 +184,7 @@ export function ApiKeySection({ defaultExpanded = false }: ApiKeySectionProps) {
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') save()
+                    if (e.key === 'Enter') void save()
                     else if (e.key === 'Escape') cancelEdit()
                   }}
                   autoFocus
@@ -160,9 +192,8 @@ export function ApiKeySection({ defaultExpanded = false }: ApiKeySectionProps) {
                   autoComplete="off"
                   className="w-full h-9 bg-[#242526] border border-[#262626] rounded-[8px] px-3 py-[7.5px] body-m text-[#DADEE5] outline-none focus:border-[#404040] font-['JetBrains_Mono',monospace] text-[12px]"
                 />
-                {error && <p className="body-m text-destructive m-0">{error}</p>}
                 <div className="flex gap-1.5">
-                  <button onClick={save} className={glassButton}>
+                  <button onClick={() => void save()} className={glassButton}>
                     Save
                   </button>
                   <button onClick={cancelEdit} className={glassButton}>
@@ -170,6 +201,10 @@ export function ApiKeySection({ defaultExpanded = false }: ApiKeySectionProps) {
                   </button>
                 </div>
               </div>
+            )}
+
+            {error?.provider === provider && (
+              <p className="body-m text-destructive m-0">{error.message}</p>
             )}
           </div>
         )
@@ -203,8 +238,11 @@ export function ApiKeySection({ defaultExpanded = false }: ApiKeySectionProps) {
             </a>
           </span>
         ))}
-        . Stored only in this browser — anyone with access to this device can
-        see it. Usage is billed to that provider account, not to us.
+        .{' '}
+        {user
+          ? 'Saved to your account, encrypted, so it works on every device you sign in on; signing out removes it from this browser.'
+          : 'Kept only in this browser until you sign in — anyone with access to this device can see it.'}{' '}
+        Usage is billed to that provider account, not to us.
       </p>
     </div>
   )

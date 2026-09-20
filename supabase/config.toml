@@ -33,3 +33,6 @@ verify_jwt = false
 
 [functions.delete-account]
 verify_jwt = false
+
+[functions.byok-keys]
+verify_jwt = false
