@@ -4,9 +4,9 @@ import { SubjectSuggestions } from '@/components/AIMode/SubjectSuggestions'
 import { useSubjectSuggestions } from '@/hooks/useSubjectSuggestions'
 import {
   MIN_SUGGESTION_QUERY_LENGTH,
-  pickQuickSearches,
+  pickMoments,
 } from '@/constants/aiSubjectSuggestions'
-import { glassButtonClass } from '@/components/ui/glassButton'
+import { QuickSearchMoments } from '@/components/NewTimeline/QuickSearchMoments'
 import { ModelSelector } from '@/components/Settings/ModelSelector'
 import { PROVIDER_META } from '@/constants/byokProviders'
 import type { ByokProvider } from '@/types/ai'
@@ -204,9 +204,10 @@ export function NewTimelineScreen({
   // wear its resting shadow while holding text, which only typing ever shows.
   const [hasEngaged, setHasEngaged] = useState(initialSubject !== '')
   const [renderDropdown, setRenderDropdown] = useState(false)
-  // Drawn once per mount, so the chips rotate between visits but never move
-  // under a cursor that is already reaching for one.
-  const [quickSearches] = useState(pickQuickSearches)
+  // Drawn once per mount, so the moments rotate between visits but never move
+  // under a cursor that is already reaching for one. Shuffle is the only other
+  // way they change, and that is the user asking them to.
+  const [moments, setMoments] = useState(() => pickMoments())
   const inputRef = useRef<HTMLInputElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
 
@@ -269,6 +270,8 @@ export function NewTimelineScreen({
     inputRef.current?.focus()
   }
 
+  const shuffleMoments = () => setMoments((prev) => pickMoments(prev))
+
   const handleQuickSearch = (subject: string) => {
     // Seed the field before generating: for a signed-out visitor
     // `onAIGenerate` opens the key/sign-in gate, which should show what they
@@ -289,7 +292,7 @@ export function NewTimelineScreen({
     (suggestions.length > 0 || suggestionsLoading)
 
   // Gated on `renderDropdown` rather than `dropdownVisible` for the same reason
-  // the chips are: it keeps the button away through the panel's 180ms exit
+  // the quick searches are: it keeps the button away through the panel's 180ms exit
   // animation instead of popping it back under a panel that is still fading.
   const showEnterButton = name.trim().length > 0 && !renderDropdown
 
@@ -318,8 +321,8 @@ export function NewTimelineScreen({
             This replaced a `pt-[max(40vh,200px)]` offset that put the label at
             40% of the viewport and let the page scroll when the sum overran.
             With `overflow-hidden` a fixed offset has nowhere to put content
-            that no longer fits, so a short window would clip the quick-search
-            chips off the bottom instead of scrolling to them. Centred, the
+            that no longer fits, so a short window would clip the quick
+            searches off the bottom instead of scrolling to them. Centred, the
             block gives back its own slack from both ends and stays whole. */}
         <div className="h-full flex flex-col items-center justify-center gap-[40px] px-[var(--page-gutter)] pt-[80px] pb-[40px]">
           <form
@@ -331,9 +334,9 @@ export function NewTimelineScreen({
               Search for a person, era, or event
             </h2>
 
-            {/* One column, so the chips and any error hang off the field's left
+            {/* One column, so the quick searches and any error hang off the field's left
                 edge. The suggestions panel is not part of it — it anchors to the
-                field itself and covers both the model tab and the chips. */}
+                field itself and covers both the model tab and the quick searches. */}
             <div className="w-full max-w-[480px] flex flex-col items-start gap-[8px]">
               {/* The plate the field sits on, and the whole of what makes the model
                   control read as a tab rather than a fourth chip: an opaque fill
@@ -458,7 +461,7 @@ export function NewTimelineScreen({
                     break the reserve-width arithmetic documented at
                     SEARCH_FIELD_ENTER_RESERVE.
 
-                    Deliberately *not* hidden with the chips when the suggestions
+                    Deliberately *not* hidden with the quick searches when the suggestions
                     panel opens. The panel is translucent over a 4px blur and covers
                     this exactly, so the tab reads through it — which is the mockup,
                     and it means nothing appears or disappears as the panel comes and
@@ -470,52 +473,24 @@ export function NewTimelineScreen({
                 />
               </div>
 
-              {/* `type="button"` is required, not tidiness: a chip left as the
-                  default `submit` would fire `handleSubmit` with whatever is in
-                  the field on top of `handleQuickSearch`, generating the typed
-                  query rather than the chip's subject. The enter button holds
-                  default-button status regardless — it comes first in tree order
-                  — but that only settles which control the Enter key reaches,
-                  not what a click on a chip does.
-
-                The row recedes behind the open panel rather than vanishing, the
-                  way the model tab does: it keeps its place and fades, so the
-                  layout under the field stays the same shape whether you are
-                  typing or not. It used to be `invisible`, which read as the
-                  chips being destroyed and rebuilt every time a query started.
-
-                  `pointer-events-none` and `tabIndex={-1}` carry the part of
-                  `invisible` that was doing real work. A chip is a one-click
+              {/* The quick searches recede behind the open panel rather than
+                  vanishing, the way the model tab does: they keep their place
+                  and fade, so the layout under the field stays the same shape
+                  whether you are typing or not. Receded, they also drop out of
+                  hit-testing and the tab order — a moment is a one-click
                   generation of a *different* subject, so one left live under a
                   half-covering panel is a mis-click that throws away whatever
-                  the user was typing — and focus should not land on something
-                  sitting behind a panel either.
+                  the user was typing.
 
                   Keyed to `renderDropdown`, not `dropdownVisible`, so the fade
-                  holds through the panel's exit animation instead of the chips
-                  brightening under a panel that is still on screen. */}
-              <div
-                role="group"
-                aria-label="Quick searches"
-                className={`w-full flex flex-row flex-wrap items-start gap-[8px] transition-opacity duration-150 ${
-                  renderDropdown ? 'opacity-40 pointer-events-none' : ''
-                }`}
-              >
-                {quickSearches.map((subject) => (
-                  <button
-                    key={subject}
-                    type="button"
-                    // `pointer-events-none` on the row stops the mouse; this
-                    // stops the keyboard. React 18 has no `inert` prop, which
-                    // would otherwise do both on the container in one word.
-                    tabIndex={renderDropdown ? -1 : undefined}
-                    onClick={() => handleQuickSearch(subject)}
-                    className={`${glassButtonClass} shrink-0 whitespace-nowrap disabled:opacity-50 disabled:pointer-events-none`}
-                  >
-                    {subject}
-                  </button>
-                ))}
-              </div>
+                  holds through the panel's exit animation instead of the
+                  moments brightening under a panel that is still on screen. */}
+              <QuickSearchMoments
+                moments={moments}
+                onSelect={handleQuickSearch}
+                onShuffle={shuffleMoments}
+                receded={renderDropdown}
+              />
 
               {error && (
                 <div className="mt-[16px] flex flex-wrap items-baseline gap-2">
