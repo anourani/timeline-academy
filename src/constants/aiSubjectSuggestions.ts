@@ -13,140 +13,73 @@ export interface SubjectSuggestion {
  */
 export const MIN_SUGGESTION_QUERY_LENGTH = 2
 
-export const SUBJECT_SUGGESTIONS: string[] = [
-  // People — Athletes
-  'Kobe Bryant',
-  'Muhammad Ali',
-  'Serena Williams',
-  'Michael Jordan',
-  'Pelé',
-  'Roger Federer',
-  'Simone Biles',
-  'Usain Bolt',
-  // People — Artists & Writers
-  'Frida Kahlo',
-  'Pablo Picasso',
-  'Vincent van Gogh',
-  'Leonardo da Vinci',
-  'Georgia O\u2019Keeffe',
-  'Maya Angelou',
-  'Toni Morrison',
-  'Ernest Hemingway',
-  // People — Scientists
-  'Albert Einstein',
-  'Marie Curie',
-  'Isaac Newton',
-  'Charles Darwin',
-  'Stephen Hawking',
-  'Nikola Tesla',
-  'Ada Lovelace',
-  'Alan Turing',
-  // People — Leaders & Activists
-  'Martin Luther King Jr.',
-  'Nelson Mandela',
-  'Mahatma Gandhi',
-  'Abraham Lincoln',
-  'Winston Churchill',
-  'Malcolm X',
-  'Rosa Parks',
-  'John F. Kennedy',
-  // People — Musicians
-  'David Bowie',
-  'Prince',
-  'Beyoncé',
-  'Bob Dylan',
-  'The Beatles',
-  'Aretha Franklin',
-  'Michael Jackson',
-  // People — Presidents
-  'Barack Obama',
-  'Theodore Roosevelt',
-  'Franklin D. Roosevelt',
-  'George Washington',
-  // Events
-  'World War II',
-  'World War I',
-  'The French Revolution',
-  'The Cold War',
-  'The Apollo 11 Moon Landing',
-  'The Fall of the Berlin Wall',
-  'The Civil Rights Movement',
-  'The American Revolution',
-  'The Industrial Revolution',
-  // Topics
-  'The Renaissance',
-  'The Space Race',
-  'The History of Jazz',
-  'The History of Hip-Hop',
-  'The Internet',
-  'Climate Change',
-  'Artificial Intelligence',
-  'Quantum Physics',
-  // Organizations
-  'Apple Inc.',
-  'NASA',
-  'Microsoft',
-  'Google',
-  'Pixar',
-  'Nike',
-  'The United Nations',
-  'SpaceX',
-]
+export type MomentKind = 'person' | 'era' | 'event'
 
-/**
- * What one quick-search chip costs the row, in px.
- *
- * `glassButtonClass` gives every chip `min-w-[80px]` and `px-[11px]`, and at
- * its 14px medium type a label measures about 8px per character — checked
- * against the rendered chips rather than assumed. The floor is why a character
- * budget cannot stand in for this one: `NASA` spends four characters and 80px.
- *
- * Deliberately an over-estimate for longer labels (a 17-character name comes
- * out at 158px against a measured 148px), and the measurement came from a wide
- * system sans. Both errors point the same way — a row that fits here fits on
- * the narrower faces phones actually ship.
- */
-function estimateChipWidth(subject: string): number {
-  return Math.max(80, 22 + subject.length * 8)
+export interface Moment {
+  /** Sent to generation, exactly as the chips sent their subject. */
+  title: string
+  /** Display label where space is tight (desktop pills). */
+  short: string
+  /** Display year, e.g. '1955' or 'c. 1450'. */
+  year: string
+  /** Numeric year used for sorting. */
+  sortYear: number
+  kind: MomentKind
 }
 
-/**
- * How much width the chip row plans for.
- *
- * The narrowest common phone is 375px, which leaves `375 - 32` of page gutter
- * for the field, less the row's two 8px gaps: 327px across three chips.
- *
- * A preference, not a guarantee — the row is `flex-wrap`, so a draw that
- * overruns on an unusually wide face wraps rather than clipping.
- */
-const QUICK_SEARCH_ROW_BUDGET = 327
+/** Dot colours. Literals, same reasoning as ModelSelector's label colour:
+ *  the category palette is user data and can be rethemed; this is chrome. */
+export const MOMENT_KIND_COLOR: Record<MomentKind, string> = {
+  person: '#4196E4',
+  era: '#A770EC',
+  event: '#FF7D05',
+}
+
+export const MOMENTS: Moment[] = [
+  // People
+  { kind: 'person', title: 'Rosa Parks', short: 'Rosa Parks', year: '1955', sortYear: 1955 },
+  { kind: 'person', title: 'Usain Bolt', short: 'Usain Bolt', year: '2008', sortYear: 2008 },
+  { kind: 'person', title: 'Frida Kahlo', short: 'Frida Kahlo', year: '1907', sortYear: 1907 },
+  { kind: 'person', title: 'Marie Curie', short: 'Marie Curie', year: '1903', sortYear: 1903 },
+  { kind: 'person', title: 'Nelson Mandela', short: 'Nelson Mandela', year: '1994', sortYear: 1994 },
+  { kind: 'person', title: 'Ada Lovelace', short: 'Ada Lovelace', year: '1843', sortYear: 1843 },
+  { kind: 'person', title: 'Muhammad Ali', short: 'Muhammad Ali', year: '1964', sortYear: 1964 },
+  { kind: 'person', title: 'Nikola Tesla', short: 'Nikola Tesla', year: '1891', sortYear: 1891 },
+  { kind: 'person', title: 'Serena Williams', short: 'Serena Williams', year: '1999', sortYear: 1999 },
+  // Eras
+  { kind: 'era', title: 'The Renaissance', short: 'The Renaissance', year: 'c. 1450', sortYear: 1450 },
+  { kind: 'era', title: 'The Industrial Revolution', short: 'Industrial Revolution', year: '1760', sortYear: 1760 },
+  { kind: 'era', title: 'The Cold War', short: 'The Cold War', year: '1947', sortYear: 1947 },
+  { kind: 'era', title: 'The Space Race', short: 'The Space Race', year: '1957', sortYear: 1957 },
+  { kind: 'era', title: 'The History of Jazz', short: 'History of Jazz', year: '1917', sortYear: 1917 },
+  { kind: 'era', title: 'The History of Hip-Hop', short: 'History of Hip-Hop', year: '1973', sortYear: 1973 },
+  // Events
+  { kind: 'event', title: 'The Apollo 11 Moon Landing', short: 'Apollo 11', year: '1969', sortYear: 1969 },
+  { kind: 'event', title: 'The Fall of the Berlin Wall', short: 'Fall of the Berlin Wall', year: '1989', sortYear: 1989 },
+  { kind: 'event', title: 'The French Revolution', short: 'French Revolution', year: '1789', sortYear: 1789 },
+  { kind: 'event', title: 'World War I', short: 'World War I', year: '1914', sortYear: 1914 },
+  { kind: 'event', title: 'The American Revolution', short: 'American Revolution', year: '1775', sortYear: 1775 },
+  { kind: 'event', title: 'World War II', short: 'World War II', year: '1939', sortYear: 1939 },
+]
+
+const KIND_ORDER: MomentKind[] = ['person', 'era', 'event']
 
 /**
- * Draw `count` distinct subjects for the quick-search chips under the field.
+ * One moment of each kind, sorted by year.
  *
- * Meant for a `useState` initializer, so the set is fixed for the life of the
- * screen and rotates per visit — chips that reshuffled mid-session would be a
- * target that moves while you reach for it.
+ * Always sorted: the axis tells the user the row is chronological, so an
+ * out-of-order draw reads as a bug. If a "recommended" pick is ever needed,
+ * mark it visually and keep it in date order.
+ *
+ * Pass the previous draw as `exclude` when shuffling, so a shuffle never hands
+ * back a subject that was just on screen.
  */
-export function pickQuickSearches(count = 3): string[] {
-  const pool = [...SUBJECT_SUGGESTIONS]
-  const picked: string[] = []
-  let remaining = QUICK_SEARCH_ROW_BUDGET
-
-  while (picked.length < count && pool.length > 0) {
-    // Every chip still to be drawn gets an equal share of what is left, so an
-    // early long draw cannot spend the row on itself. The share never falls
-    // below a chip's 80px floor, so `eligible` holds for every real draw and
-    // the total stays inside the budget by construction.
-    const share = remaining / (count - picked.length)
-    const eligible = pool.filter((subject) => estimateChipWidth(subject) <= share)
-    const source = eligible.length > 0 ? eligible : pool
-    const subject = source[Math.floor(Math.random() * source.length)]
-
-    pool.splice(pool.indexOf(subject), 1)
-    picked.push(subject)
-    remaining -= estimateChipWidth(subject)
-  }
-
-  return picked
+export function pickMoments(exclude: Moment[] = []): Moment[] {
+  const excluded = new Set(exclude.map((m) => m.title))
+  return KIND_ORDER.map((kind) => {
+    const pool = MOMENTS.filter((m) => m.kind === kind)
+    const fresh = pool.filter((m) => !excluded.has(m.title))
+    const source = fresh.length > 0 ? fresh : pool
+    return source[Math.floor(Math.random() * source.length)]
+  }).sort((a, b) => a.sortYear - b.sortYear)
 }
