@@ -5,14 +5,20 @@ import { TimelineViewer } from './components/TimelineViewer/TimelineViewer';
 import { PrivacyPolicyPage } from './components/Legal/PrivacyPolicyPage';
 import { TermsPage } from './components/Legal/TermsPage';
 import { SidePanelProvider } from './contexts/SidePanelContext';
+import { GenerationProvider } from './contexts/GenerationContext';
 import { GlobalLayout } from './components/Layout/GlobalLayout';
 
 function LayoutRoute() {
   return (
     <SidePanelProvider>
-      <GlobalLayout>
-        <Outlet />
-      </GlobalLayout>
+      {/* Above the Outlet on purpose: a generation starts on `/` and finishes
+          on `/editor`, so the store has to outlive the route change that
+          happens in the middle of it. */}
+      <GenerationProvider>
+        <GlobalLayout>
+          <Outlet />
+        </GlobalLayout>
+      </GenerationProvider>
     </SidePanelProvider>
   );
 }

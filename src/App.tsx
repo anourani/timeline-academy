@@ -27,6 +27,23 @@ import { DEFAULT_CATEGORIES } from './constants/categories';
 import { ChaptersStrip } from './components/Timeline/ChaptersStrip';
 import { normalizeChapters } from './utils/chapters';
 import { getTimelineRange } from './utils/dateUtils';
+import { useGeneration } from './hooks/useGeneration';
+import { CurtainIntro } from './components/Timeline/CurtainIntro';
+import { MAX_DRAFTS } from './utils/draftStorage';
+
+/**
+ * What AI mode hands the editor when it navigates on Enter.
+ *
+ * Deliberately just the request, not a result: the generation itself lives in
+ * `GenerationContext` above the router, and the editor starts it. `fromRect`
+ * is a plain object rather than a DOMRect because route state is serialised
+ * into history.
+ */
+interface AiStreamingRouteState {
+  subject: string;
+  providerOverride?: 'anthropic' | 'openai';
+  fromRect: { top: number; left: number; width: number; height: number } | null;
+}
 
 function limitReachedMessage(kind: 'event' | 'timeline'): string {
   const { eventLimit, timelineLimit } = getCurrentLimits();
@@ -88,7 +105,31 @@ export function App() {
   // the same state, which mints a fresh location.key and lets the hydration
   // effect below run the identical branch a second time.
   const [trialGateState, setTrialGateState] = useState<Record<string, unknown> | null>(null);
-  const { loadAllDrafts, loadDraft, saveDraft, saveDraftImmediate, flushDraftSave, cancelPendingDraftSave, createDraft, deleteDraft: deleteLocalDraft } = useLocalDraft(localStore);
+  const generation = useGeneration();
+  /**
+   * The search field's box, kept for the intro animation.
+   *
+   * Held in state rather than read from the route: the branches below clear
+   * route state the moment they act on it, so a refresh cannot re-seed, and
+   * the intro still needs somewhere to fly the query from.
+   */
+  const [introRect, setIntroRect] = useState<
+    { top: number; left: number; width: number; height: number } | null
+  >(null);
+  /**
+   * True from the moment AI mode hands us a subject until the stream's
+   * result is committed. While it holds, the editor renders the generation
+   * store and writes nothing: `useEvents` is untouched, so the autosave
+   * fingerprint never sees a partial timeline, the guest draft write stays
+   * gated on a null `activeDraftId`, and the trial unload warning stays
+   * disarmed on an empty `events`.
+   */
+  const [streamingRunId, setStreamingRunId] = useState<string | null>(null);
+  /** Guards the commit against re-entry while its awaits are in flight. */
+  const committedRunRef = useRef<string | null>(null);
+  /** True for the ~1.2s the intro overlay owns the screen. */
+  const [introPlaying, setIntroPlaying] = useState(false);
+  const { loadAllDrafts, loadDraft, saveDraft, saveDraftImmediate, flushDraftSave, cancelPendingDraftSave, createDraft, getDraftCount, deleteDraft: deleteLocalDraft } = useLocalDraft(localStore);
   // Which timeline's contents are actually in the editor right now. This is the
   // only id the app may act on — autosave, Share and Delete all key off it.
   // It is written in exactly one place: applyLoadedTimeline().
@@ -136,17 +177,70 @@ export function App() {
     setShowAddEventModal(true);
   };
 
+  // The store owns the editor's contents while a generation is in flight.
+  const isStreaming =
+    generation.active || (generation.status === 'done' && streamingRunId !== generation.id);
+  const streamEvents = isStreaming ? generation.events : events;
+  const streamCategories = isStreaming ? generation.categories : categories;
+  // The wire shape carries no ids — they are assigned by index after sorting.
+  // Re-deriving each render is stable while chapters arrive in order, which
+  // the stream guarantees, so chips do not remount as later ones land.
+  const streamedChapters = useMemo(
+    () => normalizeChapters(generation.chapters),
+    [generation.chapters],
+  );
+  const streamChapters = isStreaming ? streamedChapters : chapters;
+  // The subject stands in until the model names the timeline, so the nav has
+  // something true to show from the first frame rather than "Untitled".
+  const streamTitle = generation.meta?.title || generation.subject;
+
   // Derive the dominant category color for the nav's status dot and the side-panel badge.
   const timelineAccentColor = useMemo(
-    () => computeDominantCategoryColor(events, categories),
-    [events, categories],
+    () => computeDominantCategoryColor(streamEvents, streamCategories),
+    [streamEvents, streamCategories],
   );
 
+  /**
+   * Take the subject AI mode handed us and start generating.
+   *
+   * Creates nothing. The editor renders the generation store from here until
+   * the stream reaches `done`, at which point the effect below commits the
+   * result in one go — which is what keeps every write path dormant while a
+   * half-built timeline is on screen.
+   */
+  // `startGeneration` is stable (the context memoises it with no deps), so
+  // this callback is too. That matters: it is listed in the two bootstrap
+  // effects below, and depending on the whole generation object would re-run
+  // them on every streamed event — re-entering the very bootstrap their
+  // location latches exist to run exactly once.
+  const startGeneration = generation.start;
+  const beginStreaming = useCallback((request: AiStreamingRouteState) => {
+    setIntroRect(request.fromRect);
+    setIntroPlaying(request.fromRect !== null);
+    setStreamingRunId(null);
+    void startGeneration(request.subject, request.providerOverride);
+  }, [startGeneration]);
+
+  /**
+   * The axis span, while a generation is streaming.
+   *
+   * Comes from the stream's `meta` line, which arrives before any event, so
+   * the grid is right from the first frame instead of growing as events land.
+   * Null once committed, when the events themselves are the better source.
+   */
+  const rangeOverride = isStreaming ? generation.meta?.range ?? null : null;
+
   // The same month range Timeline builds internally. Recomputed here rather
-  // than lifted out of Timeline: it is a pure function of `events`, memoised on
-  // the identical dependency, and passing it down would put the grid's geometry
-  // on a prop where a stale render could disagree with the canvas.
-  const { months } = useMemo(() => getTimelineRange(events), [events]);
+  // than lifted out of Timeline: it is a pure function of its inputs, memoised
+  // on the identical dependencies, and passing it down would put the grid's
+  // geometry on a prop where a stale render could disagree with the canvas.
+  //
+  // Both calls must be given the same override, or the chapter chips sit over
+  // columns the canvas has drawn somewhere else.
+  const { months } = useMemo(
+    () => getTimelineRange(streamEvents, rangeOverride ?? undefined),
+    [streamEvents, rangeOverride],
+  );
 
   // Stable identity: Timeline fires this from an effect keyed on the callback,
   // so an inline arrow would re-run it on every render of the editor.
@@ -202,6 +296,7 @@ export function App() {
            *  chapters — see the parser in services/llmShared.ts. */
           chapters?: Array<{ label: string; startDate: string; endDate: string }>;
         };
+        aiStreaming?: AiStreamingRouteState;
         importedEvents?: TimelineEvent[];
       } | null;
 
@@ -220,6 +315,7 @@ export function App() {
       const hasRouteInstruction = !!(
         routeState?.importedEvents ||
         routeState?.aiGenerated ||
+        routeState?.aiStreaming ||
         (routeState?.newTimeline && routeState.skipCreationScreen) ||
         routeState?.draftId
       );
@@ -322,6 +418,32 @@ export function App() {
         // Reset grouping too, or the previous draft's setting leaks into this
         // brand-new one — the sibling branches below already do this.
         handleGroupByCategoryChange(newDraft.groupByCategory ?? false);
+      } else if (routeState?.aiStreaming) {
+        // Arriving from AI mode with a subject, not a timeline.
+        //
+        // Capacity is checked here rather than by letting `createDraft()`
+        // return null, because the draft is not created until the stream
+        // finishes — and finding out then would mean telling someone their
+        // timeline has nowhere to go after they had watched it build.
+        const draftCount = getDraftCount();
+        if (tier === 'trial' && draftCount >= 1) {
+          // Same contract as the branches above: don't navigate away, don't
+          // clear the route state. The editor keeps showing the work under
+          // discussion and the stashed instruction replays once they choose.
+          setTrialGateState(routeState as Record<string, unknown>);
+          setDraftHydrated(true);
+          return;
+        }
+        if (tier === 'byok-anon' && draftCount >= MAX_DRAFTS) {
+          alert(limitReachedMessage('timeline'));
+          routerNavigate('/', { replace: true });
+          setDraftHydrated(true);
+          return;
+        }
+
+        // Nothing is created and nothing is seeded. The editor renders the
+        // generation store until `done`, then commits once.
+        beginStreaming(routeState.aiStreaming);
       } else if (routeState?.draftId) {
         // Resuming a local draft (e.g. from the side panel)
         const draft = loadDraft(routeState.draftId);
@@ -365,7 +487,7 @@ export function App() {
       // Clear the route state so refreshing doesn't re-trigger
       routerNavigate('/editor', { replace: true, state: {} });
     }
-  }, [authReady, storageReconciled, tier, user, draftHydrated, createDraft, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange, loadAllDrafts, loadDraft, location.state, location.key, routerNavigate, setDescription, setEvents, setTitle, updateCategories, updateChapters]);
+  }, [authReady, storageReconciled, tier, user, draftHydrated, beginStreaming, createDraft, getDraftCount, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange, loadAllDrafts, loadDraft, location.state, location.key, routerNavigate, setDescription, setEvents, setTitle, updateCategories, updateChapters]);
 
   // Guest drafts save on a 500 ms debounce, so a rename followed immediately by
   // closing the tab or navigating away would be lost — the draft path has no
@@ -664,6 +786,7 @@ export function App() {
         categories: CategoryConfig[];
         chapters?: Array<{ label: string; startDate: string; endDate: string }>;
       };
+      aiStreaming?: AiStreamingRouteState;
       importedEvents?: TimelineEvent[];
     } | null;
     if (!authReady || !storageReconciled || !user) return;
@@ -709,6 +832,15 @@ export function App() {
         }
       })();
       routerNavigate('/editor', { replace: true, state: {} });
+    } else if (state?.aiStreaming) {
+      editorSeededRef.current = true;
+      // No `switchTimeline('new')` here, unlike the aiGenerated branch above:
+      // that creates the Supabase row, and creating one now would leave an
+      // empty timeline in the user's list if the generation failed. The row
+      // is created at `done`, which keeps "nothing is saved until there is
+      // something to save" true of this path too.
+      beginStreaming(state.aiStreaming);
+      routerNavigate('/editor', { replace: true, state: {} });
     } else if (state?.timelineId) {
       editorSeededRef.current = true;
       if (state.timelineId === 'new' && state.skipCreationScreen) {
@@ -722,7 +854,83 @@ export function App() {
       }
       routerNavigate('/editor', { replace: true, state: {} });
     }
-  }, [location.state, location.key, authReady, storageReconciled, user, routerNavigate, setDescription, setEvents, setTitle, switchTimeline, updateCategories, updateChapters]);
+  }, [location.state, location.key, authReady, storageReconciled, user, beginStreaming, routerNavigate, setDescription, setEvents, setTitle, switchTimeline, updateCategories, updateChapters]);
+
+  /**
+   * Commit a finished generation into the editor — the one and only write.
+   *
+   * Everything up to here has been read-only: the canvas has been rendering
+   * the generation store directly, so `useEvents` never saw a partial
+   * timeline and no store was armed. This is where that changes, and it
+   * happens once.
+   *
+   * Also runs for a stream that failed or was cancelled *after* producing
+   * events. Discarding thirty good events because the thirty-first never
+   * arrived is the worse outcome, and nothing has been persisted yet, so
+   * keeping them costs nothing.
+   */
+  useEffect(() => {
+    const { status, id, events: streamed } = generation;
+    const finished =
+      status === 'done' ||
+      ((status === 'error' || status === 'cancelled') && streamed.length > 0);
+    if (!finished || !id) return;
+    if (!authReady || !storageReconciled) return;
+    // Ref, not the state latch below: this effect re-runs on every streamed
+    // event, and the latch cannot flip until the awaits have landed.
+    if (committedRunRef.current === id) return;
+    committedRunRef.current = id;
+
+    const { meta, chapters: finalChapters, categories: finalCategories, subject } = generation;
+
+    (async () => {
+      if (user) {
+        // Creates the Supabase row and binds autosave to it. Deferred all
+        // the way to here so a generation that failed leaves nothing behind.
+        await switchTimeline('new');
+      } else {
+        const newDraft = createDraft();
+        if (!newDraft) {
+          // Capacity was checked before the stream started, so this is a slot
+          // that filled underneath us — another tab, most likely. The work is
+          // still on screen; say so rather than discarding it silently.
+          alert(limitReachedMessage('timeline'));
+          return;
+        }
+        setActiveDraftId(newDraft.id);
+        handleScaleChange(newDraft.scale);
+        handleVerticalScaleChange(newDraft.verticalScale ?? 'medium');
+        handleGroupByCategoryChange(newDraft.groupByCategory ?? false);
+      }
+
+      setTitle(meta?.title || subject);
+      setDescription(meta?.description ?? '');
+      setEvents(streamed);
+      updateCategories(finalCategories);
+      updateChapters(normalizeChapters(finalChapters));
+      setDraftHydrated(true);
+      // Last, so the canvas swaps from the store to committed state only once
+      // that state actually holds the timeline. Flipping first would show an
+      // empty editor for the length of the awaits above.
+      setStreamingRunId(id);
+    })();
+  }, [
+    generation, authReady, storageReconciled, user, switchTimeline, createDraft,
+    handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange,
+    setTitle, setDescription, setEvents, updateCategories, updateChapters,
+  ]);
+
+  /**
+   * A generation that produced nothing sends the user back to the search
+   * page, where the error row and its retry-with-the-other-provider button
+   * already live. The store keeps the message, so nothing needs passing.
+   */
+  useEffect(() => {
+    const { status, events: streamed } = generation;
+    if (status !== 'error' && status !== 'cancelled') return;
+    if (streamed.length > 0) return;
+    routerNavigate('/', { replace: true });
+  }, [generation, routerNavigate]);
 
   // Signed in, on /editor, with nothing in the route state telling us what to
   // show — a bookmark, a refresh, or the browser back button.
@@ -983,16 +1191,32 @@ export function App() {
       <GlobalNav
         variant="timeline"
         timelineId={loadedTimelineId}
-        timelineTitle={title}
+        timelineTitle={isStreaming ? streamTitle : title}
         onTimelineTitleChange={setTitle}
-        events={events}
-        categories={categories}
+        events={streamEvents}
+        categories={streamCategories}
         onCategoriesChange={updateCategories}
         timelineAccentColor={timelineAccentColor}
         saveStatus={saveStatus}
         lastSavedTime={lastSavedTime}
         mode={mode}
+        // The axis span, so the year range reads the generation's own
+        // `meta.range` rather than growing event by event as they arrive.
+        yearRangeOverride={rangeOverride}
+        // The flying title in the intro overlay is standing in for this one;
+        // showing both would double it for the length of the flight.
+        titleHidden={introPlaying}
+        // Nothing to share until the timeline has been committed and has an
+        // id, and editing the name mid-stream would be overwritten by `meta`.
+        readOnly={isStreaming}
       />
+      {introPlaying && introRect && (
+        <CurtainIntro
+          fromRect={introRect}
+          subject={generation.subject}
+          onDone={() => setIntroPlaying(false)}
+        />
+      )}
       <Header
         title={title}
         description={description}
@@ -1053,8 +1277,8 @@ export function App() {
               readout — so 140 - 24 - 40 = 76. */}
           <div className="absolute inset-x-0 top-[76px] h-[40px]">
             <ChaptersStrip
-              chapters={chapters}
-              events={events}
+              chapters={streamChapters}
+              events={streamEvents}
               months={months}
               currentMonthIndex={currentMonthIndex}
               accentColor={timelineAccentColor}
@@ -1062,10 +1286,16 @@ export function App() {
             />
           </div>
           <Timeline
-            events={events}
-            categories={categories}
-            onAddEvent={mode === 'edit' ? addEvent : undefined}
-            onUpdateEvent={mode === 'edit' ? handleUpdateEvent : undefined}
+            events={streamEvents}
+            categories={streamCategories}
+            rangeOverride={rangeOverride}
+            // Editing is off while the stream runs. Passing the handlers as
+            // undefined is how this component already expresses "not
+            // editable", so no extra prop is needed — and it is the honest
+            // state: the array on screen belongs to the generation store and
+            // is replaced wholesale when it commits.
+            onAddEvent={mode === 'edit' && !isStreaming ? addEvent : undefined}
+            onUpdateEvent={mode === 'edit' && !isStreaming ? handleUpdateEvent : undefined}
             onOpenDetails={(event) => setDetailPanelEvent(event)}
             scale={currentScale}
             verticalScale={currentVerticalScale}

@@ -25,6 +25,21 @@ interface GlobalNavProps {
   /** Edit/View mode. The toggle itself lives in the dock (FloatingToolbar);
       this only decides whether the title is editable. */
   mode?: 'edit' | 'view'
+  /**
+   * The axis span, while a generation is streaming.
+   *
+   * Without it the year range is derived from `events`, which during a stream
+   * means it reads "1957", then "1957-1961", then "1957-1969" — growing on
+   * almost every event that lands. The generation's `meta` line knows the
+   * real span before the first event arrives.
+   */
+  yearRangeOverride?: { startYear: number; endYear: number } | null
+  /** Hidden while the intro overlay's flying title stands in for it, so the
+   *  two are never on screen together. */
+  titleHidden?: boolean
+  /** True while a generation owns the editor: there is no timeline id to
+   *  share yet, and a rename would be overwritten when `meta` lands. */
+  readOnly?: boolean
 }
 
 export function GlobalNav({
@@ -39,6 +54,9 @@ export function GlobalNav({
   saveStatus,
   lastSavedTime,
   mode = 'edit',
+  yearRangeOverride = null,
+  titleHidden = false,
+  readOnly = false,
 }: GlobalNavProps) {
   const { isOpen: isPanelOpen, toggle: togglePanel } = useSidePanel()
 
@@ -63,7 +81,11 @@ export function GlobalNav({
   // SaveStatusIndicator is hidden for now — flip to true to re-enable.
   const SHOW_SAVE_STATUS = false
   const showTitleCluster = variant === 'timeline' && typeof timelineTitle === 'string'
-  const yearRange = showTitleCluster ? getTimelineYearRange(events) : ''
+  const yearRange = !showTitleCluster
+    ? ''
+    : yearRangeOverride
+      ? `${yearRangeOverride.startYear}-${yearRangeOverride.endYear}`
+      : getTimelineYearRange(events)
   const eventCount = events.length
   const eventCountLabel = `${eventCount} ${eventCount === 1 ? 'event' : 'events'}`
 
@@ -95,8 +117,14 @@ export function GlobalNav({
               right (16px + 36px), so it has to be at least 52px for the centred
               title not to run under either. */}
           {showTitleCluster && (
-            <div className="flex flex-col gap-0 min-w-0 w-full items-center text-center px-[52px] md:gap-[2px] md:w-auto md:items-start md:text-left md:px-0">
-              {onTimelineTitleChange && mode === 'edit' ? (
+            <div
+              // Kept mounted, only made invisible: CurtainIntro measures this
+              // element to know where to fly the query to, and it cannot
+              // measure a node that is not in the layout.
+              style={{ opacity: titleHidden ? 0 : 1 }}
+              className="flex flex-col gap-0 min-w-0 w-full items-center text-center px-[52px] md:gap-[2px] md:w-auto md:items-start md:text-left md:px-0"
+            >
+              {onTimelineTitleChange && mode === 'edit' && !readOnly ? (
                 <input
                   type="text"
                   value={timelineTitle ?? ''}
@@ -108,6 +136,12 @@ export function GlobalNav({
                   }}
                   placeholder="Untitled Timeline"
                   aria-label="Timeline name"
+                  // Measured by CurtainIntro, which flies the typed query
+                  // here from the search field. An attribute rather than a
+                  // forwarded ref: the intro is a sibling overlay, and
+                  // threading a ref to it would touch three components that
+                  // otherwise have nothing to do with the animation.
+                  data-timeline-title=""
                   size={Math.max((timelineTitle ?? '').length, 'Untitled Timeline'.length)}
                   // `fieldSizing: content` sizes the box to the text, so
                   // without a cap a long title runs off the bar — and on mobile
@@ -116,7 +150,10 @@ export function GlobalNav({
                   style={{ fieldSizing: 'content' } as CSSProperties}
                 />
               ) : (
-                <p className="header-small text-text-primary max-w-full truncate">
+                <p
+                  data-timeline-title=""
+                  className="header-small text-text-primary max-w-full truncate"
+                >
                   {timelineTitle || 'Untitled Timeline'}
                 </p>
               )}

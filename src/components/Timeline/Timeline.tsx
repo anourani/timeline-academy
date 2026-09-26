@@ -8,6 +8,7 @@ import { EventHoverCursor, EventHoverCursorHandle } from './EventHoverCursor';
 import { TimelineEvent as ITimelineEvent, CategoryConfig } from '../../types/event';
 import { ScrollTarget, TimelineScale, TimelineVerticalScale } from '../../types/timeline';
 import { findMonthIndex, formatYMD, getTimelineRange, shiftEventDates } from '../../utils/dateUtils';
+import type { TimelineYearRange } from '../../utils/dateUtils';
 import { calculateEventStacks, StackedEvent } from '../../utils/eventStacking';
 import { useTimelineScroll } from '../../hooks/useTimelineScroll';
 import { useEventDrag } from '../../hooks/useEventDrag';
@@ -32,6 +33,16 @@ interface TimelineProps {
   scale: TimelineScale;
   verticalScale: TimelineVerticalScale;
   groupByCategory?: boolean;
+  /**
+   * Fixes the axis span instead of deriving it from `events`.
+   *
+   * Set while a generation is streaming, from its `meta` line. Without it the
+   * span grows as events arrive, and because placement is by month index that
+   * shifts every column already drawn. `App` must pass the identical override
+   * to its own `getTimelineRange` call for the chapters strip, or the chips
+   * and the canvas disagree.
+   */
+  rangeOverride?: TimelineYearRange | null;
   pendingScrollTarget?: ScrollTarget | null;
   onScrollComplete?: () => void;
   /** Id of an event the page wants edited — set by the detail panel's Edit
@@ -74,6 +85,7 @@ export function Timeline({
   scale,
   verticalScale,
   groupByCategory = false,
+  rangeOverride,
   pendingScrollTarget,
   onScrollComplete,
   pendingEditEventId,
@@ -99,7 +111,10 @@ export function Timeline({
     [events, visibleCategories]
   );
 
-  const { months } = useMemo(() => getTimelineRange(visibleEvents), [visibleEvents]);
+  const { months } = useMemo(
+    () => getTimelineRange(visibleEvents, rangeOverride ?? undefined),
+    [visibleEvents, rangeOverride],
+  );
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [hoveredMonth, setHoveredMonth] = useState<number | null>(null);
   const [showEventModal, setShowEventModal] = useState(false);
