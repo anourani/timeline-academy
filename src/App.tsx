@@ -222,13 +222,22 @@ export function App() {
   }, [startGeneration]);
 
   /**
-   * The axis span, while a generation is streaming.
+   * The axis span a generation declared.
    *
    * Comes from the stream's `meta` line, which arrives before any event, so
    * the grid is right from the first frame instead of growing as events land.
-   * Null once committed, when the events themselves are the better source.
+   *
+   * Kept after the commit, not dropped: a model routinely states a span
+   * wider than its own earliest event, and letting the axis fall back to the
+   * events alone would narrow it at exactly the moment the timeline lands.
+   * It only ever widens (see getTimelineRange), so an event added later
+   * outside the span still expands the axis — and on a later visit the range
+   * is simply derived from the events, with nothing on screen to jump.
    */
-  const rangeOverride = isStreaming ? generation.meta?.range ?? null : null;
+  const rangeOverride =
+    isStreaming || streamingRunId === generation.id
+      ? generation.meta?.range ?? null
+      : null;
 
   // The same month range Timeline builds internally. Recomputed here rather
   // than lifted out of Timeline: it is a pure function of its inputs, memoised
@@ -920,6 +929,31 @@ export function App() {
     setTitle, setDescription, setEvents, updateCategories, updateChapters,
   ]);
 
+  /**
+   * Park the view on the start of the generated span, once.
+   *
+   * The axis is padded three years either side of the content, so a canvas
+   * left at scroll 0 opens on empty grid with the first event off to the
+   * right — the timeline looks blank while it fills. `align: 'start'` puts
+   * the range's first year at the left edge, less the usual lead-in.
+   *
+   * Once is the whole point: the view must not chase events as they arrive.
+   * `pendingScrollTarget` is deduplicated by value downstream, and the ref
+   * keeps a second `meta` (a retry) from re-parking a view the user has
+   * since scrolled.
+   */
+  const parkedRunRef = useRef<string | null>(null);
+  useEffect(() => {
+    const range = generation.meta?.range;
+    if (!range || !generation.id) return;
+    if (parkedRunRef.current === generation.id) return;
+    parkedRunRef.current = generation.id;
+    setPendingScrollTarget({
+      date: `${String(range.startYear).padStart(4, '0')}-01-01`,
+      align: 'start',
+    });
+  }, [generation.meta, generation.id]);
+
   useEffect(() => {
     if (!generation.active) return;
     const onKey = (e: KeyboardEvent) => {
@@ -991,6 +1025,10 @@ export function App() {
       return;
     }
 
+    // The generation no longer describes what is in the editor.
+    generation.reset();
+    setStreamingRunId(null);
+
     // Dedup: if the user clicked the tile for the timeline that's already
     // loaded, there's nothing to switch to — skip the refetch.
     //
@@ -1009,6 +1047,9 @@ export function App() {
     if (newDraftId === activeDraftId) {
       return;
     }
+    // As above: the generated span stops applying once we leave its timeline.
+    generation.reset();
+    setStreamingRunId(null);
     // Commit the outgoing draft's pending save before its contents are replaced.
     // Without this the debounced call's arguments are overwritten by the
     // incoming draft's snapshot and the last <500 ms of edits are dropped —
