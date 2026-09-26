@@ -772,9 +772,9 @@ generated there and fills in as it arrives. Replaced the old blocking spinner
 ### Where the generation lives
 
 `GenerationContext` (`src/contexts/GenerationContext.tsx`), mounted in
-`Router.tsx`'s `LayoutRoute` **above** the `Outlet`. It must outlive the route
-change: a run starts on `/` and finishes on `/editor`, so a store owned by
-either route would be torn down mid-stream.
+`Router.tsx`'s `LayoutRoute` **above** the `Outlet`. It outlives both routes
+because a run must survive the editor's own bounce back to `/` — its error is
+rendered there — as well as the editor unmounting mid-stream.
 
 `AIModePage` only navigates. The editor owns both the capacity decision and
 the `generation.start()` call, so "may this run" and "run it" stay together.
@@ -908,10 +908,32 @@ Symptoms: a cancelled run makes **every** route into the editor bounce back to
 `/` until a refresh; re-entering with a finished run commits a duplicate
 timeline; the axis narrows and the view parks on a stale range.
 
-Fix designed, not yet applied: move the record into the store as a
-`resolvedId` the editor marks once, and treat the store as describing whatever
-the editor currently shows — loading anything else clears it. **Do not add
-more per-run state to `App`** until this is resolved.
+**Fix designed, not yet applied.** The question splits in two, and conflating
+them is the mistake:
+
+- **Durable — `resolvedId` in the store.** "Has this run's outcome been dealt
+  with?" Set at three sites: commit, bounce, and **`App` unmount**. The third
+  matters as much as the others — leaving `/editor` mid-stream abandons a run
+  that then finishes unowned, and the *next* mount commits it as a duplicate
+  for a subject the user has moved on from. Unmount should abort it too: a run
+  nothing can render is only spending tokens. Together these buy the invariant
+  *at mount time every run in the store is already resolved, and a resolved
+  run drives nothing* — no commit, no bounce, no park, no `isStreaming`.
+- **Per-mount — keep today's `streamingRunId`** (better named
+  `committedRunId`). "Are the editor's current contents that run's output?"
+  Only ever true of the mount that did the committing, so no store field can
+  answer it. This is what stops `rangeOverride` applying a generation's span
+  to an unrelated timeline; fixing `isStreaming` then fixes the axis symptom
+  on its own.
+
+`committedRunRef` stays as the within-mount re-entry guard. All three have
+genuinely different lifetimes. **Do not add more per-run state to `App`**
+beyond `committedRunId` until this lands.
+
+`SidePanelContext` needs no change: it is the *outer* provider (`Router.tsx`)
+and cannot read the generation store — and once a resolved run is inert, a
+tile click from `/` no longer needs the reset that `handleTimelineSwitch`
+does from inside the editor.
 
 ---
 
