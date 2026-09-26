@@ -19,6 +19,8 @@ interface NewTimelineScreenProps {
    * element is gone — so it has to be read on the way out.
    */
   onAIGenerate: (subject: string, fromRect: DOMRect | null) => void
+  /** Seeds the field once, at mount. Empty on an ordinary visit. */
+  initialSubject?: string
   error: string | null
   /** Set when the failure came from one BYOK provider and the user has a key
    *  for the other one. Null otherwise — including on the server-funded path,
@@ -184,17 +186,23 @@ export function BackgroundPattern() {
 
 export function NewTimelineScreen({
   onAIGenerate,
+  initialSubject = '',
   error,
   retryProvider,
   onRetryWithProvider,
   onRequestApiKey,
 }: NewTimelineScreenProps) {
-  const [name, setName] = useState('')
+  // Mount-time only, which is the right shape: the page mounts fresh each
+  // time the editor sends someone back to it, and a later change to the prop
+  // must never overwrite what they have typed since.
+  const [name, setName] = useState(initialSubject)
   const [placeholderText, setPlaceholderText] = useState('')
   const [placeholderPhase, setPlaceholderPhase] = useState<'typing' | 'deleting'>('typing')
   const [placeholderIndex, setPlaceholderIndex] = useState(0)
   const [showSuggestions, setShowSuggestions] = useState(false)
-  const [hasEngaged, setHasEngaged] = useState(false)
+  // A restored subject is already engagement: without this the field would
+  // wear its resting shadow while holding text, which only typing ever shows.
+  const [hasEngaged, setHasEngaged] = useState(initialSubject !== '')
   const [renderDropdown, setRenderDropdown] = useState(false)
   // Drawn once per mount, so the chips rotate between visits but never move
   // under a cursor that is already reaching for one.

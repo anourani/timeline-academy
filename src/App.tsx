@@ -117,15 +117,10 @@ export function App() {
     { top: number; left: number; width: number; height: number } | null
   >(null);
   /**
-   * True from the moment AI mode hands us a subject until the stream's
-   * result is committed. While it holds, the editor renders the generation
-   * store and writes nothing: `useEvents` is untouched, so the autosave
-   * fingerprint never sees a partial timeline, the guest draft write stays
-   * gated on a null `activeDraftId`, and the trial unload warning stays
-   * disarmed on an empty `events`.
+   * Guards the commit against re-entry *within this mount* while its awaits
+   * are in flight. Whether a run has been committed at all is not recorded
+   * here — see `resolvedId` in GenerationContext for why it cannot be.
    */
-  const [streamingRunId, setStreamingRunId] = useState<string | null>(null);
-  /** Guards the commit against re-entry while its awaits are in flight. */
   const committedRunRef = useRef<string | null>(null);
   /** True for the ~1.2s the intro overlay owns the screen. */
   const [introPlaying, setIntroPlaying] = useState(false);
@@ -177,9 +172,21 @@ export function App() {
     setShowAddEventModal(true);
   };
 
-  // The store owns the editor's contents while a generation is in flight.
+  /**
+   * True from the moment a generation starts until its result is committed.
+   * While it holds, the editor renders the generation store and writes
+   * nothing: `useEvents` is untouched, so the autosave fingerprint never sees
+   * a partial timeline, the guest draft write stays gated on a null
+   * `activeDraftId`, and the trial unload warning stays disarmed on an empty
+   * `events`.
+   *
+   * "Committed" is read from the store's `resolvedId`, not from anything held
+   * here: a flag in this component is blank on every mount, and a finished
+   * run found in the store on the way back in would read as still streaming.
+   */
   const isStreaming =
-    generation.active || (generation.status === 'done' && streamingRunId !== generation.id);
+    generation.active ||
+    (generation.status === 'done' && generation.resolvedId !== generation.id);
   const streamEvents = isStreaming ? generation.events : events;
   const streamCategories = isStreaming ? generation.categories : categories;
   // The wire shape carries no ids — they are assigned by index after sorting.
@@ -217,9 +224,13 @@ export function App() {
   const beginStreaming = useCallback((request: AiStreamingRouteState) => {
     setIntroRect(request.fromRect);
     setIntroPlaying(request.fromRect !== null);
-    setStreamingRunId(null);
     void startGeneration(request.subject, request.providerOverride);
   }, [startGeneration]);
+  // Stable for the same reason, and listed in the same effects. Every route
+  // into the editor that loads something other than a generation calls it:
+  // the store describes what the editor is showing, and nothing else.
+  const resetGeneration = generation.reset;
+  const markResolved = generation.markResolved;
 
   /**
    * The axis span a generation declared.
@@ -235,7 +246,7 @@ export function App() {
    * is simply derived from the events, with nothing on screen to jump.
    */
   const rangeOverride =
-    isStreaming || streamingRunId === generation.id
+    isStreaming || generation.resolvedId === generation.id
       ? generation.meta?.range ?? null
       : null;
 
@@ -353,6 +364,9 @@ export function App() {
           setDraftHydrated(true);
           return;
         }
+        // Past the capacity check, not before it: a refused load leaves the
+        // editor's contents — and so the store describing them — as they were.
+        resetGeneration();
         const imported = routeState.importedEvents;
         setActiveDraftId(newDraft.id);
         setTitle(newDraft.title);
@@ -385,6 +399,7 @@ export function App() {
           setDraftHydrated(true);
           return;
         }
+        resetGeneration();
         const { title: aiTitle, description: aiDesc, events: aiEvents, categories: aiCategories, chapters: aiChapters } = routeState.aiGenerated;
         setActiveDraftId(newDraft.id);
         setTitle(aiTitle);
@@ -416,6 +431,7 @@ export function App() {
           setDraftHydrated(true);
           return;
         }
+        resetGeneration();
         setActiveDraftId(newDraft.id);
         setTitle(newDraft.title);
         setDescription(newDraft.description);
@@ -457,6 +473,7 @@ export function App() {
         // Resuming a local draft (e.g. from the side panel)
         const draft = loadDraft(routeState.draftId);
         if (draft) {
+          resetGeneration();
           setActiveDraftId(draft.id);
           setTitle(draft.title);
           setDescription(draft.description);
@@ -475,6 +492,7 @@ export function App() {
         // No route state — load most recent draft or send user to AI entry
         const allDrafts = loadAllDrafts();
         if (allDrafts.length > 0) {
+          resetGeneration();
           const mostRecent = allDrafts[0];
           setActiveDraftId(mostRecent.id);
           setTitle(mostRecent.title);
@@ -496,7 +514,7 @@ export function App() {
       // Clear the route state so refreshing doesn't re-trigger
       routerNavigate('/editor', { replace: true, state: {} });
     }
-  }, [authReady, storageReconciled, tier, user, draftHydrated, beginStreaming, createDraft, getDraftCount, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange, loadAllDrafts, loadDraft, location.state, location.key, routerNavigate, setDescription, setEvents, setTitle, updateCategories, updateChapters]);
+  }, [authReady, storageReconciled, tier, user, draftHydrated, beginStreaming, resetGeneration, createDraft, getDraftCount, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange, loadAllDrafts, loadDraft, location.state, location.key, routerNavigate, setDescription, setEvents, setTitle, updateCategories, updateChapters]);
 
   // Guest drafts save on a 500 ms debounce, so a rename followed immediately by
   // closing the tab or navigating away would be lost — the draft path has no
@@ -813,6 +831,7 @@ export function App() {
 
     if (state?.importedEvents) {
       editorSeededRef.current = true;
+      resetGeneration();
       const imported = state.importedEvents;
       (async () => {
         await switchTimeline('new');
@@ -825,6 +844,7 @@ export function App() {
       routerNavigate('/editor', { replace: true, state: {} });
     } else if (state?.aiGenerated) {
       editorSeededRef.current = true;
+      resetGeneration();
       const aiData = state.aiGenerated;
       (async () => {
         // Creates the timeline row in Supabase and binds the editor to it, so
@@ -853,17 +873,19 @@ export function App() {
     } else if (state?.timelineId) {
       editorSeededRef.current = true;
       if (state.timelineId === 'new' && state.skipCreationScreen) {
+        resetGeneration();
         switchTimeline('new');
       } else if (state.timelineId === 'new') {
         // "new" without skipCreationScreen now means "go to AI mode" (which lives at /)
         routerNavigate('/', { replace: true });
         return;
       } else {
+        resetGeneration();
         switchTimeline(state.timelineId);
       }
       routerNavigate('/editor', { replace: true, state: {} });
     }
-  }, [location.state, location.key, authReady, storageReconciled, user, beginStreaming, routerNavigate, setDescription, setEvents, setTitle, switchTimeline, updateCategories, updateChapters]);
+  }, [location.state, location.key, authReady, storageReconciled, user, beginStreaming, resetGeneration, routerNavigate, setDescription, setEvents, setTitle, switchTimeline, updateCategories, updateChapters]);
 
   /**
    * Commit a finished generation into the editor — the one and only write.
@@ -877,9 +899,17 @@ export function App() {
    * events. Discarding thirty good events because the thirty-first never
    * arrived is the worse outcome, and nothing has been persisted yet, so
    * keeping them costs nothing.
+   *
+   * Two guards, with different lifetimes, and both are needed. `resolvedId`
+   * lives in the store and survives this component: without it, mounting
+   * `/editor` while the store still held a committed run committed it again,
+   * creating a second timeline for the previous subject. `committedRunRef`
+   * lives and dies with this mount, and covers the window the store cannot:
+   * the effect re-runs on every streamed event, and `markResolved` does not
+   * land until the awaits below have.
    */
   useEffect(() => {
-    const { status, id, events: streamed } = generation;
+    const { status, id, resolvedId, events: streamed } = generation;
     // Events are the precondition, not just the payload. The store already
     // refuses to report `done` with none, but stating it here too means no
     // future path can create a timeline with nothing in it — which is the
@@ -888,9 +918,8 @@ export function App() {
     const finished = streamed.length > 0 &&
       (status === 'done' || status === 'error' || status === 'cancelled');
     if (!finished || !id) return;
+    if (resolvedId === id) return;
     if (!authReady || !storageReconciled) return;
-    // Ref, not the state latch below: this effect re-runs on every streamed
-    // event, and the latch cannot flip until the awaits have landed.
     if (committedRunRef.current === id) return;
     committedRunRef.current = id;
 
@@ -925,10 +954,10 @@ export function App() {
       // Last, so the canvas swaps from the store to committed state only once
       // that state actually holds the timeline. Flipping first would show an
       // empty editor for the length of the awaits above.
-      setStreamingRunId(id);
+      markResolved(id);
     })();
   }, [
-    generation, authReady, storageReconciled, user, switchTimeline, createDraft,
+    generation, authReady, storageReconciled, user, markResolved, switchTimeline, createDraft,
     handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange,
     setTitle, setDescription, setEvents, updateCategories, updateChapters,
   ]);
@@ -945,18 +974,24 @@ export function App() {
    * `pendingScrollTarget` is deduplicated by value downstream, and the ref
    * keeps a second `meta` (a retry) from re-parking a view the user has
    * since scrolled.
+   *
+   * Only for a run the editor is actually rendering. The ref dies with this
+   * component and the store does not, so a fresh mount finds a finished
+   * run's `meta` still sitting there — and parking on it would open some
+   * unrelated timeline at the previous subject's start year.
    */
   const parkedRunRef = useRef<string | null>(null);
   useEffect(() => {
     const range = generation.meta?.range;
     if (!range || !generation.id) return;
+    if (!isStreaming) return;
     if (parkedRunRef.current === generation.id) return;
     parkedRunRef.current = generation.id;
     setPendingScrollTarget({
       date: `${String(range.startYear).padStart(4, '0')}-01-01`,
       align: 'start',
     });
-  }, [generation.meta, generation.id]);
+  }, [generation.meta, generation.id, isStreaming]);
 
   useEffect(() => {
     if (!generation.active) return;
@@ -971,13 +1006,43 @@ export function App() {
    * A generation that produced nothing sends the user back to the search
    * page, where the error row and its retry-with-the-other-provider button
    * already live. The store keeps the message, so nothing needs passing.
+   *
+   * Once per run, and the record of that is kept in the store. The outcome
+   * stays there after this component unmounts on the way home, so with
+   * nothing to say it had been handled, every later route into the editor —
+   * a quick-search chip, a side-panel tile, New Timeline — found it and was
+   * sent straight back out: a flash, and nothing, until a refresh.
    */
   useEffect(() => {
-    const { status, events: streamed } = generation;
+    const { status, id, resolvedId, events: streamed } = generation;
     if (status !== 'error' && status !== 'cancelled') return;
     if (streamed.length > 0) return;
+    if (resolvedId === id) return;
+    markResolved(id);
     routerNavigate('/', { replace: true });
-  }, [generation, routerNavigate]);
+  }, [generation, markResolved, routerNavigate]);
+
+  /**
+   * Abandon a run the editor is walking away from mid-stream.
+   *
+   * Nothing else would receive it. The commit and the bounce are both effects
+   * of this component, so a run left streaming after the user leaves
+   * `/editor` finishes into a store nobody is reading — the generation spent
+   * for nothing — and then waits there, unresolved, for whichever editor
+   * mounts next to act on it in the middle of loading something else.
+   *
+   * Only a run still in flight. A finished one is left exactly as it is: the
+   * bounce above leaves on purpose, and the search page reads the error and
+   * the subject from the store. The ref is written from an effect so that at
+   * unmount it holds what the last committed render actually showed.
+   */
+  const generationActiveRef = useRef(generation.active);
+  useEffect(() => {
+    generationActiveRef.current = generation.active;
+  }, [generation.active]);
+  useEffect(() => () => {
+    if (generationActiveRef.current) resetGeneration();
+  }, [resetGeneration]);
 
   // Signed in, on /editor, with nothing in the route state telling us what to
   // show — a bookmark, a refresh, or the browser back button.
@@ -1001,6 +1066,9 @@ export function App() {
     if (state?.timelineId || state?.aiGenerated || state?.importedEvents) return;
 
     editorSeededRef.current = true;
+    // Whatever opens here is not a generation, so the store must stop
+    // describing the editor — see resetGeneration.
+    resetGeneration();
     (async () => {
       try {
         const mostRecentId = await getMostRecentTimelineId();
@@ -1015,7 +1083,7 @@ export function App() {
         setBootstrapError('Failed to load your timelines. Please try again.');
       }
     })();
-  }, [authReady, storageReconciled, user, location.state, bootstrapAttempt, getMostRecentTimelineId, switchTimeline, routerNavigate]);
+  }, [authReady, storageReconciled, user, location.state, bootstrapAttempt, getMostRecentTimelineId, resetGeneration, switchTimeline, routerNavigate]);
 
   const retryBootstrap = () => {
     setBootstrapError(null);
@@ -1029,10 +1097,6 @@ export function App() {
       return;
     }
 
-    // The generation no longer describes what is in the editor.
-    generation.reset();
-    setStreamingRunId(null);
-
     // Dedup: if the user clicked the tile for the timeline that's already
     // loaded, there's nothing to switch to — skip the refetch.
     //
@@ -1042,6 +1106,11 @@ export function App() {
     if (newTimelineId === loadedTimelineId) {
       return;
     }
+
+    // The generation no longer describes what is in the editor. After the
+    // dedup, not before: clicking the tile of a timeline just generated would
+    // otherwise drop its span and narrow the axis under the user's cursor.
+    generation.reset();
 
     await switchTimeline(newTimelineId);
   };
@@ -1053,7 +1122,6 @@ export function App() {
     }
     // As above: the generated span stops applying once we leave its timeline.
     generation.reset();
-    setStreamingRunId(null);
     // Commit the outgoing draft's pending save before its contents are replaced.
     // Without this the debounced call's arguments are overwritten by the
     // incoming draft's snapshot and the last <500 ms of edits are dropped —

@@ -107,6 +107,17 @@ export function AIModePage() {
       </div>
       <NewTimelineScreen
         onAIGenerate={handleAIGenerate}
+        // A run that ended with nothing to show — cancelled, or failed — is
+        // what sends the user back here, so the field comes back holding what
+        // they asked for rather than empty. Only those: after a timeline was
+        // made, the search page is for starting the next one, and a field
+        // pre-filled with the last subject would be in the way.
+        initialSubject={
+          (generation.status === 'cancelled' || generation.status === 'error') &&
+          generation.events.length === 0
+            ? generation.subject
+            : ''
+        }
         // A generation that failed before producing anything sends the user
         // back here, so the error it left on the store is this page's to
         // show — the same row, and the same retry affordance, as before.
