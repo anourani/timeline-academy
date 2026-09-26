@@ -766,60 +766,152 @@ If the perceived behavior is "the timeline starts at the first event," the cause
 ## AI Generation Streaming
 
 Pressing Enter in AI mode navigates to `/editor` immediately; the timeline is
-generated there and fills in as it arrives.
+generated there and fills in as it arrives. Replaced the old blocking spinner
+(`GeneratingIndicator`, deleted).
 
-**Where the generation lives.** `GenerationContext` (`src/contexts/GenerationContext.tsx`),
-mounted in `Router.tsx`'s `LayoutRoute` above the `Outlet`. It has to outlive
-the route change — a generation starts on `/` and finishes on `/editor`, so a
-store owned by either route would be torn down mid-stream.
+### Where the generation lives
 
-**The wire shape** is NDJSON, one object per line: a single `meta`, then every
-`chapter`, then every `event` ascending by start date, then `done`. That order
-is a contract the UI depends on, not a convention. Prompts live in
-`llmPrompts.ts` / `_shared/prompts.ts` as `getStreamSystemPrompt()`, alongside
-the unchanged buffered `getSystemPrompt()`.
+`GenerationContext` (`src/contexts/GenerationContext.tsx`), mounted in
+`Router.tsx`'s `LayoutRoute` **above** the `Outlet`. It must outlive the route
+change: a run starts on `/` and finishes on `/editor`, so a store owned by
+either route would be torn down mid-stream.
 
-**Nothing is persisted until the stream ends.** While `isStreaming` holds,
-`App` renders the store (`streamEvents`, `streamChapters`, `streamCategories`)
-and never touches `useEvents`. That single choice keeps every write path
-dormant without a new flag: autosave fingerprints `events`, the guest draft
-write is gated on `activeDraftId`, and the trial unload warning on
-`events.length`. The Supabase row or local draft is created once, at `done`.
-A stream that fails or is cancelled *after* producing events still commits
-them.
+`AIModePage` only navigates. The editor owns both the capacity decision and
+the `generation.start()` call, so "may this run" and "run it" stay together.
 
-**The axis is fixed before the first event.** `meta.range` is passed as
-`rangeOverride` to both `Timeline` and `App`'s own `getTimelineRange` call for
-the chapters strip — both, because those two disagreeing puts the chips over
-the wrong columns (see the comment at that call site). It **widens** the range
-rather than replacing it, so that dropping it at commit is a no-op: a model
-routinely states a span a year wider than its own earliest event, and a
+### Two accepted response shapes
+
+| Shape | When | Handling |
+|---|---|---|
+| **NDJSON** — one object per line: `meta`, then `chapter`×n, then `event`×n ascending by date, then `done` | the function understands `stream: true` | `parseNdjsonStream` → `dispatchLine` |
+| **Buffered** — one `GeneratedTimeline` document | the deployed function predates streaming, or a model ignores the NDJSON instruction | `dispatchLine` detects it (no `type`, has `timelineTitle` + `events`) and expands it into the same handler calls, deriving `range` from the events |
+
+So `stream: true` is an **optimisation, not a contract**. Where understood the
+timeline streams; where not, it arrives at once and the reveal queue paces it
+anyway. Deploy order does not matter in either direction — see the deploy-skew
+rule in CLAUDE.md, which this is the client half of.
+
+Line order in the NDJSON shape *is* a contract: `meta.range` fixes the axis
+before any event exists, and events ascend so the skeleton can recede ahead of
+them. Prompts: `getStreamSystemPrompt()` in `llmPrompts.ts` /
+`_shared/prompts.ts`, alongside the unchanged buffered `getSystemPrompt()`
+(whose output must stay byte-identical — cached bundles still call it).
+
+OpenAI's `generateStream` params deliberately omit `response_format:
+json_object`; it constrains the reply to exactly one JSON object, which is the
+opposite of NDJSON. It lives as a shared named constant in
+`src/constants/models.ts` so the three OpenAI entries cannot drift back into
+carrying it. **This fails silently** — you get one object where the line
+reader expects one per line, which reads like a bad model, not a bad body.
+
+### Nothing is persisted until the stream ends
+
+While `isStreaming` holds, `App` renders the store (`streamEvents`,
+`streamChapters`, `streamCategories`) and never touches `useEvents`. That one
+choice keeps every write path dormant with no new flag: autosave fingerprints
+`events`, the guest draft write is gated on `activeDraftId`, the trial unload
+warning on `events.length`. The Supabase row or local draft is created once,
+at `done`.
+
+A run that fails or is cancelled **after** producing events still commits
+them. A run that produces **none** is an error, never a commit — reported from
+the store's `onDone` so both editor effects do the right thing. Without that
+guard an unrecognised response shape created empty timelines that consumed
+plan slots and reported nothing.
+
+### The axis is fixed before the first event
+
+`meta.range` is passed as `rangeOverride` to **both** `Timeline` and `App`'s
+own `getTimelineRange` call for the chapters strip. Both, or the chips sit
+over the wrong columns.
+
+It **widens** the range rather than replacing it, so dropping it is a no-op.
+A model routinely states a span a year wider than its own earliest event; a
 replacing override narrowed the axis by 336px at exactly the moment the
-timeline landed. It stays applied for the committed timeline and is cleared
+timeline committed. It stays applied for the committed timeline and clears
 when the editor switches away.
 
-The view parks once, on the range's first year, when `meta` arrives — the axis
-is padded three years either side, so a canvas left at scroll 0 opens on empty
-grid. It must not move again while events land.
+The view parks **once**, on the range's first year, when `meta` arrives — the
+axis is padded three years either side, so a canvas left at scroll 0 opens on
+empty grid with the first event off to the right. It must not move again.
 
-**Pacing.** `useRevealQueue` releases one event every 200ms, or every 60ms
-when more than six are waiting. Providers send several NDJSON lines per chunk,
-so without it events appear in clumps. It also caps how often
-`calculateEventStacks` re-runs, which is O(n·m) in month scans and runs once
-per category when grouped.
+### Pacing
 
-**The intro.** `CurtainIntro.tsx` replays the search screen's exit over the
-editor for ~1.2s: the grid swipes off, the field drops away, and the typed
-query flies into the nav title (measured via `[data-timeline-title]`). The
-axis assembles underneath via the `intro` prop on `Timeline`, which staggers
-lines and labels from the parked scroll position — only what is in view, since
-a 17th-century timeline is ~3,700 months wide. Year-boundary lines are marked
-revealed under `intro`, bypassing the IntersectionObserver reveal described in
-[Vertical Lines](#vertical-lines).
+`useRevealQueue` releases one event every `RELEASE_MS` (200), dropping to
+`DRAIN_MS` (60) when more than `DRAIN_THRESHOLD` (6) are waiting. Providers
+send several lines per chunk, so without it events appear in clumps. It also
+caps how often `calculateEventStacks` re-runs — O(n·m) in month scans, once
+per category when grouped — so the release interval, not the provider's
+chunking, bounds that cost.
 
-Easing tokens (`--ease-enter`, `--ease-swipe`, `--ease-pop`) and every intro
-keyframe live in `index.css`. Reduced motion drops the intro entirely and
-fades events instead of striking them in.
+### Animation timeline
+
+All times are ms after the editor mounts. Constants live beside the code that
+uses them; the easing tokens (`--ease-enter`, `--ease-swipe`, `--ease-pop`)
+and every keyframe live in `index.css`.
+
+| From | Leg | Owner |
+|---|---|---|
+| 0 | background + blobs fade (`GRID_SWIPE_MS` 500) | `CurtainIntro.tsx` |
+| 0 | grid lines swipe up, stagger `GRID_STAGGER_MS` 35 | `CurtainIntro.tsx` |
+| 0 | field ghost drops away (`GHOST_FADE_MS` 350) | `CurtainIntro.tsx` |
+| 50 | query flies to nav title (`TITLE_FLIGHT_MS` 800, scale 32→24px) | `CurtainIntro.tsx` |
+| 300 | axis lines arrive, alternating top/bottom, stagger 11, +80 for year boundaries | `TimelineVerticalLines.tsx` |
+| 550 | month cells fade, stagger 8 | `TimelineMonthLabels.tsx` |
+| 600 | year labels rise, stagger 70 | `TimelineYearLabels.tsx` |
+| 600 | dock rises 96px (`INTRO_RISE_MS` 550, `--ease-pop`) | `FloatingToolbar.tsx` |
+| 750 | chapter placeholders fade, stagger 60 | `ChaptersStrip.tsx` |
+| ~1200 | overlay unmounts (`INTRO_MS`) | `CurtainIntro.tsx` |
+| per event | bar `scaleY` 400 · fill clip 550 · title slide 350 · glow 800 | `TimelineEvent.tsx` |
+
+Per-event reveal is keyed to **mount**: the queue decides when an event joins
+the array, so there is nothing else to trigger on and no timestamp to track.
+
+### Gotchas — the things that will otherwise be relearned
+
+- **The dock's rise composes into its existing inline `translateX`.** An
+  inline style beats a utility class, so a Tailwind `translate-y` is silently
+  discarded. Same trap `GlobalLayout.tsx` documents.
+- **Year-boundary lines are marked revealed under `intro`**, bypassing the
+  IntersectionObserver gate in [Vertical Lines](#vertical-lines) that
+  otherwise holds them at `height: 0` until they scroll into view.
+- **The stagger is keyed to the parked scroll position, not grid index.**
+  "Line 0" is the leftmost *visible* one, and only what is in view animates —
+  a 17th-century timeline is ~3,700 months wide. Measured once; recomputing on
+  scroll restarts delays mid-flight.
+- **`CurtainIntro` must declare the same responsive `--page-gutter` scale** as
+  `NewTimelineScreen` (exported as `PAGE_GUTTER_SCALE`), or frame 0 does not
+  line up at non-desktop widths.
+- **The nav title is measured via `[data-timeline-title]`** and kept mounted
+  at `opacity: 0` during the flight — a display-none node cannot be measured.
+- **FLIP stack-reflow is suppressed while streaming**
+  (`suppressStackAnimation`). Events arrive in date order so reshuffles are
+  rare, but sliding one that just appeared reads as a glitch.
+- **`animation-fill-mode: both` is load-bearing** on the axis legs: it holds
+  each line off-screen through its delay. Without it the axis is simply
+  present from frame 0 with nothing to arrive.
+- **Skeleton bars are positioned in viewport px** scaled from a 1600px
+  reference, and recede when a revealed event reaches them — which only works
+  because events ascend by date.
+- **Reduced motion** drops the intro entirely and fades events rather than
+  striking them in.
+
+### Known issue: run-outcome bookkeeping lives in the wrong place
+
+`streamingRunId`, `committedRunRef` and `parkedRunRef` live in `App.tsx`,
+which unmounts whenever the user leaves `/editor` — while the run lives in a
+store that does not. On re-entry the bookkeeping is blank but the finished run
+persists, so the editor re-handles an outcome it already handled, from state
+read before `start()` lands.
+
+Symptoms: a cancelled run makes **every** route into the editor bounce back to
+`/` until a refresh; re-entering with a finished run commits a duplicate
+timeline; the axis narrows and the view parks on a stale range.
+
+Fix designed, not yet applied: move the record into the store as a
+`resolvedId` the editor marks once, and treat the store as describing whatever
+the editor currently shows — loading anything else clears it. **Do not add
+more per-run state to `App`** until this is resolved.
 
 ---
 

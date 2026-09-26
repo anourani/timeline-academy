@@ -13,6 +13,12 @@ npm run lint      # ESLint on .ts/.tsx files
 npm run preview   # Preview production build locally
 ```
 
+**Nothing above typechecks.** `npm run build` is bare `vite build`, and `npx tsc --noEmit` at the repo root checks *zero files* — the root tsconfig is `"files": []` with project references, so it exits clean no matter what is broken. The real command is:
+
+```bash
+npx tsc --noEmit -p tsconfig.app.json   # 12 pre-existing errors on main; add none
+```
+
 No test framework is configured — every check is manual. This is the direct reason a five-month drift between this repo and the live project went unnoticed, along with three features that were silently broken in production for months (see `docs/2026-08-05-security-review-handoff.md`).
 
 ## Architecture
@@ -22,8 +28,11 @@ src/
 ├── components/       # Feature-folder organized React components
 │   ├── Legal/        # /privacy and /terms pages
 │   └── ui/           # shadcn/ui primitives
-├── hooks/            # Custom React hooks (useTimeline, useEvents, useAutosave, useAIMode, etc.)
-├── contexts/         # React Context providers (AuthContext, SidePanelContext)
+├── hooks/            # Custom React hooks (useTimeline, useEvents, useAutosave,
+│                     #   useGeneration, useRevealQueue, etc.)
+├── contexts/         # React Context providers (AuthContext, SidePanelContext,
+│                     #   GenerationContext — the in-flight AI generation, mounted
+│                     #   above the router so it survives / → /editor)
 ├── services/         # AI generation + external APIs:
 │                     #   aiTimeline, anthropicDirect + openaiDirect (BYOK),
 │                     #   llmShared (provider-neutral), eventEnrichment,
@@ -98,7 +107,10 @@ Each of these was learned the expensive way. See `docs/2026-08-05-security-revie
 - **Never assume a migration in `supabase/migrations/` has been applied.** Verify against `information_schema.columns` first. An unapplied April–May 2026 batch silently broke autosave, event descriptions and sharing for three months while the code that depended on it shipped normally.
 - **`verify_jwt` must stay `false`** in `supabase/config.toml`. With it `true`, Supabase's gateway rejects the CORS preflight — which by specification carries no `Authorization` header — and answers with headers omitting `content-type`, so browsers can never POST JSON. Every function authenticates its own caller with `supabase.auth.getUser()`, so the gateway check adds nothing.
 - **Do not "tighten" `_shared/cors.ts`.** It deliberately reflects `Access-Control-Request-Headers` back. A hand-written allow-list turns the client library's exact header set into a deploy-time dependency, and the failure is invisible to `curl` — because `curl` only asks permission for headers you already thought of.
-- **A function must accept both the current site and the previous one.** The two pipelines finish at different times and cached bundles persist for longer still. Keep old headers permitted and old request shapes tolerated.
+- **Deploy skew cuts both ways, and the second direction is the one that breaks production.**
+  - *A function must accept both the current site and the previous one.* The two pipelines finish at different times and cached bundles persist for longer still. Keep old headers permitted and old request shapes tolerated.
+  - *And the site must accept both the current function and the previous one.* This is the direction that actually bites: Netlify deploys on merge, GitHub Actions deploys functions separately, so **the site routinely goes live first** and every user hits a new client against an old function. Streaming generation shipped guarding only the first direction — the client sent an opt-in `stream: true`, the old function ignored the unknown field and answered with its buffered shape, and the client discarded every timeline silently. A new request field is not backwards-compatible on its own; the client must also handle the response it gets when that field is ignored.
+  - Test the pairing you will actually deploy into, not the one you are deploying. A mock of the *new* function proves nothing about the window you are shipping through.
 - **Debug with `curl` before the browser.** CORS is a browser-only mechanism, so `curl` separates "the server is broken" from "the browser refused to send" — a distinction that once cost hours.
 - **Nothing user-visible may depend on Supabase Realtime.** `useTimelines` and `useEventUsage` subscribe to `postgres_changes`, and the publication that makes those fire is dashboard state — `20260808000000_timeline_ordering.sql` is the only thing in the repo that adds `public.timelines` to it, and like every migration here it is applied by hand. The side panel's ordering once hung entirely on that subscription, so wherever it was off the list rendered correctly on load and then silently froze; a `CHANNEL_ERROR` is invisible whenever the list is non-empty. Ordering now runs off a same-tab event from the write layer (`src/utils/timelineSaved.ts`) and realtime is the cross-tab bonus. Check what is actually live with `select * from pg_publication_tables where pubname = 'supabase_realtime';` — and treat anything it doesn't list as off.
 
@@ -140,3 +152,4 @@ That sentence is the whole model. Everything below is how it is enforced.
 - Migrations are not automated — the other half of the drift problem.
 - `/privacy` and `/terms` are engineering drafts describing the real data flows accurately, but they have not had a legal review.
 - Several paths shipped in August 2026 are deployed but never exercised, including **account deletion, which is destructive**. See the handoff doc's verified/unverified section before trusting them.
+- **A cancelled or failed AI generation makes every route into `/editor` bounce back to `/` until the page is refreshed.** Run-outcome bookkeeping (`streamingRunId`, `committedRunRef`, `parkedRunRef`) lives in `App.tsx`, which unmounts on leaving the editor, while the run lives in `GenerationContext`, which does not. Also causes a duplicate timeline on re-entry after a successful run. Fix designed but not applied — see the Known issue at the end of `src/TIMELINE_ARCHITECTURE.md` §AI Generation Streaming. **Do not add more per-run state to `App.tsx`** until it is resolved.
