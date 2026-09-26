@@ -17,6 +17,7 @@
 //     rejects it — and both providers constrain the shape instead.
 
 import {
+  getStreamSystemPrompt,
   getSystemPrompt,
   getUserPrompt,
   buildEnrichUserPrompt,
@@ -24,9 +25,18 @@ import {
   ENRICH_SYSTEM_PROMPT,
   type CategoryDefinition,
 } from './llmPrompts'
-import { parseTimelineJson, readApiError, readSseStream } from './llmShared'
+import {
+  createNdjsonLineReader,
+  parseTimelineJson,
+  readApiError,
+  readSseStream,
+} from './llmShared'
 import type { ModelDef } from '@/constants/models'
-import type { EnrichmentStreamHandlers, GeneratedTimeline } from '@/types/ai'
+import type {
+  EnrichmentStreamHandlers,
+  GeneratedTimeline,
+  TimelineStreamHandlers,
+} from '@/types/ai'
 import type { EventSource, TimelineEvent } from '@/types/event'
 
 const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions'
@@ -240,6 +250,113 @@ export async function generateTimelineOpenAIDirect(
   if (!text) throw new Error('Empty response from OpenAI')
 
   return parseTimelineJson(text as string)
+}
+
+// ---------------------------------------------------------------------------
+// Timeline generation (streaming NDJSON)
+// ---------------------------------------------------------------------------
+
+/**
+ * The same generation as above, emitted a line at a time.
+ *
+ * Still /v1/chat/completions, not the Responses API that enrichment uses —
+ * so the frame shape here is `choices[0].delta.content`, not
+ * `response.output_text.delta`. Those two are not interchangeable; the
+ * enrichment reader below is no guide to this one.
+ *
+ * Chat Completions sends unnamed SSE frames and a final literal `[DONE]`.
+ * `readSseStream` tolerates both: it reports an empty event name, and skips
+ * the sentinel because it will not parse as JSON.
+ *
+ * The registry body deliberately omits `response_format: json_object` — that
+ * mode returns exactly one JSON object, which is the opposite of NDJSON. See
+ * `OPENAI_NDJSON_GENERATE` in src/constants/models.ts.
+ */
+export async function generateTimelineStreamOpenAIDirect(
+  subject: string,
+  categories: CategoryDefinition[] | undefined,
+  model: ModelDef,
+  apiKey: string,
+  handlers: TimelineStreamHandlers,
+  onLine: (line: Record<string, unknown>) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const userPrompt = categories
+    ? getUserPrompt(subject, categories)
+    : `Generate a biographical timeline for: ${subject}`
+
+  let res: Response
+  try {
+    res = await fetch(OPENAI_CHAT_URL, {
+      method: 'POST',
+      headers: headers(apiKey),
+      body: JSON.stringify({
+        model: model.id,
+        messages: [
+          { role: 'system', content: getStreamSystemPrompt() },
+          { role: 'user', content: userPrompt },
+        ],
+        ...model.params.generateStream,
+      }),
+      signal,
+    })
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') return
+    handlers.onError((err as Error).message || 'Network error', 'openai')
+    return
+  }
+
+  if (!res.ok || !res.body) {
+    handlers.onError(
+      await readApiError(res, 'OpenAI API error', model.id, 'openai'),
+      'openai',
+    )
+    return
+  }
+
+  const lines = createNdjsonLineReader(onLine)
+  let finishReason: string | null = null
+
+  try {
+    await readSseStream(res.body, (_eventName, data) => {
+      const choices = data.choices as Array<Record<string, unknown>> | undefined
+      const choice = choices?.[0]
+      if (!choice) return
+      const delta = choice.delta as Record<string, unknown> | undefined
+      const text = delta?.content as string | undefined
+      if (text) lines.push(text)
+      if (typeof choice.finish_reason === 'string') {
+        finishReason = choice.finish_reason
+      }
+    })
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') return
+    handlers.onError((err as Error).message || 'Stream interrupted', 'openai')
+    return
+  }
+
+  if (finishReason === 'content_filter') {
+    handlers.onError(
+      'The model declined this request. Try rephrasing the subject, or pick a different model.',
+      'openai',
+    )
+    return
+  }
+
+  // Flushed before the length check so a truncated run still delivers every
+  // whole line it managed. `length` is OpenAI's spelling of max_tokens; the
+  // sentence matches the Anthropic path's so the UI reads the same either way.
+  lines.end()
+
+  if (finishReason === 'length') {
+    handlers.onError(
+      'The model ran out of room before finishing. Try again, or pick a different model.',
+      'openai',
+    )
+    return
+  }
+
+  handlers.onDone()
 }
 
 // ---------------------------------------------------------------------------

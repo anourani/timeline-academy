@@ -48,6 +48,59 @@ export interface GeneratedTimeline {
   }>
 }
 
+/** The axis span, fixed by the stream's `meta` line before any event lands. */
+export interface TimelineRange {
+  startYear: number
+  endYear: number
+}
+
+/**
+ * The NDJSON lines a streaming generation emits, in the order the prompt
+ * pins them: one `meta`, then every `chapter`, then every `event` ascending
+ * by startDate, then one `done`.
+ *
+ * The order is load-bearing rather than tidy. `meta.range` fixes the axis
+ * before the first event exists — the alternative is deriving the span from
+ * the events seen so far, which re-lays out the grid on every earlier-dated
+ * arrival. Events ascending is what lets the skeleton recede left to right
+ * just ahead of them.
+ */
+export interface StreamMeta {
+  title: string
+  description: string
+  range: TimelineRange
+  categoryMapping?: Record<string, string>
+}
+
+export interface StreamChapter {
+  label: string
+  startDate: string
+  endDate: string
+}
+
+export interface StreamEvent {
+  title: string
+  startDate: string
+  endDate: string
+  category: TimelineCategory
+}
+
+/**
+ * One normalised handler set for all three routes — BYOK Anthropic, BYOK
+ * OpenAI and the edge function — mirroring `EnrichmentStreamHandlers`.
+ *
+ * `onError` is terminal: a route calls it or `onDone`, never both.
+ */
+export interface TimelineStreamHandlers {
+  onMeta: (meta: StreamMeta) => void
+  onChapter: (chapter: StreamChapter) => void
+  onEvent: (event: StreamEvent) => void
+  onDone: () => void
+  /** `provider` is set when the failure came from a specific BYOK provider,
+   *  so the UI can offer a retry against the other one. */
+  onError: (message: string, provider?: ByokProvider) => void
+}
+
 export interface ClassificationResult {
   type: SubjectType
 }
