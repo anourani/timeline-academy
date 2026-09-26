@@ -34,6 +34,16 @@ export const destructiveGlassButtonClass = `
   hover:bg-destructive/30 transition-all
 `
 
+/** Solid destructive — final, irreversible confirm. */
+export const solidDestructiveButtonClass = `
+  relative min-w-[80px] px-[11px] py-[6px] rounded-[10px]
+  bg-[rgba(173,41,41,0.85)] border border-[rgba(173,41,41,0.6)]
+  shadow-[0px_8px_32px_rgba(0,0,0,0.4),inset_0px_1px_0px_rgba(255,255,255,0.1)]
+  font-['Avenir',sans-serif] font-medium text-[14px] text-[#fafafa]
+  hover:bg-[rgba(173,41,41,0.95)] transition-all
+  inline-flex items-center justify-center gap-1.5
+`
+
 /**
  * A tab in a modal's section rail. Active tabs take the brand fill; the rest
  * stay flat until hovered.

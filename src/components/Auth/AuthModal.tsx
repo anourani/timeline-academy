@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Modal } from '../Modal/Modal';
+import { ArrowLeft } from 'lucide-react';
+import { PopupShell } from '@/components/ui/PopupShell';
+import { glassButtonClass, primaryGlassButtonClass } from '@/components/ui/glassButton';
+import { DEFAULT_CATEGORIES } from '@/constants/categories';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { cn } from '@/lib/utils';
 import { useAuth } from '../../hooks/useAuth';
 import { isNetworkError, testConnection, getConnectionStatus } from '../../lib/supabase';
 import { OtpInput } from './OtpInput';
@@ -20,9 +25,38 @@ interface MappedError {
   hint?: string;
 }
 
+function formatSeconds(total: number): string {
+  const m = Math.floor(total / 60);
+  const sec = total % 60;
+  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+}
+
+/**
+ * The palette as overlapping discs — the sign-in card's only ornament, and the
+ * same mark the Categories legend trigger carries. Ringed in the surface
+ * colour so the discs read as separate.
+ */
+function CategoryDots({ ring }: { ring: string }) {
+  return (
+    <span className="flex shrink-0 items-center" aria-hidden>
+      {DEFAULT_CATEGORIES.map((cat, i) => (
+        <span
+          key={cat.id}
+          className="size-[8px] shrink-0 rounded-full"
+          style={{
+            backgroundColor: cat.color,
+            boxShadow: `0 0 0 1px ${ring}`,
+            marginLeft: i === 0 ? 0 : -2,
+          }}
+        />
+      ))}
+    </span>
+  );
+}
+
 function Spinner() {
   return (
-    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+    <svg className="animate-spin h-4 w-4 inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
     </svg>
@@ -98,9 +132,13 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   // code sent). Used as OtpInput's key so it remounts with empty boxes —
   // otherwise stale digits linger and get submitted alongside the new ones.
   const [otpAttempt, setOtpAttempt] = useState(0);
+  // The boxes' red state: set by a rejected code, cleared by the next keystroke.
+  const [otpError, setOtpError] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const { signInWithEmail, verifyEmailOtp } = useAuth();
+  const isMobile = useIsMobile();
 
   // Clean up cooldown interval
   useEffect(() => {
@@ -119,6 +157,8 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
       setOtpStep('email_entry');
       setResendCooldown(0);
       setOtpAttempt(0);
+      setOtpError(false);
+      setIsVerifying(false);
       if (cooldownRef.current) {
         clearInterval(cooldownRef.current);
         cooldownRef.current = null;
@@ -175,12 +215,16 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
   if (!isSupabaseConfigured) {
     return (
-      <Modal isOpen={isOpen} onClose={onClose} title="Connect to Supabase">
-        <div className="space-y-4 text-gray-300">
-          <p>To enable authentication and data persistence, you need to connect your Supabase project.</p>
-          <p>Click the "Connect to Supabase" button in the top right corner to get started.</p>
-        </div>
-      </Modal>
+      <PopupShell
+        open={isOpen}
+        onOpenChange={(open) => { if (!open) onClose(); }}
+        title="Connect to Supabase"
+        description="To enable authentication and data persistence, you need to connect your Supabase project."
+      >
+        <p className="body-m text-[#9B9EA3] m-0">
+          Click the "Connect to Supabase" button in the top right corner to get started.
+        </p>
+      </PopupShell>
     );
   }
 
@@ -206,7 +250,9 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
   const handleVerifyEmailOtp = async (code: string) => {
     setError(null);
+    setMessage('');
     setIsLoading(true);
+    setIsVerifying(true);
 
     try {
       await verifyEmailOtp(email, code);
@@ -214,16 +260,19 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     } catch (err) {
       console.error('Email OTP verification error:', err);
       setError(mapErrorMessage(err));
+      setOtpError(true);
       // Clear the boxes so the next code is typed into an empty field.
       setOtpAttempt((n) => n + 1);
     } finally {
       setIsLoading(false);
+      setIsVerifying(false);
     }
   };
 
   const handleResendEmailOtp = async () => {
     if (resendCooldown > 0) return;
     setError(null);
+    setOtpError(false);
     setIsLoading(true);
 
     try {
@@ -240,132 +289,193 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     }
   };
 
-  const title = otpStep === 'otp_verify' ? 'Enter Verification Code' : 'Sign In';
+  const handleOtpInput = () => {
+    if (!otpError) return;
+    setOtpError(false);
+    setError(null);
+  };
+
+  const handleBackToEmail = () => {
+    setOtpStep('email_entry');
+    setError(null);
+    setMessage('');
+    setOtpError(false);
+  };
+
+  // One line under the field for whatever the last action said. Errors keep
+  // their hint and, when it could be the network, the connection test.
+  const statusLine = (extraClass = '') => {
+    if (isVerifying) {
+      return (
+        <p className={cn('m-0 text-[13px] leading-[18px] text-[#9B9EA3]', extraClass)} aria-live="polite">
+          Verifying…
+        </p>
+      );
+    }
+    if (error) {
+      return (
+        <div className={cn('flex flex-col gap-1 text-[13px] leading-[18px]', extraClass)} role="alert" aria-live="polite">
+          <p className="m-0 text-[#E06A6A]">{error.message}</p>
+          {error.hint && <p className="m-0 text-[#6D7073]">{error.hint}</p>}
+          {error.isRetryable && (
+            <button
+              type="button"
+              onClick={handleRetryConnection}
+              className="self-start text-[13px] text-[#C9CED4] underline hover:text-[#DADEE5] disabled:opacity-50"
+              disabled={isLoading}
+            >
+              Test connection
+            </button>
+          )}
+        </div>
+      );
+    }
+    if (message) {
+      return (
+        <p className={cn('m-0 text-[13px] leading-[18px] text-[#9B9EA3]', extraClass)} aria-live="polite">
+          {message}
+        </p>
+      );
+    }
+    return null;
+  };
+
+  const legal = (
+    <p className={cn('m-0 text-[12px] leading-[18px] text-[#6D7073]', isMobile && 'text-center')}>
+      By continuing you agree to our{' '}
+      <Link to="/terms" target="_blank" className="underline hover:text-[#9B9EA3]">
+        Terms
+      </Link>{' '}
+      and{' '}
+      <Link to="/privacy" target="_blank" className="underline hover:text-[#9B9EA3]">
+        Privacy Policy
+      </Link>
+      .
+    </p>
+  );
+
+  const sendLabel = isLoading ? <><Spinner /> Sending…</> : 'Send code';
+
+  const emailInput = (extraClass: string) => (
+    <input
+      type="email"
+      aria-label="Email"
+      placeholder="you@example.com"
+      autoFocus
+      value={email}
+      onChange={(e) => setEmail(e.target.value)}
+      className={cn('min-w-0 bg-transparent outline-none text-[#DADEE5] placeholder:text-[#6D7073]', extraClass)}
+      required
+      disabled={isLoading}
+    />
+  );
+
+  const emailStep = isMobile ? (
+    <form onSubmit={handleSendEmailOtp} className="flex flex-1 flex-col">
+      <div className="flex h-[52px] items-center rounded-[12px] bg-[#0A0A0A] border border-[#404040] px-3.5 transition-colors focus-within:border-[rgba(37,99,235,0.8)] focus-within:ring-1 focus-within:ring-[rgba(37,99,235,0.8)]">
+        {/* 16px keeps iOS from zooming the page on focus. */}
+        {emailInput('flex-1 text-[16px]')}
+      </div>
+      {statusLine('mt-2')}
+      <div className="min-h-6 flex-1" aria-hidden />
+      <button
+        type="submit"
+        disabled={isLoading}
+        aria-busy={isLoading}
+        className={cn(primaryGlassButtonClass, 'w-full h-[52px] rounded-[12px] text-[16px] inline-flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-70')}
+      >
+        {sendLabel}
+      </button>
+      <div className="mt-3">{legal}</div>
+    </form>
+  ) : (
+    <form onSubmit={handleSendEmailOtp} className="flex flex-col gap-3">
+      <div className="flex flex-col gap-2">
+        <div className="flex h-11 items-center gap-2 rounded-[10px] bg-[#0A0A0A] border border-[#404040] pl-3.5 pr-1 transition-colors focus-within:border-[rgba(37,99,235,0.8)] focus-within:ring-1 focus-within:ring-[rgba(37,99,235,0.8)]">
+          {emailInput('flex-1 text-[15px]')}
+          <button
+            type="submit"
+            disabled={isLoading}
+            aria-busy={isLoading}
+            className={cn(primaryGlassButtonClass, 'h-[34px] px-3.5 py-0 rounded-[8px] min-w-0 shrink-0 inline-flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-70')}
+          >
+            {sendLabel}
+          </button>
+        </div>
+        {statusLine()}
+      </div>
+      {legal}
+    </form>
+  );
+
+  const resendArea = resendCooldown > 0 ? (
+    <div className="flex flex-col gap-2">
+      <div className="h-1 rounded bg-[#262626] overflow-hidden">
+        <div
+          className="h-full rounded bg-[#404040] transition-[width] duration-1000 ease-linear motion-reduce:transition-none"
+          style={{ width: `${(resendCooldown / RESEND_COOLDOWN_SECONDS) * 100}%` }}
+        />
+      </div>
+      <div className="flex justify-between font-['JetBrains_Mono',monospace] text-[11px] uppercase text-[#6D7073]">
+        <span>Resend in {formatSeconds(resendCooldown)}</span>
+        <span aria-hidden>{formatSeconds(RESEND_COOLDOWN_SECONDS)}</span>
+      </div>
+    </div>
+  ) : (
+    <button
+      type="button"
+      onClick={handleResendEmailOtp}
+      disabled={isLoading}
+      className={cn(
+        glassButtonClass,
+        'disabled:opacity-50',
+        isMobile ? 'w-full h-[52px] rounded-[12px] text-[16px]' : 'self-start h-[34px] py-0',
+      )}
+    >
+      Resend code
+    </button>
+  );
+
+  const otpStepBody = (
+    <>
+      <OtpInput
+        key={otpAttempt}
+        onComplete={handleVerifyEmailOtp}
+        disabled={isLoading}
+        error={otpError}
+        onInput={handleOtpInput}
+      />
+      {statusLine('-mt-2')}
+      {isMobile && <div className="flex-1" aria-hidden />}
+      {resendArea}
+    </>
+  );
+
+  const backToEmail = (
+    <button
+      type="button"
+      onClick={handleBackToEmail}
+      disabled={isLoading}
+      aria-label={`Use a different email (currently ${email})`}
+      className="-ml-1 flex min-h-[44px] md:min-h-0 min-w-0 items-center gap-1.5 rounded px-1 text-[13px] text-[#9B9EA3] transition-colors hover:text-[#DADEE5] disabled:opacity-50 outline-none focus-visible:ring-1 focus-visible:ring-white/40"
+    >
+      <ArrowLeft size={14} strokeWidth={1.5} className="shrink-0" />
+      <span className="truncate">{email}</span>
+    </button>
+  );
+
+  const isOtp = otpStep === 'otp_verify';
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title}>
-      <div className="space-y-4">
-        {/* Error display */}
-        {error && (
-          <div
-            className="p-3 bg-red-900/30 border border-red-500 rounded text-red-400"
-            role="alert"
-            aria-live="polite"
-          >
-            <p className="font-medium">{error.message}</p>
-            {error.hint && (
-              <p className="text-xs text-red-400/70 mt-1">{error.hint}</p>
-            )}
-            {error.isRetryable && (
-              <button
-                type="button"
-                onClick={handleRetryConnection}
-                className="mt-2 text-sm text-blue-400 hover:text-blue-300 underline"
-                disabled={isLoading}
-              >
-                Test connection
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Success/info message display */}
-        {message && (
-          <div
-            className="p-3 bg-green-900/30 border border-green-500 rounded text-green-500"
-            aria-live="polite"
-          >
-            {message}
-          </div>
-        )}
-
-        {/* Email entry */}
-        {otpStep === 'email_entry' && (
-          <form onSubmit={handleSendEmailOtp} className="space-y-4">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">
-                Email
-              </label>
-              <input
-                type="email"
-                id="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-700 rounded-md text-white"
-                required
-                disabled={isLoading}
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed"
-              aria-busy={isLoading}
-            >
-              {isLoading ? <><Spinner /> Sending Code...</> : 'Send Code'}
-            </button>
-
-            <p className="text-xs text-gray-500 text-center">
-              By continuing you agree to our{' '}
-              <Link to="/terms" target="_blank" className="underline hover:text-gray-400">
-                Terms
-              </Link>{' '}
-              and{' '}
-              <Link to="/privacy" target="_blank" className="underline hover:text-gray-400">
-                Privacy Policy
-              </Link>
-              .
-            </p>
-          </form>
-        )}
-
-        {/* OTP verification */}
-        {otpStep === 'otp_verify' && (
-          <div className="space-y-4">
-            <p className="text-sm text-gray-400 text-center">
-              We sent a 6-digit code to <span className="text-white font-medium">{email}</span>
-            </p>
-
-            <OtpInput key={otpAttempt} onComplete={handleVerifyEmailOtp} disabled={isLoading} />
-
-            {isLoading && (
-              <div className="flex items-center justify-center text-sm text-gray-400">
-                <Spinner /> Verifying...
-              </div>
-            )}
-
-            <div className="flex flex-col items-center gap-2 pt-2">
-              <div className="text-sm">
-                {resendCooldown > 0 ? (
-                  <span className="text-gray-500">Resend code in {resendCooldown}s</span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleResendEmailOtp}
-                    disabled={isLoading}
-                    className="text-blue-400 hover:text-blue-300 disabled:opacity-50"
-                  >
-                    Resend code
-                  </button>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setOtpStep('email_entry');
-                  setError(null);
-                  setMessage('');
-                }}
-                className="text-sm text-gray-400 hover:text-gray-300"
-                disabled={isLoading}
-              >
-                Use a different email
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </Modal>
+    <PopupShell
+      open={isOpen}
+      onOpenChange={(open) => { if (!open) onClose(); }}
+      tall
+      title={isOtp ? 'Check your inbox' : 'Keep your timelines'}
+      description={isOtp ? 'Enter the 6-digit code we just sent.' : 'Sign in to save and open them from anywhere.'}
+      topSlot={isOtp ? backToEmail : <CategoryDots ring={isMobile ? '#171717' : '#0A0A0A'} />}
+    >
+      {isOtp ? otpStepBody : emailStep}
+    </PopupShell>
   );
 }

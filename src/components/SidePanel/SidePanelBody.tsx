@@ -19,8 +19,12 @@ import { useSidePanel } from '@/hooks/useSidePanel'
 import { useTimelines } from '@/hooks/useTimelines'
 import { useTimelineMetadata } from '@/hooks/useTimelineMetadata'
 import { computeDominantCategoryColor, DEFAULT_DOT_COLOR } from '@/utils/dominantCategory'
+import { categoryBreakdown, type CategorySlice } from '@/utils/categoryCounts'
+import { getTimelineYearRange } from '@/utils/timelineUtils'
+import { DEFAULT_CATEGORIES } from '@/constants/categories'
 import { supabase } from '@/lib/supabase'
 import { ConfirmationModal } from '@/components/Modal/ConfirmationModal'
+import { DeleteTimelineDialog } from '@/components/Modal/DeleteTimelineDialog'
 import { ImportCSVModal } from '@/components/AIMode/ImportCSVModal'
 import { AuthModal } from '@/components/Auth/AuthModal'
 import { DEFAULT_TIMELINE_TITLE } from '@/constants/defaults'
@@ -34,7 +38,7 @@ import { notifyUsageChanged } from '@/utils/usageChanged'
 import { exportEventsToExcel } from '@/utils/excelExport'
 import { downloadTemplate } from '@/utils/excelSheet'
 import { isPanelOverlay } from '@/constants/panels'
-import type { TimelineEvent } from '@/types/event'
+import type { CategoryConfig, TimelineEvent } from '@/types/event'
 import { AccountDetailsModal } from '@/components/Modal/AccountDetailsModal'
 import { UsageLimits } from './UsageLimits'
 import { SidePanelActionButton } from './SidePanelActionButton'
@@ -44,6 +48,33 @@ interface TileRow {
   id: string
   title: string
   kind: 'timeline' | 'draft'
+}
+
+/** What the delete dialog shows beyond the tile's own count and colour. */
+interface DeleteDetails {
+  key: string
+  breakdown: CategorySlice[]
+  dateRange?: string
+}
+
+function summarizeEvents(
+  events: readonly { category?: string | null; startDate: string; endDate?: string | null }[],
+  categories: readonly CategoryConfig[],
+): Omit<DeleteDetails, 'key'> {
+  return {
+    breakdown: categoryBreakdown(events, categories),
+    // An empty timeline's "range" is the current year, which would read as a
+    // fact about the timeline. Say nothing instead.
+    dateRange: events.length > 0
+      ? getTimelineYearRange(events.map(e => ({
+        id: '',
+        title: '',
+        startDate: e.startDate,
+        endDate: e.endDate || e.startDate,
+        category: 'category_1',
+      })))
+      : undefined,
+  }
 }
 
 function TileMenuButton({
@@ -163,6 +194,7 @@ export function SidePanelBody() {
   const [localDrafts, setLocalDrafts] = useState<LocalDraft[]>([])
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const [pendingDeleteKind, setPendingDeleteKind] = useState<'timeline' | 'draft' | null>(null)
+  const [deleteDetails, setDeleteDetails] = useState<DeleteDetails | null>(null)
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false)
   const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false)
   const [isDeletingAccount, setIsDeletingAccount] = useState(false)
@@ -296,6 +328,78 @@ export function SidePanelBody() {
       ...(activeDominantCategoryColor != null ? { dominantCategoryColor: activeDominantCategoryColor } : {}),
     })
   }, [activeTimelineId, activeEventCount, activeDominantCategoryColor, applyLocalMetadata])
+
+  /**
+   * A tile's title, count and badge colour. Shared by the list and the delete
+   * dialog, which shows a copy of the tile being deleted.
+   */
+  const describeRow = (row: TileRow) => {
+    const isActive = row.kind === 'timeline'
+      ? row.id === activeTimelineId
+      : row.id === activeDraftId
+    // When the editor is actively showing this timeline, trust its
+    // live title over whatever the fetched list still has cached.
+    const displayTitle = isActive && activeTimelineTitle != null
+      ? (activeTimelineTitle.length > 0 ? activeTimelineTitle : DEFAULT_TIMELINE_TITLE)
+      : row.title
+
+    let count = 0
+    let badgeColor = DEFAULT_DOT_COLOR
+    if (row.kind === 'timeline') {
+      const meta = timelineMetadata.get(row.id)
+      count = meta?.eventCount ?? 0
+      badgeColor = meta?.dominantCategoryColor ?? DEFAULT_DOT_COLOR
+    } else {
+      const draft = localDrafts.find(d => d.id === row.id)
+      if (draft) {
+        count = draft.events.length
+        badgeColor = computeDominantCategoryColor(draft.events, draft.categories)
+      }
+    }
+    // When the editor is live on this row, trust its in-memory event
+    // count and dominant color over the fetched metadata (which only
+    // refreshes when the timeline ID set changes).
+    if (isActive) {
+      if (activeEventCount != null) count = activeEventCount
+      if (activeDominantCategoryColor != null) badgeColor = activeDominantCategoryColor
+    }
+    return { isActive, displayTitle, count, badgeColor }
+  }
+
+  // The delete dialog's category strip and date range. A draft already has its
+  // events in hand; a saved timeline costs one light query, made only when its
+  // dialog opens. Until that answers the dialog simply shows no strip.
+  useEffect(() => {
+    if (!pendingDeleteId || !pendingDeleteKind) {
+      setDeleteDetails(null)
+      return
+    }
+    const key = `${pendingDeleteKind}:${pendingDeleteId}`
+    if (pendingDeleteKind === 'draft') {
+      const draft = byokAnonDraftStore.getDraft(pendingDeleteId)
+      setDeleteDetails(draft ? { key, ...summarizeEvents(draft.events, draft.categories) } : null)
+      return
+    }
+    let cancelled = false
+    setDeleteDetails(null)
+    void (async () => {
+      const [eventsResult, timelineResult] = await Promise.all([
+        supabase.from('events').select('category, start_date, end_date').eq('timeline_id', pendingDeleteId),
+        supabase.from('timelines').select('categories').eq('id', pendingDeleteId).maybeSingle(),
+      ])
+      if (cancelled || eventsResult.error) return
+      const categories = Array.isArray(timelineResult.data?.categories)
+        ? timelineResult.data.categories as CategoryConfig[]
+        : DEFAULT_CATEGORIES
+      const events = (eventsResult.data || []).map(e => ({
+        category: e.category,
+        startDate: e.start_date,
+        endDate: e.end_date,
+      }))
+      setDeleteDetails({ key, ...summarizeEvents(events, categories) })
+    })()
+    return () => { cancelled = true }
+  }, [pendingDeleteId, pendingDeleteKind])
 
   /**
    * Below `md` the panel is a full-bleed drawer over the page, so anything that
@@ -561,6 +665,16 @@ export function SidePanelBody() {
     }
   }
 
+  const pendingDeleteRow = pendingDeleteId && pendingDeleteKind
+    ? rows.find(r => r.kind === pendingDeleteKind && r.id === pendingDeleteId)
+      ?? { id: pendingDeleteId, kind: pendingDeleteKind, title: DEFAULT_TIMELINE_TITLE }
+    : null
+  const pendingDeleteTile = pendingDeleteRow ? describeRow(pendingDeleteRow) : null
+  // Guarded by key so a slow answer for one tile never decorates another's.
+  const pendingDetails = pendingDeleteRow && deleteDetails?.key === `${pendingDeleteRow.kind}:${pendingDeleteRow.id}`
+    ? deleteDetails
+    : null
+
   return (
     <>
       {/* Header */}
@@ -620,35 +734,7 @@ export function SidePanelBody() {
             </div>
           ) : (
             rows.map((row) => {
-              const isActive = row.kind === 'timeline'
-                ? row.id === activeTimelineId
-                : row.id === activeDraftId
-              // When the editor is actively showing this timeline, trust its
-              // live title over whatever the fetched list still has cached.
-              const displayTitle = isActive && activeTimelineTitle != null
-                ? (activeTimelineTitle.length > 0 ? activeTimelineTitle : DEFAULT_TIMELINE_TITLE)
-                : row.title
-
-              let count = 0
-              let badgeColor = DEFAULT_DOT_COLOR
-              if (row.kind === 'timeline') {
-                const meta = timelineMetadata.get(row.id)
-                count = meta?.eventCount ?? 0
-                badgeColor = meta?.dominantCategoryColor ?? DEFAULT_DOT_COLOR
-              } else {
-                const draft = localDrafts.find(d => d.id === row.id)
-                if (draft) {
-                  count = draft.events.length
-                  badgeColor = computeDominantCategoryColor(draft.events, draft.categories)
-                }
-              }
-              // When the editor is live on this row, trust its in-memory event
-              // count and dominant color over the fetched metadata (which only
-              // refreshes when the timeline ID set changes).
-              if (isActive) {
-                if (activeEventCount != null) count = activeEventCount
-                if (activeDominantCategoryColor != null) badgeColor = activeDominantCategoryColor
-              }
+              const { isActive, displayTitle, count, badgeColor } = describeRow(row)
 
               return (
                 <div
@@ -708,17 +794,19 @@ export function SidePanelBody() {
         onDeleteAccount={() => setShowDeleteAccountConfirm(true)}
       />
 
-      <ConfirmationModal
-        isOpen={pendingDeleteId !== null}
-        onClose={() => {
+      <DeleteTimelineDialog
+        open={pendingDeleteRow !== null}
+        onOpenChange={(open) => {
+          if (open) return
           setPendingDeleteId(null)
           setPendingDeleteKind(null)
         }}
         onConfirm={handleDelete}
-        title="Delete Timeline"
-        message="Are you sure you want to delete this timeline? This action cannot be undone."
-        confirmLabel="Delete Timeline"
-        cancelLabel="Cancel"
+        title={pendingDeleteTile?.displayTitle ?? DEFAULT_TIMELINE_TITLE}
+        eventCount={pendingDeleteTile?.count ?? 0}
+        color={pendingDeleteTile?.badgeColor ?? DEFAULT_DOT_COLOR}
+        breakdown={pendingDetails?.breakdown ?? []}
+        dateRange={pendingDetails?.dateRange}
       />
 
       <ConfirmationModal
