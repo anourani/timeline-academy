@@ -13,7 +13,7 @@ export interface IntroRect {
 }
 
 interface CurtainIntroProps {
-  /** The search field's box, measured on the way out of AI mode. */
+  /** The search composer's box, measured on the way out of AI mode. */
   fromRect: IntroRect
   /** What the user typed. Flies from the field into the nav title. */
   subject: string
@@ -29,14 +29,31 @@ const GRID_SWIPE_MS = 500
 const GRID_STAGGER_MS = 35
 const GHOST_FADE_MS = 350
 
-/** The search field's type, which the flying title has to match on frame 0. */
-const FIELD_FONT_PX = 32
-/** The nav title's type. The flight scales rather than re-renders, so this is
- *  expressed as a ratio of the above. */
-const NAV_TITLE_SCALE = 24 / FIELD_FONT_PX
-/** Input border + left padding, so the ghost's text starts where the real
- *  field's text did rather than at the box edge. */
-const FIELD_TEXT_INSET = 12
+/** The nav title's type. The flight scales rather than re-renders, so the
+ *  scale is this over the field's own size. */
+const NAV_TITLE_PX = 24
+
+/**
+ * Where the composer's input text sits inside the composer's box, and at what
+ * size, which the flying title has to match on frame 0. The insets are the 1px
+ * border plus the composer's padding. Mirrors `NewTimelineScreen`'s classes at
+ * each side of `md`; if those move, these move with them.
+ */
+interface FieldMetrics {
+  fontPx: number
+  lineHeightPx: number
+  insetX: number
+  insetY: number
+}
+const FIELD_METRICS_MD: FieldMetrics = { fontPx: 18, lineHeightPx: 28, insetX: 21, insetY: 19 }
+const FIELD_METRICS_SM: FieldMetrics = { fontPx: 16, lineHeightPx: 24, insetX: 17, insetY: 17 }
+
+function fieldMetrics(): FieldMetrics {
+  return typeof window !== 'undefined' &&
+    window.matchMedia('(min-width: 768px)').matches
+    ? FIELD_METRICS_MD
+    : FIELD_METRICS_SM
+}
 
 function prefersReducedMotion(): boolean {
   return (
@@ -63,6 +80,7 @@ export function CurtainIntro({ fromRect, subject, onDone }: CurtainIntroProps) {
   const [navRect, setNavRect] = useState<IntroRect | null>(null)
   const [flying, setFlying] = useState(false)
   const reduced = useRef(prefersReducedMotion())
+  const field = useRef(fieldMetrics()).current
 
   // Measured before paint: the flight's start and end have to be known on the
   // same frame the overlay first draws, or the title visibly jumps from the
@@ -108,10 +126,12 @@ export function CurtainIntro({ fromRect, subject, onDone }: CurtainIntroProps) {
   // Flight geometry. Falling back to the field's own box means a missing nav
   // title degrades to the title fading in place rather than flying to 0,0.
   const target = navRect ?? fromRect
-  const startX = fromRect.left + FIELD_TEXT_INSET
-  const startY = fromRect.top + (fromRect.height - FIELD_FONT_PX) / 2
+  const scale = NAV_TITLE_PX / field.fontPx
+  const startX = fromRect.left + field.insetX
+  const startY = fromRect.top + field.insetY
   const dx = target.left - startX
-  const dy = target.top + (target.height - FIELD_FONT_PX * NAV_TITLE_SCALE) / 2 - startY
+  const dy = target.top + (target.height - field.lineHeightPx * scale) / 2 - startY
+  const flightTiming = `${TITLE_FLIGHT_MS}ms var(--ease-swipe) ${TITLE_FLIGHT_DELAY_MS}ms`
 
   return (
     <div
@@ -148,12 +168,12 @@ export function CurtainIntro({ fromRect, subject, onDone }: CurtainIntroProps) {
         ))}
       </div>
 
-      {/* The field itself, dropping away. Only the plate — the label, chips
-          and model tab are close enough to the fade to not be missed, and
+      {/* The composer itself, dropping away. Only its shell — the heading,
+          toolbar and chips are close enough to the fade to not be missed, and
           reproducing them would mean keeping a second copy of that layout in
           step with the real one forever. */}
       <div
-        className="absolute rounded-[8px] border border-[#404040] bg-surface-secondary"
+        className="absolute rounded-[20px] border border-[#404040] bg-surface-secondary shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
         style={{
           top: fromRect.top,
           left: fromRect.left,
@@ -167,23 +187,38 @@ export function CurtainIntro({ fromRect, subject, onDone }: CurtainIntroProps) {
 
       {/* The query, flying into the nav. Transform-only so it composites on
           the GPU; animating top/left would lay out the page 60 times a second
-          while the axis behind it is also building. */}
+          while the axis behind it is also building.
+
+          Two copies ride the one transform: the input's Avenir, which frame 0
+          has to match, cross-fading into the nav title's Aleo, which the real
+          title takes over from. A font family cannot be animated, so this is
+          the only way to have the right face at both ends. */}
       <span
-        className="absolute whitespace-nowrap font-['Aleo',serif] font-normal tracking-[-0.01em]"
+        className="absolute whitespace-nowrap text-[#DADEE5]"
         style={{
           top: startY,
           left: startX,
-          fontSize: `${FIELD_FONT_PX}px`,
-          lineHeight: 1.25,
+          fontSize: `${field.fontPx}px`,
+          lineHeight: `${field.lineHeightPx}px`,
           transformOrigin: 'left top',
-          color: flying ? '#DADEE5' : '#C9CED4',
           transform: flying
-            ? `translate(${dx}px, ${dy}px) scale(${NAV_TITLE_SCALE})`
+            ? `translate(${dx}px, ${dy}px) scale(${scale})`
             : 'translate(0, 0) scale(1)',
-          transition: `transform ${TITLE_FLIGHT_MS}ms var(--ease-swipe) ${TITLE_FLIGHT_DELAY_MS}ms, color ${TITLE_FLIGHT_MS}ms var(--ease-swipe) ${TITLE_FLIGHT_DELAY_MS}ms`,
+          transition: `transform ${flightTiming}`,
         }}
       >
-        {subject}
+        <span
+          className="absolute left-0 top-0 font-['Avenir',sans-serif]"
+          style={{ opacity: flying ? 0 : 1, transition: `opacity ${flightTiming}` }}
+        >
+          {subject}
+        </span>
+        <span
+          className="font-['Aleo',serif] font-normal tracking-[-0.01em]"
+          style={{ opacity: flying ? 1 : 0, transition: `opacity ${flightTiming}` }}
+        >
+          {subject}
+        </span>
       </span>
     </div>
   )
