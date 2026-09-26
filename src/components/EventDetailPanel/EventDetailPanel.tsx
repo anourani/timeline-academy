@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Pencil, Trash2, X } from 'lucide-react'
 import { ConfirmationModal } from '../Modal/ConfirmationModal'
+import { ProvenanceBadge } from '../Provenance/ProvenanceBadge'
 import { PanelResizeHandle } from '../ui/PanelResizeHandle'
 import { Skeleton, SkeletonText } from '../ui/skeleton'
 import { usePanelWidth } from '@/hooks/usePanelWidth'
@@ -13,6 +14,8 @@ import {
   fetchEventImage,
 } from '@/services/eventEnrichment'
 import type { EventSource, TimelineEvent } from '@/types/event'
+import type { TimelineOrigin } from '@/types/timeline'
+import { canEditEvents } from '@/types/timeline'
 import type { ByokProvider } from '@/types/ai'
 import { PROVIDER_META } from '@/constants/byokProviders'
 import { getKey } from '@/services/userApiKey'
@@ -24,11 +27,17 @@ interface EventDetailPanelProps {
   mode: 'edit' | 'view'
   onClose: () => void
   onEventChange: (updated: TimelineEvent) => void
+  /** Provenance of the timeline this event belongs to. An 'ai' timeline
+   *  hides the authoring actions below — see `canEditEvents`. */
+  origin?: TimelineOrigin
   /** Edit-mode authoring actions. Since clicking an event opens this panel
    *  rather than an actions menu, the panel header is where Edit and Delete
    *  live. Omitted in view mode. */
   onEdit?: () => void
   onDelete?: () => void
+  /** Spend the 'ai' label to re-enable the actions above. Omitted where the
+   *  reader doesn't own the timeline. */
+  onRequestUnlock?: () => void
 }
 
 type PanelState = 'idle' | 'generating' | 'loaded' | 'error'
@@ -70,8 +79,10 @@ export function EventDetailPanel({
   mode,
   onClose,
   onEventChange,
+  origin = 'manual',
   onEdit,
   onDelete,
+  onRequestUnlock,
 }: EventDetailPanelProps) {
   const [state, setState] = useState<PanelState>('idle')
   const [streamedDescription, setStreamedDescription] = useState('')
@@ -82,7 +93,6 @@ export function EventDetailPanel({
   const [sources, setSources] = useState<EventSource[]>([])
   const [errorMessage, setErrorMessage] = useState('')
   const [errorProvider, setErrorProvider] = useState<ByokProvider | null>(null)
-  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false)
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [isResizing, setIsResizing] = useState(false)
@@ -246,7 +256,7 @@ export function EventDetailPanel({
       if (e.key === 'Escape') onClose()
     }
     const handleMouseDown = (e: MouseEvent) => {
-      if (showRemoveConfirm || showRegenerateConfirm || showDeleteConfirm) return
+      if (showRegenerateConfirm || showDeleteConfirm) return
       const node = panelRef.current
       if (!node) return
       const target = e.target as Node | null
@@ -262,12 +272,15 @@ export function EventDetailPanel({
       document.removeEventListener('keydown', handleKey)
       document.removeEventListener('mousedown', handleMouseDown)
     }
-  }, [open, onClose, showRemoveConfirm, showRegenerateConfirm, showDeleteConfirm])
+  }, [open, onClose, showRegenerateConfirm, showDeleteConfirm])
 
   // A confirmation left open when the panel closes would reappear over the next
   // event opened.
   useEffect(() => {
-    if (!open) setShowDeleteConfirm(false)
+    if (!open) {
+      setShowRegenerateConfirm(false)
+      setShowDeleteConfirm(false)
+    }
   }, [open])
 
   function runGeneration(
@@ -375,24 +388,19 @@ export function EventDetailPanel({
     setShowRegenerateConfirm(true)
   }
 
-  function handleRemove() {
-    if (!event) return
-    onEventChange({
-      ...event,
-      description: null,
-      imageUrl: null,
-      imageAttribution: null,
-      sources: null,
-    })
-    onClose()
-  }
-
   if (typeof document === 'undefined') return null
 
   const showFooter = mode === 'edit' && open && !!event
   // Edit and Delete used to live in the click-path actions menu. That menu is
   // gone — a click opens this panel — so the header carries them instead.
-  const showAuthoringActions = mode === 'edit' && !!event && !!onEdit && !!onDelete
+  //
+  // `canEditEvents` is the gate: on a generated timeline these are withheld,
+  // so the events stay as the model produced them until the user says
+  // otherwise. The badge below the date row is what tells them why, and
+  // carries the way out.
+  const showAuthoringActions =
+    mode === 'edit' && !!event && !!onEdit && !!onDelete && canEditEvents(origin)
+  const showProvenance = mode === 'edit' && !!event && origin !== 'manual'
   const description = state === 'loaded' ? event?.description ?? streamedDescription : streamedDescription
   const displayImageUrl = state === 'loaded' ? event?.imageUrl ?? imageUrl : imageUrl
   const displayAttribution = state === 'loaded' ? event?.imageAttribution ?? imageAttribution : imageAttribution
@@ -498,6 +506,10 @@ export function EventDetailPanel({
                     </button>
                   </div>
                 </div>
+
+                {showProvenance && (
+                  <ProvenanceBadge origin={origin} onUnlock={onRequestUnlock} />
+                )}
 
                 {/* Photo frame. Fluid rather than a fixed 274px so it follows
                     a resized panel; the 274/205 ratio is preserved.
@@ -634,21 +646,18 @@ export function EventDetailPanel({
               <FooterButton onClick={handleRegenerate} disabled={state === 'generating'}>
                 Regenerate
               </FooterButton>
-              <FooterButton onClick={() => setShowRemoveConfirm(true)} disabled={state === 'generating'}>
-                Remove
-              </FooterButton>
             </div>
           )}
         </div>
       </aside>
 
       <ConfirmationModal
-        isOpen={showRemoveConfirm}
-        onClose={() => setShowRemoveConfirm(false)}
-        onConfirm={handleRemove}
-        title="Remove event details"
-        message="This will clear the description, image, and sources for this event. The event itself will not be deleted."
-        confirmLabel="Remove"
+        isOpen={showRegenerateConfirm}
+        onClose={() => setShowRegenerateConfirm(false)}
+        onConfirm={() => regenerateNow()}
+        title="Regenerate description?"
+        message="This replaces the current description and runs a new AI request, including a fresh web search. If you're using your own API key, it will be billed to that account."
+        confirmLabel="Regenerate"
         cancelLabel="Cancel"
       />
 
@@ -666,16 +675,6 @@ export function EventDetailPanel({
             : ''
         }
         confirmLabel="Delete"
-        cancelLabel="Cancel"
-      />
-
-      <ConfirmationModal
-        isOpen={showRegenerateConfirm}
-        onClose={() => setShowRegenerateConfirm(false)}
-        onConfirm={() => regenerateNow()}
-        title="Regenerate description?"
-        message="This replaces the current description and runs a new AI request, including a fresh web search. If you're using your own API key, it will be billed to that account."
-        confirmLabel="Regenerate"
         cancelLabel="Cancel"
       />
     </>,

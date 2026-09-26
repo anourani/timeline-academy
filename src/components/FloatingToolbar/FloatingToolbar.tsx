@@ -12,6 +12,12 @@ interface FloatingToolbarProps {
   activePanel: 'events' | 'settings' | null
   mode?: 'edit' | 'view'
   onModeChange?: (mode: 'edit' | 'view') => void
+  /**
+   * False on a locked AI-generated timeline. Separate from `mode` on purpose:
+   * `mode` also decides where the Present tabs sit, and a locked timeline is
+   * still very much in edit mode — it is only the events that are fixed.
+   */
+  canAddEvent?: boolean
 }
 
 export function FloatingToolbar({
@@ -20,6 +26,7 @@ export function FloatingToolbar({
   onSettingsClick,
   activePanel,
   mode = 'edit',
+  canAddEvent = true,
   onModeChange,
 }: FloatingToolbarProps) {
   // The pill is centered on the viewport, then shifted by half the side
@@ -36,6 +43,7 @@ export function FloatingToolbar({
     : '-50%'
 
   const isEditing = mode === 'edit'
+  const showAddEvent = isEditing && canAddEvent
 
   return (
     <>
@@ -62,8 +70,8 @@ export function FloatingToolbar({
         `}
         style={{ transform: `translateX(${desktopTranslateX})` }}
       >
-        <Collapsible open={isEditing}>
-          <Button variant="glass" size="none" onClick={onAddEventClick} tabIndex={isEditing ? 0 : -1}>
+        <Collapsible open={showAddEvent}>
+          <Button variant="glass" size="none" onClick={onAddEventClick} tabIndex={showAddEvent ? 0 : -1}>
             <Plus size={20} />
             Add Event
           </Button>
@@ -96,8 +104,8 @@ export function FloatingToolbar({
           mode, so a desktop window narrowed while presenting always has a way
           back rather than stranding the reader in a mode it cannot leave. */}
       <div className="fixed bottom-0 left-0 right-0 z-30 w-full flex md:hidden justify-center items-center gap-2 px-4 pt-2 pb-6 bg-black border-t border-[#3d3e40]">
-        <Collapsible open={isEditing}>
-          <Button variant="glass" size="none" onClick={onAddEventClick} tabIndex={isEditing ? 0 : -1}>
+        <Collapsible open={showAddEvent}>
+          <Button variant="glass" size="none" onClick={onAddEventClick} tabIndex={showAddEvent ? 0 : -1}>
             <Plus size={20} />
             Add Event
           </Button>

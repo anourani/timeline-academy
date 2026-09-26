@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { TimelineEvent, CategoryConfig } from '../types/event';
-import type { TimelineChapter } from '../types/timeline';
+import type { TimelineChapter, TimelineOrigin } from '../types/timeline';
 import { useAuth } from './useAuth';
 import { DEFAULT_TIMELINE_TITLE } from '../constants/defaults';
 import { notifyUsageChanged } from '../utils/usageChanged';
@@ -47,6 +47,9 @@ export interface TimelineData {
   events: TimelineEvent[];
   categories?: CategoryConfig[];
   chapters?: TimelineChapter[];
+  /** Absent only from payloads built before this field existed; every caller
+   *  should read it through `?? 'manual'`. */
+  origin?: TimelineOrigin;
   scale?: 'large' | 'medium' | 'small';
   verticalScale?: 'small' | 'medium';
   groupByCategory?: boolean;
@@ -92,7 +95,18 @@ export function useTimeline() {
     return data?.id ?? null;
   }, [user]);
 
-  const loadTimeline = useCallback(async (id: string): Promise<TimelineData> => {
+  /**
+   * `newOrigin` applies only to `id === 'new'`, and exists because provenance
+   * has to be written in the same INSERT that mints the row. The AI hand-off
+   * creates the timeline before it seeds the generated events into it, so
+   * stamping the origin afterwards would leave a window — a crash, a closed
+   * tab, a failed second write — in which a generated timeline is on disk
+   * claiming to be hand-built.
+   */
+  const loadTimeline = useCallback(async (
+    id: string,
+    newOrigin: TimelineOrigin = 'manual',
+  ): Promise<TimelineData> => {
     if (!user) throw new Error('Must be signed in to load timeline');
 
     if (id === 'new') {
@@ -112,6 +126,7 @@ export function useTimeline() {
           scale: 'small',
           vertical_scale: 'medium',
           group_by_category: false,
+          origin: newOrigin,
         })
         .select('id')
         .single();
@@ -127,6 +142,7 @@ export function useTimeline() {
         description: '',
         events: [],
         categories: undefined, // Will use default categories
+        origin: newOrigin,
         scale: 'small',
         verticalScale: 'medium',
         groupByCategory: false
@@ -182,6 +198,11 @@ export function useTimeline() {
       chapters: Array.isArray(timeline.chapters) && timeline.chapters.length > 0
         ? timeline.chapters
         : undefined,
+      // A row predating the origin column reads back undefined, and a
+      // timeline we have no provenance record for is treated as the user's
+      // own — locking someone's months-old work on a guess is the worse
+      // failure. See supabase/migrations/20260919000000_timeline_origin.sql.
+      origin: (timeline.origin as TimelineOrigin | null) ?? 'manual',
       scale: timeline.scale || 'large',
       verticalScale: timeline.vertical_scale || 'medium',
       groupByCategory: timeline.group_by_category ?? false
@@ -200,6 +221,7 @@ export function useTimeline() {
     events: TimelineEvent[],
     scale: 'large' | 'medium' | 'small' = 'small',
     verticalScale: 'small' | 'medium' = 'medium',
+    origin: TimelineOrigin = 'manual',
   ): Promise<string> => {
     if (!user) throw new Error('Must be signed in to save');
 
@@ -207,7 +229,7 @@ export function useTimeline() {
 
     const { data: timeline, error: timelineError } = await supabase
       .from('timelines')
-      .insert({ title, user_id: user.id, scale, vertical_scale: verticalScale })
+      .insert({ title, user_id: user.id, scale, vertical_scale: verticalScale, origin })
       .select('id')
       .single();
 
@@ -237,9 +259,31 @@ export function useTimeline() {
     return timeline.id;
   }, [user]);
 
+  /**
+   * Move a timeline to a new provenance state. Used for exactly one
+   * transition — 'ai' → 'edited', when the user unlocks a generated timeline
+   * — and written on its own rather than folded into autosave: `origin` is
+   * absent from the autosave fingerprint (it is not editor content), so
+   * nothing else would ever arm a write for it.
+   */
+  const setTimelineOrigin = useCallback(async (
+    id: string,
+    origin: TimelineOrigin,
+  ): Promise<void> => {
+    if (!user) throw new Error('Must be signed in to change timeline origin');
+
+    const { error } = await supabase
+      .from('timelines')
+      .update({ origin })
+      .eq('id', id);
+
+    if (error) throw error;
+  }, [user]);
+
   return {
     getMostRecentTimelineId,
     createTimelineFrom,
+    setTimelineOrigin,
     loadTimeline
   };
 }

@@ -3,6 +3,8 @@ import { EventTableEditor } from '../EventTableEditor/EventTableEditor';
 import { FloatingToolbar } from '../FloatingToolbar/FloatingToolbar';
 import { EventForm } from '../EventForm/EventForm';
 import { TimelineEvent, CategoryConfig } from '../../types/event';
+import type { TimelineOrigin } from '../../types/timeline';
+import { canEditEvents } from '../../types/timeline';
 import {
   Dialog,
   DialogContent,
@@ -36,6 +38,9 @@ interface HeaderProps {
   onDeleteTimeline: () => Promise<void> | void;
   mode?: 'edit' | 'view';
   onModeChange?: (mode: 'edit' | 'view') => void;
+  /** Provenance of the open timeline; 'ai' locks the event table. */
+  origin?: TimelineOrigin;
+  onRequestUnlock?: () => void;
 }
 
 export function Header({
@@ -63,6 +68,8 @@ export function Header({
   onDeleteTimeline,
   mode = 'edit',
   onModeChange,
+  origin = 'manual',
+  onRequestUnlock,
 }: HeaderProps) {
   const closePanel = () => onActivePanelChange(null);
   const togglePanel = (panel: 'events' | 'settings') => {
@@ -86,6 +93,7 @@ export function Header({
         activePanel={activePanel}
         mode={mode}
         onModeChange={onModeChange}
+        canAddEvent={canEditEvents(origin)}
       />
 
       <Dialog open={showAddEventModal} onOpenChange={(open) => { if (!open) onCloseAddEventModal(); }}>
@@ -130,6 +138,8 @@ export function Header({
         categories={categories}
         onCategoriesChange={onCategoriesChange}
         mode={mode}
+        origin={origin}
+        onRequestUnlock={onRequestUnlock}
       />
     </>
   );

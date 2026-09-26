@@ -12,6 +12,7 @@ import { computeDominantCategoryColor } from './utils/dominantCategory';
 import { TrialGateModal } from './components/Modal/TrialGateModal';
 import { ApiKeyModal } from './components/Modal/ApiKeyModal';
 import { AuthModal } from './components/Auth/AuthModal';
+import { ConfirmationModal } from './components/Modal/ConfirmationModal';
 import { exportEventsToExcel } from './utils/excelExport';
 import { notifyUsageChanged } from './utils/usageChanged';
 import { EventDetailPanel } from './components/EventDetailPanel/EventDetailPanel';
@@ -19,7 +20,8 @@ import { useLocalDraft } from './hooks/useLocalDraft';
 import { useAccountTier, type AccountTier } from './hooks/useAccountTier';
 import { byokAnonDraftStore, trialDraftStore } from './utils/draftStorage';
 import { TimelineEvent, CategoryConfig } from './types/event';
-import type { ScrollTarget } from './types/timeline';
+import type { ScrollTarget, TimelineOrigin } from './types/timeline';
+import { canEditEvents } from './types/timeline';
 import { LimitReachedError, getCurrentLimits } from './lib/limits';
 import { supabase } from './lib/supabase';
 import { DEFAULT_TIMELINE_TITLE } from './constants/defaults';
@@ -64,7 +66,7 @@ export function App() {
     if (activeDraftId && byokAnonDraftStore.getDraft(activeDraftId)) return byokAnonDraftStore;
     return trialDraftStore;
   }, [tier, activeDraftId]);
-  const { getMostRecentTimelineId, createTimelineFrom, loadTimeline } = useTimeline();
+  const { getMostRecentTimelineId, createTimelineFrom, setTimelineOrigin, loadTimeline } = useTimeline();
   const location = useLocation();
   const routerNavigate = useNavigate();
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
@@ -93,6 +95,14 @@ export function App() {
   // only id the app may act on — autosave, Share and Delete all key off it.
   // It is written in exactly one place: applyLoadedTimeline().
   const [loadedTimelineId, setLoadedTimelineId] = useState<string | null>(null);
+  // Provenance of whatever is currently in the editor. Deliberately plain
+  // state rather than part of the autosave payload: it is not editor content,
+  // it changes exactly once in a timeline's life, and the two writes that can
+  // change it (the AI hand-off, and the unlock below) both persist it
+  // themselves. Keeping it out of the fingerprint is what stops every load of
+  // a generated timeline from writing itself back.
+  const [origin, setOrigin] = useState<TimelineOrigin>('manual');
+  const [showUnlockConfirm, setShowUnlockConfirm] = useState(false);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
   // Latches the location we've already acted on. A boolean here meant the
@@ -250,6 +260,8 @@ export function App() {
         }
         const imported = routeState.importedEvents;
         setActiveDraftId(newDraft.id);
+        // A spreadsheet the user brought is their own work, not ours.
+        setOrigin('manual');
         setTitle(newDraft.title);
         setDescription(newDraft.description);
         setEvents(imported);
@@ -282,6 +294,10 @@ export function App() {
         }
         const { title: aiTitle, description: aiDesc, events: aiEvents, categories: aiCategories, chapters: aiChapters } = routeState.aiGenerated;
         setActiveDraftId(newDraft.id);
+        // createDraft() stamps 'manual'; this is a generated timeline, and the
+        // draft autosave effect below writes the corrected value through on
+        // its first pass.
+        setOrigin('ai');
         setTitle(aiTitle);
         setDescription(aiDesc);
         setEvents(aiEvents);
@@ -312,6 +328,7 @@ export function App() {
           return;
         }
         setActiveDraftId(newDraft.id);
+        setOrigin('manual');
         setTitle(newDraft.title);
         setDescription(newDraft.description);
         setEvents(newDraft.events);
@@ -327,6 +344,7 @@ export function App() {
         const draft = loadDraft(routeState.draftId);
         if (draft) {
           setActiveDraftId(draft.id);
+          setOrigin(draft.origin ?? 'manual');
           setTitle(draft.title);
           setDescription(draft.description);
           setEvents(draft.events);
@@ -346,6 +364,7 @@ export function App() {
         if (allDrafts.length > 0) {
           const mostRecent = allDrafts[0];
           setActiveDraftId(mostRecent.id);
+          setOrigin(mostRecent.origin ?? 'manual');
           setTitle(mostRecent.title);
           setDescription(mostRecent.description);
           setEvents(mostRecent.events);
@@ -425,10 +444,11 @@ export function App() {
         scale: currentScale.value,
         verticalScale: currentVerticalScale.value,
         groupByCategory,
+        origin,
         savedAt: new Date().toISOString()
       });
     }
-  }, [user, storageReconciled, draftHydrated, activeDraftId, title, description, events, categories, chapters, currentScale.value, currentVerticalScale.value, groupByCategory, saveDraft]);
+  }, [user, storageReconciled, draftHydrated, activeDraftId, title, description, events, categories, chapters, currentScale.value, currentVerticalScale.value, groupByCategory, origin, saveDraft]);
 
   /**
    * Move any work that is sitting in a store below the visitor's current tier
@@ -505,7 +525,9 @@ export function App() {
           continue;
         }
         try {
-          await createTimelineFrom(draft.title, draft.events, draft.scale, draft.verticalScale ?? 'medium');
+          // Provenance travels with the work. Signing in is not an edit, so
+          // a generated draft must not arrive in Supabase as hand-built.
+          await createTimelineFrom(draft.title, draft.events, draft.scale, draft.verticalScale ?? 'medium', draft.origin ?? 'manual');
           // Only after the write is confirmed, and only this one. The previous
           // version cleared *everything* after a failure, so hitting the plan
           // cap mid-migration deleted every draft that hadn't been saved yet.
@@ -614,10 +636,17 @@ export function App() {
     handleScaleChange(scale);
     handleVerticalScaleChange(verticalScale);
     handleGroupByCategoryChange(groupByCategory);
+    // Part of the atomic write for the same reason the id is: a render that
+    // saw this timeline's events beside the last one's provenance would
+    // briefly offer Edit and Delete on a locked timeline.
+    setOrigin(data.origin ?? 'manual');
     setLoadedTimelineId(data.id);
   }, [markClean, setTitle, setDescription, setEvents, updateCategories, updateChapters, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange]);
 
-  const switchTimeline = useCallback(async (newTimelineId: string) => {
+  const switchTimeline = useCallback(async (
+    newTimelineId: string,
+    newOrigin: TimelineOrigin = 'manual',
+  ) => {
     try {
       // Commit anything still pending for the outgoing timeline before its
       // contents are replaced. The debounced save holds a snapshot of its
@@ -626,7 +655,7 @@ export function App() {
       await flushPendingSave();
 
       // Load new data first — don't clear state until we have the replacement
-      const data = await loadTimeline(newTimelineId);
+      const data = await loadTimeline(newTimelineId, newOrigin);
 
       // Only update state after a successful load, and via the single
       // atomic writer so the id and the contents can't drift apart.
@@ -696,8 +725,10 @@ export function App() {
       const aiData = state.aiGenerated;
       (async () => {
         // Creates the timeline row in Supabase and binds the editor to it, so
-        // autosave persists the state updates below to the new row.
-        await switchTimeline('new');
+        // autosave persists the state updates below to the new row. The
+        // origin goes in that same INSERT — see loadTimeline's note on why it
+        // cannot be stamped afterwards.
+        await switchTimeline('new', 'ai');
         setTitle(aiData.title);
         setDescription(aiData.description);
         setEvents(aiData.events);
@@ -804,6 +835,7 @@ export function App() {
       return;
     }
     setActiveDraftId(draft.id);
+    setOrigin(draft.origin ?? 'manual');
     setTitle(draft.title);
     setDescription(draft.description);
     setEvents(draft.events);
@@ -956,12 +988,44 @@ export function App() {
     routerNavigate('/');
   };
 
+  // Whether the user may change this timeline's events at all. Presenting
+  // locks them, and so does an untouched AI generation until it is unlocked.
+  const eventsEditable = mode === 'edit' && canEditEvents(origin);
+
   const handleUpdateEvent = (updatedEvent: TimelineEvent) => {
     updateEvent(updatedEvent);
   };
 
   const handleDeleteEvent = (eventId: string) => {
     setEvents(events.filter(e => e.id !== eventId));
+  };
+
+  /**
+   * Spend the 'ai' label so the user can edit a generated timeline.
+   *
+   * One-way on purpose, and persisted before the UI unlocks rather than
+   * after: if the write fails we have to leave the timeline locked, because
+   * the alternative is an editable timeline still on disk as untouched model
+   * output — exactly the state this feature exists to prevent.
+   *
+   * The draft path needs no write of its own. `origin` is in the draft
+   * autosave payload, so setting the state here is what persists it.
+   */
+  const handleUnlockOrigin = async () => {
+    setShowUnlockConfirm(false);
+    if (origin !== 'ai') return;
+
+    if (user && loadedTimelineId) {
+      try {
+        await setTimelineOrigin(loadedTimelineId, 'edited');
+      } catch (err) {
+        console.error('Failed to unlock timeline:', err);
+        alert('Could not unlock this timeline. Please try again.');
+        return;
+      }
+    }
+
+    setOrigin('edited');
   };
 
   const handleBulkEventsChange = (newEvents: TimelineEvent[]) => {
@@ -1026,6 +1090,8 @@ export function App() {
             setShowAddEventModal(false);
           }
         }}
+        origin={origin}
+        onRequestUnlock={() => setShowUnlockConfirm(true)}
       />
       {bootstrapError ? (
         <div className="flex-1 flex items-center justify-center py-20">
@@ -1064,8 +1130,11 @@ export function App() {
           <Timeline
             events={events}
             categories={categories}
-            onAddEvent={mode === 'edit' ? addEvent : undefined}
-            onUpdateEvent={mode === 'edit' ? handleUpdateEvent : undefined}
+            // Both gated on provenance as well as mode: `onUpdateEvent` is
+            // what drag-to-move writes through, which is an edit to a
+            // generated event like any other.
+            onAddEvent={eventsEditable ? addEvent : undefined}
+            onUpdateEvent={eventsEditable ? handleUpdateEvent : undefined}
             onOpenDetails={(event) => setDetailPanelEvent(event)}
             scale={currentScale}
             verticalScale={currentVerticalScale}
@@ -1107,6 +1176,8 @@ export function App() {
           handleUpdateEvent(updated);
           setDetailPanelEvent(updated);
         }}
+        origin={origin}
+        onRequestUnlock={() => setShowUnlockConfirm(true)}
         onEdit={
           mode === 'edit'
             ? () => {
@@ -1125,6 +1196,15 @@ export function App() {
               }
             : undefined
         }
+      />
+      <ConfirmationModal
+        isOpen={showUnlockConfirm}
+        onClose={() => setShowUnlockConfirm(false)}
+        onConfirm={handleUnlockOrigin}
+        title="Edit this AI-generated timeline?"
+        message="This timeline will be marked as edited, and it will keep that label for good — there's no way back to an untouched generation short of generating it again. Anyone you share it with will see that it has been changed by hand."
+        confirmLabel="Unlock editing"
+        cancelLabel="Cancel"
       />
     </div>
   );

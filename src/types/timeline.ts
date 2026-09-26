@@ -53,3 +53,24 @@ export interface TimelineChapter {
   startDate: string;
   endDate: string;
 }
+
+/**
+ * Where a timeline's events came from.
+ *
+ * `'ai'` is the only state that locks editing. The point is not to stop a
+ * determined user — they own the row, and RLS lets them write to it through
+ * the API directly — but to make sure a timeline still presenting itself as
+ * raw AI output actually is one. Editing is therefore never blocked outright:
+ * the user can unlock, and unlocking spends the `'ai'` label permanently by
+ * moving the timeline to `'edited'`.
+ *
+ * Anything created before this field existed reads back as `'manual'`, which
+ * is the honest answer — we have no record either way, and locking a
+ * timeline someone has been editing for months would be the worse guess.
+ */
+export type TimelineOrigin = 'manual' | 'ai' | 'edited';
+
+/** The two states in which the user may change events. */
+export function canEditEvents(origin: TimelineOrigin): boolean {
+  return origin !== 'ai';
+}
