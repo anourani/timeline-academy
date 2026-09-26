@@ -920,6 +920,15 @@ export function App() {
     setTitle, setDescription, setEvents, updateCategories, updateChapters,
   ]);
 
+  useEffect(() => {
+    if (!generation.active) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') generation.cancel();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [generation]);
+
   /**
    * A generation that produced nothing sends the user back to the search
    * page, where the error row and its retry-with-the-other-provider button
@@ -1218,6 +1227,8 @@ export function App() {
         />
       )}
       <Header
+        intro={introPlaying}
+        streaming={isStreaming}
         title={title}
         description={description}
         onDescriptionChange={setDescription}
@@ -1264,7 +1275,10 @@ export function App() {
           </div>
         </div>
       ) : (
-        <main className="timeline-container relative flex-1 min-h-0 flex flex-col pt-[140px]">
+        <main
+          aria-busy={isStreaming}
+          className="timeline-container relative flex-1 min-h-0 flex flex-col pt-[140px]"
+        >
           {/* Absolutely positioned inside the 140px band, which was empty
               before this — so the strip appearing or disappearing never moves
               the canvas.
@@ -1275,6 +1289,18 @@ export function App() {
               ~650px below the readout it belongs to. The band is 140px, the
               strip is 40px, and the design wants 24px of air above the
               readout — so 140 - 24 - 40 = 76. */}
+          {isStreaming && (
+            <>
+              <p className="absolute inset-x-0 top-[120px] z-10 px-4 text-center body-m text-text-tertiary md:px-6 md:text-left">
+                Press Esc to cancel
+              </p>
+              <span className="sr-only" role="status" aria-live="polite">
+                {generation.status === 'done'
+                  ? `Timeline ready, ${generation.events.length} events`
+                  : `Building timeline for ${generation.subject}`}
+              </span>
+            </>
+          )}
           <div className="absolute inset-x-0 top-[76px] h-[40px]">
             <ChaptersStrip
               chapters={streamChapters}
@@ -1283,6 +1309,9 @@ export function App() {
               currentMonthIndex={currentMonthIndex}
               accentColor={timelineAccentColor}
               onSelect={setPendingScrollTarget}
+              // Four lenses means four chapters is the usual shape, so the
+              // strip reserves that many while they are still arriving.
+              placeholderCount={isStreaming ? 4 : 0}
             />
           </div>
           <Timeline

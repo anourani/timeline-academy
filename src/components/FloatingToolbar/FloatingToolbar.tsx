@@ -12,7 +12,18 @@ interface FloatingToolbarProps {
   activePanel: 'events' | 'settings' | null
   mode?: 'edit' | 'view'
   onModeChange?: (mode: 'edit' | 'view') => void
+  /**
+   * Slides the dock up as part of the AI-generation intro, and holds its
+   * controls disabled until the stream finishes — there is no timeline to
+   * add an event to or open settings for until then.
+   */
+  intro?: boolean
+  streaming?: boolean
 }
+
+const INTRO_RISE_MS = 550
+const INTRO_RISE_DELAY_MS = 600
+const INTRO_RISE_PX = 96
 
 export function FloatingToolbar({
   onAddEventClick,
@@ -20,6 +31,8 @@ export function FloatingToolbar({
   onSettingsClick,
   activePanel,
   mode = 'edit',
+  intro = false,
+  streaming = false,
   onModeChange,
 }: FloatingToolbarProps) {
   // The pill is centered on the viewport, then shifted by half the side
@@ -36,6 +49,24 @@ export function FloatingToolbar({
     : '-50%'
 
   const isEditing = mode === 'edit'
+
+  /**
+   * The intro's rise, composed into the existing transform.
+   *
+   * It has to go in the same inline `transform` as the side-panel push: an
+   * inline style beats a utility class, so a Tailwind `translate-y` here
+   * would be silently discarded — the trap GlobalLayout.tsx documents. The
+   * Y leg is dropped once the intro is over, leaving the original value
+   * exactly as it was.
+   */
+  const desktopTranslateY = intro ? `${INTRO_RISE_PX}px` : '0px'
+  // Nothing here has anywhere to go while a generation is running: there is
+  // no timeline row yet, and the events on screen belong to the stream.
+  // Dimmed rather than hidden, so the dock does not reflow when it unlocks.
+  const lockedClass = streaming ? 'opacity-50 pointer-events-none' : ''
+  const introTransition = intro
+    ? `transform ${INTRO_RISE_MS}ms var(--ease-pop) ${INTRO_RISE_DELAY_MS}ms`
+    : undefined
 
   return (
     <>
@@ -58,20 +89,31 @@ export function FloatingToolbar({
           bg-[rgba(23,23,23,0.8)] border border-[#262626] backdrop-blur-[2px]
           rounded-[20px]
           will-change-transform
-          ${skipTransition ? '' : 'transition-transform duration-300 ease-out'}
+          ${skipTransition || intro ? '' : 'transition-transform duration-300 ease-out'}
         `}
-        style={{ transform: `translateX(${desktopTranslateX})` }}
+        style={{
+          transform: `translateX(${desktopTranslateX}) translateY(${desktopTranslateY})`,
+          transition: introTransition,
+        }}
       >
         <Collapsible open={isEditing}>
-          <Button variant="glass" size="none" onClick={onAddEventClick} tabIndex={isEditing ? 0 : -1}>
+          <Button
+            variant="glass" size="none"
+            className={lockedClass}
+            onClick={onAddEventClick}
+            disabled={streaming}
+            tabIndex={isEditing && !streaming ? 0 : -1}
+          >
             <Plus size={20} />
             Add Event
           </Button>
         </Collapsible>
         <Button
           variant="glass" size="none"
+          className={lockedClass}
           data-active={activePanel === 'events'}
           onClick={onEventsClick}
+          disabled={streaming}
         >
           <CalendarFold size={20} />
           Events
@@ -79,9 +121,11 @@ export function FloatingToolbar({
         <Collapsible open={isEditing}>
           <Button
             variant="glass" size="none"
+            className={lockedClass}
             data-active={activePanel === 'settings'}
             onClick={onSettingsClick}
-            tabIndex={isEditing ? 0 : -1}
+            disabled={streaming}
+            tabIndex={isEditing && !streaming ? 0 : -1}
           >
             <Bolt size={20} />
             Settings
@@ -97,15 +141,23 @@ export function FloatingToolbar({
           back rather than stranding the reader in a mode it cannot leave. */}
       <div className="fixed bottom-0 left-0 right-0 z-30 w-full flex md:hidden justify-center items-center gap-2 px-4 pt-2 pb-6 bg-black border-t border-[#3d3e40]">
         <Collapsible open={isEditing}>
-          <Button variant="glass" size="none" onClick={onAddEventClick} tabIndex={isEditing ? 0 : -1}>
+          <Button
+            variant="glass" size="none"
+            className={lockedClass}
+            onClick={onAddEventClick}
+            disabled={streaming}
+            tabIndex={isEditing && !streaming ? 0 : -1}
+          >
             <Plus size={20} />
             Add Event
           </Button>
         </Collapsible>
         <Button
           variant="glass" size="none"
+          className={lockedClass}
           data-active={activePanel === 'events'}
           onClick={onEventsClick}
+          disabled={streaming}
         >
           <CalendarFold size={20} />
           Events
@@ -113,9 +165,11 @@ export function FloatingToolbar({
         <Collapsible open={isEditing}>
           <Button
             variant="glass" size="none"
+            className={lockedClass}
             data-active={activePanel === 'settings'}
             onClick={onSettingsClick}
-            tabIndex={isEditing ? 0 : -1}
+            disabled={streaming}
+            tabIndex={isEditing && !streaming ? 0 : -1}
           >
             <Bolt size={20} />
             Settings
