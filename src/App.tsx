@@ -880,9 +880,13 @@ export function App() {
    */
   useEffect(() => {
     const { status, id, events: streamed } = generation;
-    const finished =
-      status === 'done' ||
-      ((status === 'error' || status === 'cancelled') && streamed.length > 0);
+    // Events are the precondition, not just the payload. The store already
+    // refuses to report `done` with none, but stating it here too means no
+    // future path can create a timeline with nothing in it — which is the
+    // failure that turned a silent protocol mismatch into empty rows eating
+    // plan slots.
+    const finished = streamed.length > 0 &&
+      (status === 'done' || status === 'error' || status === 'cancelled');
     if (!finished || !id) return;
     if (!authReady || !storageReconciled) return;
     // Ref, not the state latch below: this effect re-runs on every streamed

@@ -258,9 +258,28 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
         },
         onDone: () => {
           if (!isCurrent()) return
-          setState((prev) =>
-            prev.id === runId ? { ...prev, status: 'done' } : prev,
-          )
+          setState((prev) => {
+            if (prev.id !== runId) return prev
+            // A transport that finished without delivering a single event is
+            // a failure, whatever the HTTP status said. Treating it as a
+            // result is how a silent protocol mismatch — a response shape the
+            // line reader did not recognise — became an empty timeline that
+            // consumed a plan slot and reported nothing, three times over.
+            //
+            // Reported here rather than in the editor so both of its effects
+            // already do the right thing: the commit requires events, and the
+            // error path already returns the user to the search page with the
+            // message and its retry.
+            if (prev.events.length === 0) {
+              return {
+                ...prev,
+                status: 'error',
+                error:
+                  'That generation came back empty. Try again, or try a different subject.',
+              }
+            }
+            return { ...prev, status: 'done' }
+          })
         },
         onError: (message, provider) => fail(message, provider ?? null),
       }

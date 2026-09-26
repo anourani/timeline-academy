@@ -181,6 +181,85 @@ export async function generateTimeline(
 // ---------------------------------------------------------------------------
 
 /**
+ * A whole timeline arriving as one line, in the buffered `GeneratedTimeline`
+ * shape rather than as NDJSON.
+ *
+ * Two things produce this, and both are normal rather than exceptional:
+ *
+ *  - **An edge function that predates streaming.** The site deploys on merge
+ *    via Netlify; the functions deploy separately via GitHub Actions. In the
+ *    window where the site is ahead, `stream: true` is simply an unknown
+ *    field and the function answers with one buffered JSON document. Without
+ *    this, every server-funded generation in that window returns nothing at
+ *    all — which is exactly what happened.
+ *  - **A model that ignores the NDJSON instruction** and emits the schema it
+ *    was trained to produce. That is a standing possibility on every model in
+ *    the registry, not a transient one.
+ *
+ * Recognising it here rather than sniffing `Content-Type` covers both cases
+ * in one place, and keeps the fix on the client, which deploys as a unit.
+ *
+ * The effect is that `stream: true` is an optimisation, not a contract: where
+ * it is understood the timeline streams, where it is not the whole thing
+ * arrives at once and the reveal queue paces it anyway.
+ */
+function isBufferedTimeline(line: Record<string, unknown>): boolean {
+  return (
+    typeof line.type !== 'string' &&
+    typeof line.timelineTitle === 'string' &&
+    line.timelineTitle.length > 0 &&
+    Array.isArray(line.events)
+  );
+}
+
+/**
+ * Expand a buffered timeline into the calls a stream would have made.
+ *
+ * The per-item shapes are already identical to the stream's, so the same
+ * validators apply and no second set of rules is introduced. Only `range`
+ * has to be derived: the buffered shape never carried one, because the axis
+ * used to be computed from the events after they had all arrived.
+ */
+function dispatchBufferedTimeline(
+  line: Record<string, unknown>,
+  handlers: TimelineStreamHandlers,
+): void {
+  const rawEvents = (line.events as Array<Record<string, unknown>>) ?? [];
+  const events = rawEvents
+    .map(validateStreamEvent)
+    .filter((e): e is NonNullable<typeof e> => e !== null);
+
+  const years = events
+    .flatMap((e) => [e.startDate, e.endDate])
+    .map((d) => Number.parseInt(d.slice(0, 4), 10))
+    .filter((y) => Number.isFinite(y));
+
+  // No usable events means no axis to state. Emitting nothing lets the
+  // caller's "produced nothing" check report a real failure, rather than a
+  // timeline whose only content is a title.
+  if (years.length === 0) return;
+
+  handlers.onMeta({
+    title: line.timelineTitle as string,
+    description:
+      typeof line.timelineDescription === 'string' ? line.timelineDescription : '',
+    range: { startYear: Math.min(...years), endYear: Math.max(...years) },
+    categoryMapping:
+      line.categoryMapping && typeof line.categoryMapping === 'object'
+        ? (line.categoryMapping as Record<string, string>)
+        : undefined,
+  });
+
+  const rawChapters = (line.chapters as Array<Record<string, unknown>>) ?? [];
+  for (const raw of rawChapters) {
+    const chapter = validateStreamChapter(raw);
+    if (chapter) handlers.onChapter(chapter);
+  }
+
+  for (const event of events) handlers.onEvent(event);
+}
+
+/**
  * Turn one NDJSON line into the handler call it stands for.
  *
  * Shared by all three routes so a line means the same thing however it
@@ -196,6 +275,11 @@ function dispatchLine(
   line: Record<string, unknown>,
   handlers: TimelineStreamHandlers,
 ): void {
+  if (isBufferedTimeline(line)) {
+    dispatchBufferedTimeline(line, handlers);
+    return;
+  }
+
   switch (line.type) {
     case 'meta': {
       const meta = validateStreamMeta(line);
