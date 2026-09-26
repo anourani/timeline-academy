@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
-import { CornerDownLeft } from 'lucide-react'
-import { SubjectSuggestions } from '@/components/AIMode/SubjectSuggestions'
+import { ArrowUp } from 'lucide-react'
+import {
+  SubjectSuggestions,
+  SUGGESTIONS_LISTBOX_ID,
+  SUGGESTION_OPTION_ID_PREFIX,
+} from '@/components/AIMode/SubjectSuggestions'
 import { useSubjectSuggestions } from '@/hooks/useSubjectSuggestions'
 import {
   MIN_SUGGESTION_QUERY_LENGTH,
@@ -13,7 +17,7 @@ import type { ByokProvider } from '@/types/ai'
 
 interface NewTimelineScreenProps {
   /**
-   * `fromRect` is the search field's on-screen box, measured before the
+   * `fromRect` is the search composer's on-screen box, measured before the
    * navigation it triggers. The editor's intro animation flies the typed
    * query from here into the nav title, and once we have navigated this
    * element is gone — so it has to be read on the way out.
@@ -32,33 +36,6 @@ interface NewTimelineScreenProps {
   onRequestApiKey: () => void
 }
 
-const PLACEHOLDER_NAMES = [
-  'Kobe Bryant',
-  'World War II',
-  'Frida Kahlo',
-  'The Renaissance',
-  'Muhammad Ali',
-  'Civil Rights Movement',
-]
-
-/**
- * The field's type at each size, as one string.
- *
- * The real input and the typewriter ghost drawn on top of it have to resolve to
- * identical metrics or the animated placeholder slides off the caret — so both
- * read this rather than each carrying a copy.
- *
- * `.header-small` / `.header-medium` in `index.css` say the same thing, but
- * stacking them (`header-small md:header-medium`) leaves the winner to source
- * order between two equal-specificity utilities in the same layer, which is not
- * a contract worth resting alignment on.
- */
-const SEARCH_FIELD_FONT =
-  "font-['Aleo',serif] font-normal tracking-[-0.01em] text-[24px] leading-[1.4] md:text-[32px] md:leading-[1.25]"
-
-/** Box padding. Shared with the ghost overlay, for the same reason. */
-const SEARCH_FIELD_PADDING = 'px-[11px] py-[9px] md:p-[11px]'
-
 /**
  * The responsive page gutter, shared with `CurtainIntro`.
  *
@@ -69,23 +46,6 @@ const SEARCH_FIELD_PADDING = 'px-[11px] py-[9px] md:p-[11px]'
  */
 export const PAGE_GUTTER_SCALE =
   '[--page-gutter:16px] sm:[--page-gutter:40px] md:[--page-gutter:64px] lg:[--page-gutter:120px]'
-
-/**
- * Room at the field's right edge for the enter button: 12px inset + 38px button
- * + a 10px gap. Reserved permanently rather than toggled with the button, so
- * text long enough to have scrolled the input never jumps sideways when it
- * appears.
- *
- * Input-only, deliberately not folded into `SEARCH_FIELD_PADDING`: the ghost
- * overlay renders only while the field is empty and the button only while it is
- * not, so the ghost has no button to make room for — and taking the reserve
- * anyway would narrow the box its placeholder animates in from 456px to 407px,
- * cutting the longest name's headroom ('Civil Rights Movement', ~302px) from
- * 154px to 105px to buy nothing. Right padding cannot move left-anchored text,
- * so the two still agree on every metric the ghost actually depends on: type,
- * left padding, vertical padding.
- */
-const SEARCH_FIELD_ENTER_RESERVE = 'md:pr-[60px]'
 
 /**
  * Exported for `CurtainIntro`, which replays this screen's exit inside the
@@ -196,47 +156,26 @@ export function NewTimelineScreen({
   // time the editor sends someone back to it, and a later change to the prop
   // must never overwrite what they have typed since.
   const [name, setName] = useState(initialSubject)
-  const [placeholderText, setPlaceholderText] = useState('')
-  const [placeholderPhase, setPlaceholderPhase] = useState<'typing' | 'deleting'>('typing')
-  const [placeholderIndex, setPlaceholderIndex] = useState(0)
+  // The subject the user picked from the list. Set when a suggestion is
+  // chosen, cleared by any edit that no longer equals it. A restored subject
+  // counts as picked: it is one they already generated.
+  const [selectedSubject, setSelectedSubject] = useState<string | null>(initialSubject || null)
   const [showSuggestions, setShowSuggestions] = useState(false)
-  // A restored subject is already engagement: without this the field would
-  // wear its resting shadow while holding text, which only typing ever shows.
-  const [hasEngaged, setHasEngaged] = useState(initialSubject !== '')
+  const [highlight, setHighlight] = useState(0)
   const [renderDropdown, setRenderDropdown] = useState(false)
   // Drawn once per mount, so the moments rotate between visits but never move
   // under a cursor that is already reaching for one. Shuffle is the only other
   // way they change, and that is the user asking them to.
   const [moments, setMoments] = useState(() => pickMoments())
   const inputRef = useRef<HTMLInputElement>(null)
+  const composerRef = useRef<HTMLDivElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
 
   const { suggestions, isLoading: suggestionsLoading } = useSubjectSuggestions(name)
 
   useEffect(() => {
-    if (hasEngaged) return
-    const currentName = PLACEHOLDER_NAMES[placeholderIndex]
-
-    if (placeholderPhase === 'typing') {
-      if (placeholderText.length < currentName.length) {
-        const t = setTimeout(() => {
-          setPlaceholderText(currentName.slice(0, placeholderText.length + 1))
-        }, 80)
-        return () => clearTimeout(t)
-      }
-      const t = setTimeout(() => setPlaceholderPhase('deleting'), 1500)
-      return () => clearTimeout(t)
-    }
-
-    if (placeholderText.length > 0) {
-      const t = setTimeout(() => {
-        setPlaceholderText(currentName.slice(0, placeholderText.length - 1))
-      }, 40)
-      return () => clearTimeout(t)
-    }
-    setPlaceholderIndex((i) => (i + 1) % PLACEHOLDER_NAMES.length)
-    setPlaceholderPhase('typing')
-  }, [placeholderText, placeholderPhase, placeholderIndex, hasEngaged])
+    setHighlight(0)
+  }, [name])
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -256,30 +195,48 @@ export function NewTimelineScreen({
     }
   }, [showSuggestions])
 
+  // Only a known subject generates. A partial query like "K" is a search in
+  // progress, not a request, so it opens the list instead of spending a
+  // generation on whatever the model makes of one letter.
+  const trimmed = name.trim()
+  const exactMatch = suggestions.find(
+    (s) => s.title.toLowerCase() === trimmed.toLowerCase(),
+  )
+  const isValidSubject =
+    (selectedSubject !== null && selectedSubject === trimmed) || Boolean(exactMatch)
+
+  // The composer is what the editor's intro replays, so it is what we measure.
+  const measureComposer = () => composerRef.current?.getBoundingClientRect() ?? null
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    const trimmed = name.trim()
-    if (!trimmed) return
+    if (!isValidSubject) {
+      setShowSuggestions(true)
+      return
+    }
     setShowSuggestions(false)
-    onAIGenerate(trimmed, inputRef.current?.getBoundingClientRect() ?? null)
+    // The canonical title's casing, so "marie curie" generates "Marie Curie".
+    onAIGenerate(exactMatch?.title ?? trimmed, measureComposer())
   }
 
-  const handleSelectSuggestion = (suggestion: string) => {
-    setName(suggestion)
+  const handleSelectSuggestion = (title: string) => {
+    setName(title)
+    setSelectedSubject(title)
     setShowSuggestions(false)
     inputRef.current?.focus()
   }
 
   const shuffleMoments = () => setMoments((prev) => pickMoments(prev))
 
+  // Moments skip the known-subject gate: they are curated, so already known.
   const handleQuickSearch = (subject: string) => {
     // Seed the field before generating: for a signed-out visitor
     // `onAIGenerate` opens the key/sign-in gate, which should show what they
     // asked for rather than an empty box.
     setName(subject)
-    setHasEngaged(true)
+    setSelectedSubject(subject)
     setShowSuggestions(false)
-    onAIGenerate(subject, inputRef.current?.getBoundingClientRect() ?? null)
+    onAIGenerate(subject, measureComposer())
   }
 
   // The length test is not redundant with the hook's: that effect runs *after*
@@ -291,10 +248,10 @@ export function NewTimelineScreen({
     name.trim().length >= MIN_SUGGESTION_QUERY_LENGTH &&
     (suggestions.length > 0 || suggestionsLoading)
 
-  // Gated on `renderDropdown` rather than `dropdownVisible` for the same reason
-  // the quick searches are: it keeps the button away through the panel's 180ms exit
-  // animation instead of popping it back under a panel that is still fading.
-  const showEnterButton = name.trim().length > 0 && !renderDropdown
+  const activeDescendant =
+    dropdownVisible && !suggestionsLoading && suggestions.length > 0
+      ? `${SUGGESTION_OPTION_ID_PREFIX}${highlight}`
+      : undefined
 
   useEffect(() => {
     if (dropdownVisible) {
@@ -316,7 +273,7 @@ export function NewTimelineScreen({
             down by a fixed offset. `pt-[80px]` is the height of the
             `GlobalNav` that `AIModePage` paints over this screen: reserving it
             here is what makes the centring measure the *clear* area rather
-            than the whole viewport, so the label can never tuck under the nav.
+            than the whole viewport, so the heading can never tuck under the nav.
 
             This replaced a `pt-[max(40vh,200px)]` offset that put the label at
             40% of the viewport and let the page scroll when the sum overran.
@@ -328,159 +285,131 @@ export function NewTimelineScreen({
           <form
             ref={formRef}
             onSubmit={handleSubmit}
-            className="w-full flex flex-col items-center gap-[8px]"
+            className="w-full flex flex-col items-center gap-[24px] md:gap-[28px]"
           >
-            <h2 className="header-xsmall text-text-tertiary m-0 text-center">
-              Search for a person, era, or event
+            {/* Written out rather than `header-small md:header-medium`:
+                stacking those two leaves the winner to source order between
+                equal-specificity utilities in the same layer. */}
+            <h2 className="m-0 text-center text-text-primary [text-wrap:balance] font-['Aleo',serif] font-normal tracking-[-0.01em] text-[24px] leading-[1.4] md:text-[32px] md:leading-[1.25]">
+              What should we put on a timeline?
             </h2>
 
-            {/* One column, so the quick searches and any error hang off the field's left
-                edge. The suggestions panel is not part of it — it anchors to the
-                field itself and covers both the model tab and the quick searches. */}
-            <div className="w-full max-w-[480px] flex flex-col items-start gap-[8px]">
-              {/* The plate the field sits on, and the whole of what makes the model
-                  control read as a tab rather than a fourth chip: an opaque fill
-                  under both, so the band below the field reads as the same object
-                  the field is part of rather than as page background. The band runs
-                  the full width even though the tab only occupies its right end —
-                  that is the mockup, and it is what hides the background grid line
-                  that would otherwise cross behind the tab.
-
-                  The inner wrapper is kept as its own positioning context rather
-                  than folded into this one, because the suggestions panel anchors
-                  to it at `top-[calc(100%+4px)]`. Measured against the plate that
-                  4px would become 4px below the *tab*, dropping the panel 34px and
-                  leaving a gap the mockup does not have. */}
-              <div className="w-full flex flex-col items-end rounded-[8px] bg-surface-primary">
-                <div className="relative w-full">
-                  {/* Fill and border are constant by design — the component carries
-                      them on its base and varies only the shadow between resting and
-                      typed. Not duplication waiting to be folded away: those two
-                      shadows are the whole of the state difference. */}
+            {/* One column, so the quick searches and any error hang off the
+                composer's left edge. */}
+            <div className="w-full max-w-[640px] flex flex-col items-start gap-[12px]">
+              {/* The positioning context for the suggestions panel, which
+                  hangs 6px below the composer and covers the quick searches. */}
+              <div className="relative w-full">
+                <div
+                  ref={composerRef}
+                  className={`flex flex-col gap-[16px] md:gap-[20px] rounded-[20px] border bg-surface-secondary shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-colors duration-150 pt-[16px] pr-[8px] pb-[8px] pl-[16px] md:pt-[18px] md:pr-[12px] md:pb-[12px] md:pl-[20px] ${
+                    renderDropdown
+                      ? 'border-[#404040]'
+                      : 'border-[#262626] has-[input:focus]:border-[#404040]'
+                  }`}
+                >
+                  {/* 16px is the floor below `md`: iOS zooms the page into any
+                      focused input set smaller. */}
                   <input
                     ref={inputRef}
                     type="text"
                     value={name}
                     onChange={(e) => {
-                      setName(e.target.value)
+                      const v = e.target.value
+                      setName(v)
                       setShowSuggestions(true)
+                      if (v.trim() !== selectedSubject) setSelectedSubject(null)
                     }}
-                    onFocus={() => setHasEngaged(true)}
-                    onBlur={() => {
-                      if (name.trim().length === 0) setHasEngaged(false)
-                    }}
-                    placeholder=""
+                    placeholder="Search for a person, era, or event"
                     autoComplete="off"
                     autoCorrect="off"
                     spellCheck={false}
                     enterKeyHint="search"
-                    className={`w-full rounded-[8px] border border-[#404040] bg-surface-secondary outline-none transition-shadow text-text-secondary focus-visible:ring-1 focus-visible:ring-white/40 disabled:opacity-70 ${SEARCH_FIELD_PADDING} ${SEARCH_FIELD_ENTER_RESERVE} ${SEARCH_FIELD_FONT} ${
-                      hasEngaged
-                        ? 'shadow-[0px_8px_16px_0px_rgba(155,158,163,0.04)]'
-                        : 'shadow-[0px_8px_16px_0px_rgba(0,0,0,0.4)]'
-                    }`}
-                    aria-label="Subject for timeline generation"
+                    role="combobox"
+                    aria-autocomplete="list"
+                    aria-expanded={dropdownVisible}
+                    aria-controls={SUGGESTIONS_LISTBOX_ID}
+                    aria-activedescendant={activeDescendant}
+                    aria-label="Search for a person, era, or event"
+                    className="w-full min-w-0 bg-transparent border-0 outline-none pr-[8px] text-ellipsis font-['Avenir',sans-serif] text-[16px] leading-[24px] md:text-[18px] md:leading-[28px] text-text-primary placeholder:text-text-tertiary"
                   />
 
-                  {/* `type="submit"` is the whole point: the Enter key and this
-                      button reach `handleSubmit` through one path — the form's
-                      default button — rather than two copies of it that could
-                      drift.
+                  <div className="flex items-center justify-between gap-[8px]">
+                    <ModelSelector
+                      variant="pill"
+                      onRequestApiKey={onRequestApiKey}
+                    />
 
-                      Which is also why it must never be `disabled`. A disabled
-                      default button has no activation behaviour, so implicit
-                      submission fires nothing and the Enter key dies with it —
-                      including below `md`, where the button is not even rendered.
-                      Empty and in-flight queries are already refused inside
-                      `handleSubmit`; visibility is carried by `invisible` (the
-                      chips' idiom, which drops it from hit-testing and the tab
-                      order in one property) so the control stays mounted and the
-                      Enter path never changes shape.
+                    {/* `type="submit"` is the whole point: the Enter key and
+                        this button reach `handleSubmit` through one path — the
+                        form's default button — rather than two copies of it
+                        that could drift.
 
-                      `top-[12px] h-[40px]` measures the input's *content* box —
-                      1px border plus 11px padding, then 32px type at 1.25
-                      line-height — rather than stretching to the wrapper, whose
-                      height an inline-block input can pad with a baseline
-                      descender. Tied to `SEARCH_FIELD_FONT`'s `md` metrics; if
-                      those move, this moves with them. */}
-                  <button
-                    type="submit"
-                    aria-label="Generate timeline"
-                    className={`hidden md:flex absolute right-[12px] top-[12px] h-[40px] items-center justify-center px-[9px] rounded-[6px] bg-[rgba(37,99,235,0.8)] border border-white/[0.15] shadow-[0px_8px_32px_rgba(0,0,0,0.4),inset_0px_1px_0px_rgba(255,255,255,0.1)] text-[#dadee5] hover:bg-[rgba(37,99,235,0.9)] transition-colors outline-none focus-visible:ring-1 focus-visible:ring-white/40 ${
-                      showEnterButton ? '' : 'invisible'
-                    }`}
-                  >
-                    <CornerDownLeft size={20} aria-hidden="true" />
-                  </button>
-
-                  {/* `border border-transparent` is load-bearing: the input has a
-                      1px border and an inset-0 overlay does not, so without it the
-                      ghost sits a pixel up and left of the real caret. */}
-                  {!hasEngaged && name === '' && (
-                    <div
-                      aria-hidden="true"
-                      className={`pointer-events-none absolute inset-0 flex items-center border border-transparent overflow-hidden whitespace-nowrap select-none text-text-tertiary ${SEARCH_FIELD_PADDING} ${SEARCH_FIELD_FONT}`}
+                        Which is also why it must never be `disabled`. A
+                        disabled default button has no activation behaviour, so
+                        implicit submission fires nothing and the Enter key dies
+                        with it. An unknown subject is refused inside
+                        `handleSubmit` instead, and `aria-disabled` carries the
+                        state to assistive tech without changing the Enter path. */}
+                    <button
+                      type="submit"
+                      aria-label="Generate timeline"
+                      aria-disabled={!isValidSubject}
+                      className={`shrink-0 size-[44px] md:size-[36px] rounded-full flex items-center justify-center transition-colors duration-150 outline-none focus-visible:ring-1 focus-visible:ring-white/40 ${
+                        isValidSubject
+                          ? 'bg-[rgba(37,99,235,0.8)] hover:bg-[rgba(37,99,235,0.9)] text-[#DADEE5]'
+                          : 'bg-[#262626] text-[#6D7073] cursor-not-allowed'
+                      }`}
                     >
-                      {placeholderText}
-                      <span className="animate-blink-caret">|</span>
-                    </div>
-                  )}
-
-                  {renderDropdown && (
-                    /* The backdrop blur belongs to the panel's design but has
-                       to be applied here, on the wrapper, and the reason is
-                       worth keeping: `animate-in` runs a keyframe that sets a
-                       transform, `fill-mode-forwards` leaves it applied after
-                       the animation ends, and a transformed element is a
-                       backdrop root. So anything inside this box sees an empty
-                       backdrop — a blur on `SubjectSuggestions` itself filters
-                       nothing at any radius, which is exactly the bug this
-                       fixes: the model tab underneath was showing through the
-                       panel's 4%-opacity fill completely unblurred.
-
-                       On the wrapper the filter is resolved against the parent
-                       instead, which does contain the tab. `rounded-[8px]`
-                       matches the panel inside it so the blurred region takes
-                       the same corners rather than squaring them off. */
-                    <div
-                      data-state={dropdownVisible ? 'open' : 'closed'}
-                      className="absolute left-0 right-0 top-[calc(100%+4px)] z-20 rounded-[8px] backdrop-blur-[4px] duration-150 ease-in fill-mode-forwards data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-1 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-1 data-[state=closed]:pointer-events-none"
-                    >
-                      <SubjectSuggestions
-                        query={name}
-                        suggestions={suggestions}
-                        isLoading={suggestionsLoading}
-                        onSelect={handleSelectSuggestion}
+                      <ArrowUp
+                        strokeWidth={2}
+                        className="size-[20px] md:size-[18px]"
+                        aria-hidden="true"
                       />
-                    </div>
-                  )}
+                    </button>
+                  </div>
                 </div>
 
-                {/* Sits on the plate, not inside the field: the enter button already
-                    owns the field's right edge, and a second control there would
-                    break the reserve-width arithmetic documented at
-                    SEARCH_FIELD_ENTER_RESERVE.
+                {renderDropdown && (
+                  /* The backdrop blur belongs to the panel's design but has
+                     to be applied here, on the wrapper, and the reason is
+                     worth keeping: `animate-in` runs a keyframe that sets a
+                     transform, `fill-mode-forwards` leaves it applied after
+                     the animation ends, and a transformed element is a
+                     backdrop root. So anything inside this box sees an empty
+                     backdrop — a blur on `SubjectSuggestions` itself filters
+                     nothing at any radius.
 
-                    Deliberately *not* hidden with the quick searches when the suggestions
-                    panel opens. The panel is translucent over a 4px blur and covers
-                    this exactly, so the tab reads through it — which is the mockup,
-                    and it means nothing appears or disappears as the panel comes and
-                    goes. The panel wins the paint order on its `z-20` alone: it is
-                    positioned and this is not. */}
-                <ModelSelector
-                  variant="tab"
-                  onRequestApiKey={onRequestApiKey}
-                />
+                     On the wrapper the filter is resolved against the parent
+                     instead, which does contain the quick searches under it.
+                     `rounded-[16px]` matches the panel inside it so the
+                     blurred region takes the same corners rather than
+                     squaring them off. */
+                  <div
+                    data-state={dropdownVisible ? 'open' : 'closed'}
+                    className="absolute left-0 right-0 top-[calc(100%+6px)] z-20 rounded-[16px] backdrop-blur-[12px] duration-150 ease-in fill-mode-forwards data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-top-1 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-1 data-[state=closed]:pointer-events-none"
+                  >
+                    <SubjectSuggestions
+                      query={name}
+                      suggestions={suggestions}
+                      isLoading={suggestionsLoading}
+                      onSelect={handleSelectSuggestion}
+                      highlight={highlight}
+                      onHighlightChange={setHighlight}
+                      active={dropdownVisible}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* The quick searches recede behind the open panel rather than
-                  vanishing, the way the model tab does: they keep their place
-                  and fade, so the layout under the field stays the same shape
-                  whether you are typing or not. Receded, they also drop out of
-                  hit-testing and the tab order — a moment is a one-click
-                  generation of a *different* subject, so one left live under a
-                  half-covering panel is a mis-click that throws away whatever
-                  the user was typing.
+                  vanishing: they keep their place and fade, so the layout
+                  under the composer stays the same shape whether you are
+                  typing or not. Receded, they also drop out of hit-testing and
+                  the tab order — a moment is a one-click generation of a
+                  *different* subject, so one left live under a half-covering
+                  panel is a mis-click that throws away whatever the user was
+                  typing.
 
                   Keyed to `renderDropdown`, not `dropdownVisible`, so the fade
                   holds through the panel's exit animation instead of the
