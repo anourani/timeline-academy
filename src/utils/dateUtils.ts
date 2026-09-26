@@ -1,4 +1,3 @@
-import { TimelineEvent } from '../types/event';
 import { Month } from '../types/timeline';
 import { format } from 'date-fns';
 
@@ -83,12 +82,32 @@ export function findMonthIndex(months: Month[], dateStr: string): number {
   return beforeStart ? 0 : months.length - 1;
 }
 
-function calculateTimelineRange(events: TimelineEvent[]) {
-  const years = events
-    .flatMap(event => [event.startDate, event.endDate])
-    .map(parseDateParts)
-    .filter((parts): parts is DateParts => parts !== null)
-    .map(parts => parts.year);
+/** Anything with a start and an end. Events are the usual input, but a
+ *  streaming generation supplies its chapters, which span the same ground
+ *  before the events exist. */
+interface DateSpan {
+  startDate: string;
+  endDate: string;
+}
+
+function calculateTimelineRange(
+  events: DateSpan[],
+  rangeOverride?: TimelineYearRange
+) {
+  // The override widens, never replaces. A generation states its span up
+  // front, but its own events can sit inside that span — so replacing would
+  // mean the axis narrows the moment the events are committed and the
+  // override is dropped, shifting every column that is already drawn.
+  // Contributing instead makes the two agree, and keeps an event added later
+  // outside the stated span able to expand the axis.
+  const years = [
+    ...(rangeOverride ? [rangeOverride.startYear, rangeOverride.endYear] : []),
+    ...events
+      .flatMap(event => [event.startDate, event.endDate])
+      .map(parseDateParts)
+      .filter((parts): parts is DateParts => parts !== null)
+      .map(parts => parts.year),
+  ];
 
   // Also covers an empty timeline and one whose dates are all malformed.
   if (years.length === 0) {
@@ -127,9 +146,39 @@ function generateMonthsRange(startYear: number, endYear: number): Month[] {
   return months;
 }
 
-// Timeline range utilities
-export function getTimelineRange(events: TimelineEvent[]) {
-  const { startYear, endYear } = calculateTimelineRange(events);
+/** An explicit axis span, in place of deriving one from content. */
+export interface TimelineYearRange {
+  startYear: number;
+  endYear: number;
+}
+
+/**
+ * The month grid the canvas is drawn on.
+ *
+ * `rangeOverride` widens the span beyond what `events` imply, and exists for
+ * streaming: events arrive one at a time, and a span derived from the ones
+ * seen so far changes on every earlier-dated arrival. Because placement is by
+ * month *index*, that shifts every column already drawn while `scrollLeft`
+ * stays a fixed pixel value — the whole canvas visibly slides. The
+ * generation's `meta` line carries the span up front, so the grid can be
+ * right from the first frame.
+ *
+ * It widens rather than replaces so that dropping it is a no-op. A model
+ * routinely states a span a year wider than its own earliest event, and a
+ * replacing override would narrow the axis at exactly the moment the timeline
+ * is committed — a visible jump, measured at 336px on a 1956-1975 timeline.
+ * The override still goes through the same padding and minimum-width rules as
+ * a derived range.
+ *
+ * Every caller must pass the same override. `Timeline` draws the canvas and
+ * `App` recomputes this for `ChaptersStrip`; if those two disagree the chips
+ * sit over the wrong columns.
+ */
+export function getTimelineRange(
+  events: DateSpan[],
+  rangeOverride?: TimelineYearRange
+) {
+  const { startYear, endYear } = calculateTimelineRange(events, rangeOverride);
 
   return { months: generateMonthsRange(startYear, endYear) };
 }

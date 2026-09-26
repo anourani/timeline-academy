@@ -4,7 +4,7 @@ import { GlobalNav } from '@/components/Navigation/GlobalNav'
 import { NewTimelineScreen } from '@/components/NewTimeline/NewTimelineScreen'
 import { AuthModal } from '@/components/Auth/AuthModal'
 import { ApiKeyModal } from '@/components/Modal/ApiKeyModal'
-import { useAIMode } from '@/hooks/useAIMode'
+import { useGeneration } from '@/hooks/useGeneration'
 import { useAuth } from '@/hooks/useAuth'
 import { awaitByokSync, hasAnyKey } from '@/services/userApiKey'
 import type { ByokProvider } from '@/types/ai'
@@ -12,16 +12,7 @@ import type { ByokProvider } from '@/types/ai'
 export function AIModePage() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const {
-    isGenerating,
-    isClassifying,
-    classifiedType,
-    categoryLabels,
-    error,
-    retryProvider,
-    classifyAndGenerate,
-    abort,
-  } = useAIMode()
+  const generation = useGeneration()
 
   // Server-funded generation requires sign-in; anonymous visitors can instead
   // add their own OpenAI or Anthropic key. When a signed-out, keyless visitor
@@ -34,26 +25,47 @@ export function AIModePage() {
   // provider knows what to re-run. `pendingSubjectRef` can't serve here — it
   // is cleared as soon as the gate resolves.
   const lastSubjectRef = useRef<string | null>(null)
+  const lastRectRef = useRef<DOMRect | null>(null)
 
-  const runGeneration = async (
+  /**
+   * Leave for the editor, which starts the generation.
+   *
+   * Nothing is awaited and nothing is started here. The editor owns both the
+   * capacity decision and the call to `generation.start()`, because the one
+   * limit that can still refuse — the trial's single slot — is resolved by a
+   * modal that needs the occupying timeline in front of it. Keeping the start
+   * on that side means there is one place where "may this run" and "run it"
+   * are decided together.
+   */
+  const go = (
     subject: string,
+    fromRect: DOMRect | null,
     providerOverride?: ByokProvider,
   ) => {
     lastSubjectRef.current = subject
-    try {
-      const { title, description, events, categories, chapters } =
-        await classifyAndGenerate(subject, providerOverride)
-      navigate('/editor', {
-        state: {
-          aiGenerated: { title, description, events, categories, chapters },
+    lastRectRef.current = fromRect
+
+    navigate('/editor', {
+      state: {
+        aiStreaming: {
+          subject,
+          providerOverride,
+          // A plain object, not the DOMRect: React Router serialises route
+          // state into history, and a DOMRect does not survive the trip.
+          fromRect: fromRect
+            ? {
+                top: fromRect.top,
+                left: fromRect.left,
+                width: fromRect.width,
+                height: fromRect.height,
+              }
+            : null,
         },
-      })
-    } catch {
-      // Error is surfaced via the `error` state in useAIMode and rendered below.
-    }
+      },
+    })
   }
 
-  const handleAIGenerate = async (subject: string) => {
+  const handleAIGenerate = async (subject: string, fromRect: DOMRect | null) => {
     // On a fresh device the account's key is still being pulled into the
     // local cache when the page finishes loading. Without this wait, a
     // Generate clicked inside that window reads no key and quietly takes the
@@ -63,10 +75,11 @@ export function AIModePage() {
 
     if (!user && !hasAnyKey()) {
       pendingSubjectRef.current = subject
+      lastRectRef.current = fromRect
       setShowApiKeyModal(true)
       return
     }
-    await runGeneration(subject)
+    go(subject, fromRect)
   }
 
   // Resume a pending generation after the user signs in through the gate.
@@ -75,7 +88,7 @@ export function AIModePage() {
       const subject = pendingSubjectRef.current
       pendingSubjectRef.current = null
       setShowAuthModal(false)
-      void runGeneration(subject)
+      go(subject, lastRectRef.current)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user])
@@ -84,11 +97,7 @@ export function AIModePage() {
     setShowApiKeyModal(false)
     const subject = pendingSubjectRef.current
     pendingSubjectRef.current = null
-    if (subject) void runGeneration(subject)
-  }
-
-  const handleCancel = () => {
-    abort()
+    if (subject) go(subject, lastRectRef.current)
   }
 
   return (
@@ -98,16 +107,14 @@ export function AIModePage() {
       </div>
       <NewTimelineScreen
         onAIGenerate={handleAIGenerate}
-        onCancel={handleCancel}
-        isGenerating={isGenerating}
-        isClassifying={isClassifying}
-        classifiedType={classifiedType}
-        categoryLabels={categoryLabels}
-        error={error}
-        retryProvider={retryProvider}
+        // A generation that failed before producing anything sends the user
+        // back here, so the error it left on the store is this page's to
+        // show — the same row, and the same retry affordance, as before.
+        error={generation.status === 'error' ? generation.error : null}
+        retryProvider={generation.retryProvider}
         onRetryWithProvider={(provider) => {
           const subject = lastSubjectRef.current
-          if (subject) void runGeneration(subject, provider)
+          if (subject) go(subject, lastRectRef.current, provider)
         }}
         // The dropdown's unlock row opens the same gate the Generate button
         // does. No subject is stashed, so handleKeySaved simply closes it —

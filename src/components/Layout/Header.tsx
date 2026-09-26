@@ -12,6 +12,9 @@ import {
 import type { AddEventsResult } from '../../hooks/useEvents';
 
 interface HeaderProps {
+  /** Passed through to the dock for the AI-generation intro. */
+  intro?: boolean
+  streaming?: boolean
   title: string;
   description: string;
   onDescriptionChange: (description: string) => void;
@@ -63,6 +66,8 @@ export function Header({
   onDeleteTimeline,
   mode = 'edit',
   onModeChange,
+  intro = false,
+  streaming = false,
 }: HeaderProps) {
   const closePanel = () => onActivePanelChange(null);
   const togglePanel = (panel: 'events' | 'settings') => {
@@ -86,6 +91,8 @@ export function Header({
         activePanel={activePanel}
         mode={mode}
         onModeChange={onModeChange}
+        intro={intro}
+        streaming={streaming}
       />
 
       <Dialog open={showAddEventModal} onOpenChange={(open) => { if (!open) onCloseAddEventModal(); }}>

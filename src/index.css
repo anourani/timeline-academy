@@ -14,6 +14,16 @@
 
 @layer base {
   :root {
+    /* The three curves the AI-generation intro is built from. Named rather
+       than inlined so the axis build, the title flight and the toolbar all
+       move on the same vocabulary — and so a change is one edit, not thirty.
+         enter  easeOutCubic  — arrivals: things settling into place
+         swipe  easeInOutQuart — departures and long travel
+         pop    easeOutBack   — the one overshoot, for things that spring in */
+    --ease-enter: cubic-bezier(0.33, 1, 0.68, 1);
+    --ease-swipe: cubic-bezier(0.76, 0, 0.24, 1);
+    --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+
     --background: 0 0% 0%;
     --foreground: 0 0% 98%;
     --card: 217 33% 17%;
@@ -274,5 +284,84 @@
      resize alters only the used value, which does not start a transition. */
   .timeline-vertical-line-reveal:not([data-revealed="true"]) {
     height: 0;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   AI-generation intro
+   ---------------------------------------------------------------------------
+   The axis assembling itself as the search screen leaves. Keyframes rather
+   than transitions so each line can carry its own `animation-delay` inline
+   and stagger without a JS loop driving sixty elements a frame.
+
+   `both` fill mode is load-bearing: it holds the line at its off-screen start
+   through the delay. Without it every line sits at rest until its turn, and
+   the axis is simply there from frame 0 with nothing to arrive.
+   --------------------------------------------------------------------------- */
+
+@keyframes timeline-intro-line-from-top {
+  from { transform: translateY(-100vh); }
+  to { transform: translateY(0); }
+}
+
+@keyframes timeline-intro-line-from-bottom {
+  from { transform: translateY(100vh); }
+  to { transform: translateY(0); }
+}
+
+@keyframes timeline-intro-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes timeline-intro-rise-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* An event arriving from the stream. Four legs, staggered so the bar strikes
+   first and the title follows it in, which reads as the event landing rather
+   than four things fading up together. */
+
+@keyframes timeline-event-bar-in {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+
+/* Ranges only: the tinted span wipes open from its start date, so the bar
+   reads as being drawn along the axis in the direction time runs. */
+@keyframes timeline-event-fill-in {
+  from { clip-path: inset(0 100% 0 0 round 4px); }
+  to { clip-path: inset(0 0 0 0 round 4px); }
+}
+
+@keyframes timeline-event-title-in {
+  from { opacity: 0; transform: translateX(-6px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* `--event-glow` is set inline to the event's category colour — a keyframe
+   cannot know it, and a class per category would be twelve rules that drift
+   from the palette. */
+@keyframes timeline-event-glow-out {
+  from { box-shadow: 0 0 14px var(--event-glow); }
+  to { box-shadow: 0 0 0 rgba(0, 0, 0, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] [data-reveal-bar],
+  [data-reveal] [data-reveal-fill],
+  [data-reveal] [data-reveal-title] {
+    /* Position and clip animations go; the event still fades so its arrival
+       is not a silent pop. */
+    animation: timeline-intro-fade-in 150ms linear both !important;
+  }
+}
+
+/* The intro is decoration over content that is already correct, so removing
+   it wholesale is the right reduced-motion answer: the axis is simply drawn. */
+@media (prefers-reduced-motion: reduce) {
+  [data-timeline-intro] {
+    animation: none !important;
   }
 }

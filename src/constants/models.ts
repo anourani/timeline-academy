@@ -31,8 +31,17 @@ import type { AccountTier } from '@/hooks/useAccountTier'
 /** Body fields spread into a request, on top of `{ model, ...the shared shape }`. */
 export type RequestParams = Record<string, unknown>
 
-/** The three calls a chosen model answers. One choice, one account billed. */
-export type CallKind = 'classify' | 'generate' | 'enrich'
+/** The calls a chosen model answers. One choice, one account billed.
+ *
+ *  `generate` and `generateStream` are the same emit over different
+ *  transports: the first returns one buffered JSON document, the second
+ *  streams NDJSON a line at a time. Both exist because a bundle cached from
+ *  an earlier deploy still takes the buffered path. */
+export type CallKind =
+  | 'classify'
+  | 'generate'
+  | 'generateStream'
+  | 'enrich'
 
 export interface ModelDef {
   /** API model string; also the value persisted in `timeline_byok_model`. */
@@ -147,6 +156,26 @@ const OPENAI_WEB_SEARCH = {
 /** Ceiling for a call whose budget now covers thinking as well as the answer. */
 const THINKING_CEILING = 16384
 
+/**
+ * The OpenAI body for the NDJSON (streaming) generate leg.
+ *
+ * Note what is ABSENT: `response_format: { type: 'json_object' }`, which
+ * every OpenAI `generate` entry carries. That mode constrains the reply to
+ * exactly ONE JSON object — precisely what NDJSON is not. Send it here and
+ * the model returns a single object where the line parser expects one per
+ * line; the failure reads like a bad model rather than a bad request body,
+ * which is why this is a shared named constant and not three inline literals
+ * that could drift into carrying it.
+ *
+ * Dropping it also drops the coupling documented in openaiDirect.ts: the
+ * buffered leg needs the literal word "JSON" in the messages, the streaming
+ * leg does not.
+ */
+const OPENAI_NDJSON_GENERATE: RequestParams = {
+  max_tokens: 8192,
+  stream: true,
+}
+
 export const MODELS: ModelDef[] = [
   {
     id: 'claude-sonnet-5',
@@ -173,6 +202,15 @@ export const MODELS: ModelDef[] = [
         // budget the JSON needs.
         max_tokens: 4096,
         thinking: { type: 'disabled' },
+      },
+      generateStream: {
+        // Same body as `generate` with the transport flipped on. Sonnet is
+        // the one model that reaches the axis fast: with thinking off, text
+        // starts immediately, so `meta` lands in the first frames rather
+        // than after a reasoning budget.
+        max_tokens: 4096,
+        thinking: { type: 'disabled' },
+        stream: true,
       },
       enrich: {
         // Thinking deliberately left on: with it off, Sonnet 5 reaches for
@@ -201,6 +239,16 @@ export const MODELS: ModelDef[] = [
         max_tokens: THINKING_CEILING,
         output_config: { effort: 'low' },
       },
+      generateStream: {
+        // `thinking` stays absent for the same reason as `generate`. The cost
+        // is felt differently here: adaptive thinking runs before any text is
+        // emitted, so `meta` — and with it the axis — arrives seconds later
+        // than on Sonnet. The editor holds the axis rather than drawing a
+        // wrong one; see the streaming prompt's note on meta.range.
+        max_tokens: THINKING_CEILING,
+        output_config: { effort: 'low' },
+        stream: true,
+      },
       enrich: {
         // Effort left at the API default here, unlike generate: this call
         // depends on the model deciding to search, and that is the one place
@@ -227,6 +275,13 @@ export const MODELS: ModelDef[] = [
         max_tokens: THINKING_CEILING,
         output_config: { effort: 'low' },
       },
+      generateStream: {
+        // Same 400 applies, so `thinking` stays absent here too. Like Opus,
+        // Fable reasons before it emits, so the axis waits on `meta`.
+        max_tokens: THINKING_CEILING,
+        output_config: { effort: 'low' },
+        stream: true,
+      },
       enrich: {
         max_tokens: THINKING_CEILING,
         ...ANTHROPIC_WEB_SEARCH,
@@ -248,6 +303,7 @@ export const MODELS: ModelDef[] = [
         response_format: { type: 'json_object' },
         max_tokens: 8192,
       },
+      generateStream: { ...OPENAI_NDJSON_GENERATE },
       enrich: {
         max_output_tokens: 4096,
         ...OPENAI_WEB_SEARCH,
@@ -273,6 +329,7 @@ export const MODELS: ModelDef[] = [
         response_format: { type: 'json_object' },
         max_tokens: 8192,
       },
+      generateStream: { ...OPENAI_NDJSON_GENERATE },
       enrich: {
         max_output_tokens: 4096,
         ...OPENAI_WEB_SEARCH,
@@ -302,6 +359,7 @@ export const MODELS: ModelDef[] = [
         response_format: { type: 'json_object' },
         max_tokens: 8192,
       },
+      generateStream: { ...OPENAI_NDJSON_GENERATE },
       enrich: {
         max_output_tokens: 4096,
         ...OPENAI_WEB_SEARCH,

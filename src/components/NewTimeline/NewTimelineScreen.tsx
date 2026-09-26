@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { CornerDownLeft } from 'lucide-react'
-import type { SubjectType } from '@/constants/pillDefinitions'
 import { SubjectSuggestions } from '@/components/AIMode/SubjectSuggestions'
-import { GeneratingIndicator } from '@/components/NewTimeline/GeneratingIndicator'
 import { useSubjectSuggestions } from '@/hooks/useSubjectSuggestions'
 import {
   MIN_SUGGESTION_QUERY_LENGTH,
@@ -14,12 +12,13 @@ import { PROVIDER_META } from '@/constants/byokProviders'
 import type { ByokProvider } from '@/types/ai'
 
 interface NewTimelineScreenProps {
-  onAIGenerate: (subject: string) => void
-  onCancel: () => void
-  isGenerating: boolean
-  isClassifying: boolean
-  classifiedType: SubjectType | null
-  categoryLabels: string[]
+  /**
+   * `fromRect` is the search field's on-screen box, measured before the
+   * navigation it triggers. The editor's intro animation flies the typed
+   * query from here into the nav title, and once we have navigated this
+   * element is gone — so it has to be read on the way out.
+   */
+  onAIGenerate: (subject: string, fromRect: DOMRect | null) => void
   error: string | null
   /** Set when the failure came from one BYOK provider and the user has a key
    *  for the other one. Null otherwise — including on the server-funded path,
@@ -59,6 +58,17 @@ const SEARCH_FIELD_FONT =
 const SEARCH_FIELD_PADDING = 'px-[11px] py-[9px] md:p-[11px]'
 
 /**
+ * The responsive page gutter, shared with `CurtainIntro`.
+ *
+ * `BackgroundGrid` anchors its first column line to `--page-gutter`, so the
+ * intro has to declare the identical scale or the lines it animates start a
+ * few dozen pixels off from where this screen drew them — visible as a jump
+ * on the first frame at every width except the one it was tuned at.
+ */
+export const PAGE_GUTTER_SCALE =
+  '[--page-gutter:16px] sm:[--page-gutter:40px] md:[--page-gutter:64px] lg:[--page-gutter:120px]'
+
+/**
  * Room at the field's right edge for the enter button: 12px inset + 38px button
  * + a 10px gap. Reserved permanently rather than toggled with the button, so
  * text long enough to have scrolled the input never jumps sideways when it
@@ -75,7 +85,18 @@ const SEARCH_FIELD_PADDING = 'px-[11px] py-[9px] md:p-[11px]'
  */
 const SEARCH_FIELD_ENTER_RESERVE = 'md:pr-[60px]'
 
-function BackgroundGrid() {
+/**
+ * Exported for `CurtainIntro`, which replays this screen's exit inside the
+ * editor. Frame 0 of the intro has to match the last frame here exactly, so
+ * both sides render the same component rather than two copies that drift.
+ *
+ * The 200px column spacing and the `--page-gutter` origin are the contract:
+ * the intro re-renders these lines as individual divs so each can move on its
+ * own, and it derives their positions from the same two numbers.
+ */
+export const GRID_COLUMN_SPACING = 200
+
+export function BackgroundGrid() {
   return (
     <div
       className="absolute inset-0 pointer-events-none overflow-hidden"
@@ -96,7 +117,7 @@ function BackgroundGrid() {
   )
 }
 
-function BackgroundPattern() {
+export function BackgroundPattern() {
   return (
     <div
       className="absolute inset-0 pointer-events-none overflow-hidden"
@@ -163,10 +184,6 @@ function BackgroundPattern() {
 
 export function NewTimelineScreen({
   onAIGenerate,
-  onCancel,
-  isGenerating,
-  isClassifying,
-  categoryLabels,
   error,
   retryProvider,
   onRetryWithProvider,
@@ -185,7 +202,6 @@ export function NewTimelineScreen({
   const inputRef = useRef<HTMLInputElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
 
-  const isWorking = isClassifying || isGenerating
   const { suggestions, isLoading: suggestionsLoading } = useSubjectSuggestions(name)
 
   useEffect(() => {
@@ -221,11 +237,7 @@ export function NewTimelineScreen({
     }
     const handleKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
-      if (isWorking) {
-        onCancel()
-      } else {
-        setShowSuggestions(false)
-      }
+      setShowSuggestions(false)
     }
     window.addEventListener('mousedown', handleClick)
     window.addEventListener('keydown', handleKey)
@@ -233,14 +245,14 @@ export function NewTimelineScreen({
       window.removeEventListener('mousedown', handleClick)
       window.removeEventListener('keydown', handleKey)
     }
-  }, [showSuggestions, isWorking, onCancel])
+  }, [showSuggestions])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     const trimmed = name.trim()
-    if (!trimmed || isWorking) return
+    if (!trimmed) return
     setShowSuggestions(false)
-    onAIGenerate(trimmed)
+    onAIGenerate(trimmed, inputRef.current?.getBoundingClientRect() ?? null)
   }
 
   const handleSelectSuggestion = (suggestion: string) => {
@@ -250,14 +262,13 @@ export function NewTimelineScreen({
   }
 
   const handleQuickSearch = (subject: string) => {
-    if (isWorking) return
-    // Seed the field before generating: `GeneratingIndicator` reads `name`, and
-    // for a signed-out visitor `onAIGenerate` opens the key/sign-in gate, which
-    // should show what they asked for rather than an empty box.
+    // Seed the field before generating: for a signed-out visitor
+    // `onAIGenerate` opens the key/sign-in gate, which should show what they
+    // asked for rather than an empty box.
     setName(subject)
     setHasEngaged(true)
     setShowSuggestions(false)
-    onAIGenerate(subject)
+    onAIGenerate(subject, inputRef.current?.getBoundingClientRect() ?? null)
   }
 
   // The length test is not redundant with the hook's: that effect runs *after*
@@ -266,14 +277,13 @@ export function NewTimelineScreen({
   // stale rows on the way down.
   const dropdownVisible =
     showSuggestions &&
-    !isWorking &&
     name.trim().length >= MIN_SUGGESTION_QUERY_LENGTH &&
     (suggestions.length > 0 || suggestionsLoading)
 
   // Gated on `renderDropdown` rather than `dropdownVisible` for the same reason
   // the chips are: it keeps the button away through the panel's 180ms exit
   // animation instead of popping it back under a panel that is still fading.
-  const showEnterButton = name.trim().length > 0 && !renderDropdown && !isWorking
+  const showEnterButton = name.trim().length > 0 && !renderDropdown
 
   useEffect(() => {
     if (dropdownVisible) {
@@ -286,7 +296,7 @@ export function NewTimelineScreen({
   }, [dropdownVisible, renderDropdown])
 
   return (
-    <div className="relative h-screen overflow-hidden bg-surface-primary [--page-gutter:16px] sm:[--page-gutter:40px] md:[--page-gutter:64px] lg:[--page-gutter:120px]">
+    <div className={`relative h-screen overflow-hidden bg-surface-primary ${PAGE_GUTTER_SCALE}`}>
       <BackgroundGrid />
       <BackgroundPattern />
       <div className="relative z-10 h-full">
@@ -307,7 +317,6 @@ export function NewTimelineScreen({
           <form
             ref={formRef}
             onSubmit={handleSubmit}
-            aria-busy={isWorking}
             className="w-full flex flex-col items-center gap-[8px]"
           >
             <h2 className="header-xsmall text-text-tertiary m-0 text-center">
@@ -343,14 +352,13 @@ export function NewTimelineScreen({
                     value={name}
                     onChange={(e) => {
                       setName(e.target.value)
-                      if (!isWorking) setShowSuggestions(true)
+                      setShowSuggestions(true)
                     }}
                     onFocus={() => setHasEngaged(true)}
                     onBlur={() => {
                       if (name.trim().length === 0) setHasEngaged(false)
                     }}
                     placeholder=""
-                    disabled={isWorking}
                     autoComplete="off"
                     autoCorrect="off"
                     spellCheck={false}
@@ -450,7 +458,6 @@ export function NewTimelineScreen({
                     positioned and this is not. */}
                 <ModelSelector
                   variant="tab"
-                  disabled={isWorking}
                   onRequestApiKey={onRequestApiKey}
                 />
               </div>
@@ -490,7 +497,6 @@ export function NewTimelineScreen({
                   <button
                     key={subject}
                     type="button"
-                    disabled={isWorking}
                     // `pointer-events-none` on the row stops the mouse; this
                     // stops the keyboard. React 18 has no `inert` prop, which
                     // would otherwise do both on the container in one word.
@@ -503,15 +509,7 @@ export function NewTimelineScreen({
                 ))}
               </div>
 
-              {isWorking && (
-                <GeneratingIndicator
-                  subject={name}
-                  phase={isClassifying ? 'classifying' : 'generating'}
-                  categoryLabels={categoryLabels}
-                />
-              )}
-
-              {!isWorking && error && (
+              {error && (
                 <div className="mt-[16px] flex flex-wrap items-baseline gap-2">
                   <p className="text-sm text-red-400 m-0">{error}</p>
                   {retryProvider && onRetryWithProvider && (

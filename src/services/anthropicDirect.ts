@@ -9,6 +9,7 @@
 // OpenAI publishes no equivalent opt-in — see openaiDirect.ts.
 
 import {
+  getStreamSystemPrompt,
   getSystemPrompt,
   getUserPrompt,
   buildEnrichUserPrompt,
@@ -17,13 +18,18 @@ import {
   type CategoryDefinition,
 } from './llmPrompts'
 import {
+  createNdjsonLineReader,
   parseTimelineJson,
   readApiError,
   readSseStream,
   stripCodeFence,
 } from './llmShared'
 import type { ModelDef } from '@/constants/models'
-import type { EnrichmentStreamHandlers, GeneratedTimeline } from '@/types/ai'
+import type {
+  EnrichmentStreamHandlers,
+  GeneratedTimeline,
+  TimelineStreamHandlers,
+} from '@/types/ai'
 import type { EventSource, TimelineEvent } from '@/types/event'
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
@@ -234,6 +240,123 @@ export async function generateTimelineDirect(
   }
 
   return parseTimelineJson(readMessageText(await res.json()))
+}
+
+// ---------------------------------------------------------------------------
+// Timeline generation (streaming NDJSON)
+// ---------------------------------------------------------------------------
+
+/**
+ * The same generation as above, emitted a line at a time.
+ *
+ * Two things this must get right that the buffered call gets for free:
+ *
+ *  - **Only `text` blocks.** Opus 5 and Fable 5.1 think by default (see the
+ *    registry), so the stream opens with `thinking` deltas. Routing by the
+ *    block type recorded at `content_block_start` is what keeps reasoning out
+ *    of the line buffer — the same map `enrichEventDirect` keeps, for the
+ *    same reason.
+ *  - **`stop_reason` mid-stream.** `readMessageText` reads it off a finished
+ *    response; here it arrives in a `message_delta` frame. Refusal and
+ *    `max_tokens` both surface as HTTP 200 with nothing obviously wrong, so
+ *    they are checked explicitly and reported with the same sentences.
+ */
+export async function generateTimelineStreamDirect(
+  subject: string,
+  categories: CategoryDefinition[] | undefined,
+  model: ModelDef,
+  apiKey: string,
+  handlers: TimelineStreamHandlers,
+  onLine: (line: Record<string, unknown>) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const userPrompt = categories
+    ? getUserPrompt(subject, categories)
+    : `Generate a biographical timeline for: ${subject}`
+
+  let res: Response
+  try {
+    res = await fetch(ANTHROPIC_URL, {
+      method: 'POST',
+      headers: headers(apiKey),
+      body: JSON.stringify({
+        model: model.id,
+        system: getStreamSystemPrompt(),
+        messages: [{ role: 'user', content: userPrompt }],
+        // `stream: true` lives in the registry beside the rest of the body,
+        // so this file keeps its no-per-model-branches property.
+        ...model.params.generateStream,
+      }),
+      signal,
+    })
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') return
+    handlers.onError((err as Error).message || 'Network error', 'anthropic')
+    return
+  }
+
+  if (!res.ok || !res.body) {
+    handlers.onError(
+      await readApiError(res, 'Anthropic API error', model.id, 'anthropic'),
+      'anthropic',
+    )
+    return
+  }
+
+  const blockTypes = new Map<number, string>()
+  const lines = createNdjsonLineReader(onLine)
+  let stopReason: string | null = null
+
+  try {
+    await readSseStream(res.body, (eventName, data) => {
+      if (eventName === 'message_delta') {
+        const delta = data.delta as Record<string, unknown> | undefined
+        if (typeof delta?.stop_reason === 'string') {
+          stopReason = delta.stop_reason
+        }
+      } else if (eventName === 'content_block_start') {
+        const index = data.index as number
+        const block = data.content_block as Record<string, unknown>
+        if (block && typeof block.type === 'string') {
+          blockTypes.set(index, block.type)
+        }
+      } else if (eventName === 'content_block_delta') {
+        const index = data.index as number
+        const delta = data.delta as Record<string, unknown>
+        if (blockTypes.get(index) === 'text' && delta?.type === 'text_delta') {
+          const text = delta.text as string
+          if (text) lines.push(text)
+        }
+      }
+    })
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') return
+    handlers.onError((err as Error).message || 'Stream interrupted', 'anthropic')
+    return
+  }
+
+  if (stopReason === 'refusal') {
+    handlers.onError(
+      'The model declined this request. Try rephrasing the subject, or pick a different model.',
+      'anthropic',
+    )
+    return
+  }
+
+  // Flushed before the max_tokens check so a truncated run still delivers
+  // every whole line it managed — the caller decides whether a partial
+  // timeline is worth keeping, and for this one it is.
+  lines.end()
+
+  if (stopReason === 'max_tokens') {
+    handlers.onError(
+      'The model ran out of room before finishing. Try again, or pick a different model.',
+      'anthropic',
+    )
+    return
+  }
+
+  handlers.onDone()
 }
 
 // ---------------------------------------------------------------------------

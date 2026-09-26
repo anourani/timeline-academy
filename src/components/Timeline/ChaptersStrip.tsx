@@ -18,7 +18,24 @@ interface ChaptersStripProps {
   /** The nav's dominant-category colour, so the strip matches the status dot. */
   accentColor: string
   onSelect?: (target: ScrollTarget) => void
+  /**
+   * Number of placeholder chips to show while a generation is streaming.
+   *
+   * Chapters arrive early — before any event — but not instantly, and an
+   * empty band above a building axis reads as something missing. Real chips
+   * replace placeholders one for one as they land; any left over fade out.
+   */
+  placeholderCount?: number
 }
+
+const CHIP_ENTER_MS = 350
+const CHIP_ENTER_STAGGER_MS = 100
+const PLACEHOLDER_ENTER_MS = 300
+const PLACEHOLDER_START_MS = 750
+const PLACEHOLDER_STAGGER_MS = 60
+/** Matches the resting chip: 11px padding either side of ~14px text. */
+const PLACEHOLDER_WIDTH = 180
+const PLACEHOLDER_BAR_WIDTH = '72%'
 
 /**
  * The chapters strip — a table of contents for the timeline.
@@ -39,6 +56,7 @@ export const ChaptersStrip = memo(function ChaptersStrip({
   currentMonthIndex,
   accentColor,
   onSelect,
+  placeholderCount = 0,
 }: ChaptersStripProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const activeRef = useRef<HTMLButtonElement>(null)
@@ -96,7 +114,11 @@ export const ChaptersStrip = memo(function ChaptersStrip({
     }
   }, [syncOverflow, chapters])
 
-  if (!chapters.length) return null
+  // A timeline with no chapters renders nothing here, as it always has — but
+  // placeholders are the one case where an empty chapter list still has
+  // something to show, because they exist precisely for the window before
+  // the first chapter arrives.
+  if (!chapters.length && placeholderCount === 0) return null
 
   return (
     <div className="relative">
@@ -104,7 +126,7 @@ export const ChaptersStrip = memo(function ChaptersStrip({
         ref={scrollRef}
         className="flex h-[40px] items-center gap-2 overflow-x-auto scrollbar-hide px-4 md:px-6"
       >
-        {chapters.map((chapter) => {
+        {chapters.map((chapter, chapterIndex) => {
           const isActive = active?.id === chapter.id
           const count = countEventsInChapter(events, chapter)
 
@@ -127,11 +149,20 @@ export const ChaptersStrip = memo(function ChaptersStrip({
                   : 'border-white/[0.15] bg-white/10 text-[#c9ced4] hover:bg-white/20 hover:text-[#dadee5]'
                 }
               `}
-              style={
-                isActive
+              style={{
+                ...(isActive
                   ? { backgroundColor: `${accentColor}33`, borderColor: `${accentColor}99` }
-                  : undefined
-              }
+                  : undefined),
+                // Only while a generation is running: outside one, chapters
+                // are already there and should not animate on every render.
+                ...(placeholderCount > 0
+                  ? {
+                      animation: `timeline-intro-rise-in ${CHIP_ENTER_MS}ms var(--ease-enter) ${
+                        chapterIndex * CHIP_ENTER_STAGGER_MS
+                      }ms both`,
+                    }
+                  : undefined),
+              }}
             >
               {isActive && (
                 <>
@@ -176,6 +207,36 @@ export const ChaptersStrip = memo(function ChaptersStrip({
             </button>
           )
         })}
+
+        {/* Placeholders for chapters still in flight. Same geometry as a
+            real chip so the strip does not reflow as they are replaced —
+            only the contents swap. aria-hidden per the house rule in
+            ui/skeleton.tsx: the wait is announced once, elsewhere. */}
+        {Array.from(
+          { length: Math.max(placeholderCount - chapters.length, 0) },
+          (_, i) => (
+            <div
+              key={`chapter-placeholder-${i}`}
+              aria-hidden="true"
+              className="flex shrink-0 items-center rounded-[10px] border border-white/[0.08] bg-white/[0.03] px-[11px] py-[6px] backdrop-blur-[12px]"
+              style={{
+                width: PLACEHOLDER_WIDTH,
+                height: 35,
+                animation: `timeline-intro-fade-in ${PLACEHOLDER_ENTER_MS}ms var(--ease-enter) ${
+                  PLACEHOLDER_START_MS + (chapters.length + i) * PLACEHOLDER_STAGGER_MS
+                }ms both`,
+              }}
+            >
+              <div
+                className="h-[14px] rounded-[4px] bg-white/[0.08] animate-pulse"
+                style={{
+                  width: PLACEHOLDER_BAR_WIDTH,
+                  animationDelay: `${i * PLACEHOLDER_STAGGER_MS}ms`,
+                }}
+              />
+            </div>
+          ),
+        )}
       </div>
 
       {/* Edge fades stand in for the scrollbar the strip deliberately hides,

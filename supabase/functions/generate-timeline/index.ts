@@ -54,7 +54,7 @@ Deno.serve(async (req: Request) => {
     //
     // See docs/2026-09-10-model-selector-prd.md §5 Step 3. Letting Free users
     // past Sonnet is a pricing decision first and a change here second.
-    const { subject, categories, mode } = await req.json();
+    const { subject, categories, mode, stream } = await req.json();
 
     if (!subject || typeof subject !== "string" || !subject.trim()) {
       return json({ error: "Missing or empty 'subject' field" }, 400);
@@ -104,8 +104,8 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // 5. Create LLM client and generate timeline. The provider is a server
-    //    decision — never taken from the request body.
+    // 5. Create LLM client. The provider is a server decision — never taken
+    //    from the request body.
     const selectedProvider =
       (Deno.env.get("DEFAULT_LLM_PROVIDER") as "openai" | "claude") || "claude";
 
@@ -117,12 +117,40 @@ Deno.serve(async (req: Request) => {
         ? categories
         : undefined;
 
+    // 6. Streaming is opt-in, and must stay that way.
+    //
+    // A browser running a bundle cached from an earlier deploy sends no
+    // `stream` field and expects one buffered JSON document back. The site
+    // and this function deploy on separate pipelines that finish at different
+    // times, so that window is routine rather than exceptional — absent the
+    // flag, everything below behaves exactly as it always has.
+    if (stream === true) {
+      const body = await client.streamTimeline(subject.trim(), categoryDefs);
+
+      // Recorded once the provider has accepted the request rather than once
+      // the stream finishes: by this point the tokens are being generated and
+      // billed to us, and the response is about to be handed to the browser
+      // where nothing can report back. A stream that dies half way still
+      // cost us a generation.
+      await recordUsage(sessionKey);
+
+      return new Response(body, {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/x-ndjson",
+          "Cache-Control": "no-cache",
+          "X-RateLimit-Remaining": String(remaining - 1),
+        },
+      });
+    }
+
     const result = await client.generateTimeline(subject.trim(), categoryDefs);
 
-    // 6. Record usage
+    // 7. Record usage
     await recordUsage(sessionKey);
 
-    // 7. Return result
+    // 8. Return result
     return json(result, 200, { "X-RateLimit-Remaining": String(remaining - 1) });
   } catch (err) {
     // Upstream provider errors can carry account details in their bodies —
