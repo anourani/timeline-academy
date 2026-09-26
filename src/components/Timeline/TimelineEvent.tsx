@@ -18,6 +18,22 @@ interface TimelineEventProps {
   onPointerDown?: (eventId: string, e: React.PointerEvent) => void;
   rowHeight?: number;
   onMounted?: (eventId: string, node: HTMLDivElement | null) => void;
+  /**
+   * Play the arrival animation on mount.
+   *
+   * Set while a generation is streaming. Mount *is* the reveal: the queue in
+   * `Timeline` decides when an event joins the rendered array, so there is
+   * nothing else to key the animation to and no need to track a timestamp.
+   */
+  revealOnMount?: boolean;
+  /**
+   * Suppress the stack-reflow FLIP.
+   *
+   * Events arrive in date order, so re-stacking is rare — but when it does
+   * happen mid-stream, sliding an event that only just appeared reads as a
+   * glitch rather than as the considered reflow it is after a drag.
+   */
+  suppressStackAnimation?: boolean;
 }
 
 const STACK_TRANSITION_MS = 220;
@@ -32,6 +48,8 @@ export const TimelineEvent = memo(function TimelineEvent({
   onPointerDown,
   rowHeight = EVENT_ROW_HEIGHT,
   onMounted,
+  revealOnMount = false,
+  suppressStackAnimation = false,
 }: TimelineEventProps) {
   const wasDraggingRef = useRef(false);
   const elementRef = useRef<HTMLDivElement | null>(null);
@@ -45,7 +63,7 @@ export const TimelineEvent = memo(function TimelineEvent({
 
   useLayoutEffect(() => {
     const prev = lastSeenStackRef.current;
-    if (prev !== event.stackIndex && !isDragging) {
+    if (prev !== event.stackIndex && !isDragging && !suppressStackAnimation) {
       const delta = (prev - event.stackIndex) * rowHeight;
       if (delta !== 0) {
         setAnimOffset(delta);
@@ -53,7 +71,7 @@ export const TimelineEvent = memo(function TimelineEvent({
       }
     }
     lastSeenStackRef.current = event.stackIndex;
-  }, [event.stackIndex, rowHeight, isDragging]);
+  }, [event.stackIndex, rowHeight, isDragging, suppressStackAnimation]);
 
   useLayoutEffect(() => {
     if (animPhase !== 'jumping') return;
@@ -157,19 +175,50 @@ export const TimelineEvent = memo(function TimelineEvent({
     }
   };
 
+  // The arrival, in four staggered legs. Inline because three of them need
+  // per-event values (the glow colour, and whether there is a fill to wipe);
+  // the keyframes themselves live in index.css.
+  const reveal = (name: string, ms: number, ease: string, delay: number) =>
+    revealOnMount ? { animation: `${name} ${ms}ms var(${ease}) ${delay}ms both` } : undefined;
+
   const eventContent = (
     <div
+      data-reveal={revealOnMount ? '' : undefined}
+      data-reveal-fill={revealOnMount && !isSingleDay ? '' : undefined}
       className="flex items-center h-full w-full rounded"
       style={{
         backgroundColor: isSingleDay ? 'transparent' : `${categoryColor}73`,
-        padding: '2px 2px'
+        padding: '2px 2px',
+        // Single-day events have no tinted span, so there is nothing to wipe
+        // open — clipping an empty box would just delay the bar behind it.
+        ...(isSingleDay
+          ? undefined
+          : reveal('timeline-event-fill-in', 550, '--ease-enter', 50)),
       }}
     >
       <div
+        data-reveal-bar={revealOnMount ? '' : undefined}
         className="h-full w-[8px] rounded flex-shrink-0"
-        style={{ backgroundColor: categoryColor }}
+        style={{
+          backgroundColor: categoryColor,
+          transformOrigin: 'center',
+          ['--event-glow' as string]: categoryColor,
+          // Two animations on one element: the bar strikes down, and the
+          // glow it strikes with fades over a longer beat.
+          ...(revealOnMount
+            ? {
+                animation:
+                  'timeline-event-bar-in 400ms var(--ease-pop) both, ' +
+                  'timeline-event-glow-out 800ms var(--ease-enter) both',
+              }
+            : undefined),
+        }}
       />
-      <div className="pl-1 whitespace-nowrap body-lg overflow-visible">
+      <div
+        data-reveal-title={revealOnMount ? '' : undefined}
+        className="pl-1 whitespace-nowrap body-lg overflow-visible"
+        style={reveal('timeline-event-title-in', 350, '--ease-enter', 120)}
+      >
         {event.title}
       </div>
     </div>

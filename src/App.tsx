@@ -1289,6 +1289,8 @@ export function App() {
             events={streamEvents}
             categories={streamCategories}
             rangeOverride={rangeOverride}
+            intro={introPlaying}
+            streaming={isStreaming}
             // Editing is off while the stream runs. Passing the handlers as
             // undefined is how this component already expresses "not
             // editable", so no extra prop is needed — and it is the honest

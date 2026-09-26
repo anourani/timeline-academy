@@ -1,5 +1,6 @@
 import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { TimelineHeader } from './TimelineHeader';
+import { StreamingSkeleton } from './StreamingSkeleton';
 import { TimelineGrid } from './TimelineGrid';
 import { TimelineVerticalLines } from './TimelineVerticalLines';
 import { TimelineCategoryLabels } from './TimelineCategoryLabels';
@@ -7,6 +8,7 @@ import { TimelineEvent } from './TimelineEvent';
 import { EventHoverCursor, EventHoverCursorHandle } from './EventHoverCursor';
 import { TimelineEvent as ITimelineEvent, CategoryConfig } from '../../types/event';
 import { ScrollTarget, TimelineScale, TimelineVerticalScale } from '../../types/timeline';
+import { useRevealQueue } from '../../hooks/useRevealQueue';
 import { findMonthIndex, formatYMD, getTimelineRange, shiftEventDates } from '../../utils/dateUtils';
 import type { TimelineYearRange } from '../../utils/dateUtils';
 import { calculateEventStacks, StackedEvent } from '../../utils/eventStacking';
@@ -43,6 +45,24 @@ interface TimelineProps {
    * and the canvas disagree.
    */
   rangeOverride?: TimelineYearRange | null;
+  /**
+   * Plays the axis-assembly animation: lines drop in from alternating edges,
+   * then the month cells fade, then the years lift into place.
+   *
+   * True only for the mount that follows an AI generation starting, and only
+   * until the intro's own timer clears it. Purely decorative — the axis it
+   * animates is already correct underneath.
+   */
+  intro?: boolean;
+  /**
+   * A generation is filling this canvas.
+   *
+   * Paces arrivals through a reveal queue, plays each event's entrance, and
+   * shows placeholder rows that recede ahead of the fill. Editing is already
+   * off by this point — App withholds the handlers — so this is presentation
+   * only.
+   */
+  streaming?: boolean;
   pendingScrollTarget?: ScrollTarget | null;
   onScrollComplete?: () => void;
   /** Id of an event the page wants edited — set by the detail panel's Edit
@@ -86,6 +106,8 @@ export function Timeline({
   verticalScale,
   groupByCategory = false,
   rangeOverride,
+  intro = false,
+  streaming = false,
   pendingScrollTarget,
   onScrollComplete,
   pendingEditEventId,
@@ -104,11 +126,16 @@ export function Timeline({
     () => categories.filter(cat => cat.visible),
     [categories]
   );
+  // Paced before anything else reads it: stacking, the month range and the
+  // bands must all agree on which events exist right now, and the queue is
+  // the only thing that decides that during a stream.
+  const pacedEvents = useRevealQueue(events, streaming);
+
   const visibleEvents = useMemo(
-    () => events.filter(event =>
+    () => pacedEvents.filter(event =>
       visibleCategories.some(cat => cat.id === event.category)
     ),
-    [events, visibleCategories]
+    [pacedEvents, visibleCategories]
   );
 
   const { months } = useMemo(
@@ -308,6 +335,39 @@ export function Timeline({
 
   // Compute layout: either one band per visible category (grouped mode)
   // or a single band containing all visible events (default).
+  /**
+   * Where the viewport sits when the intro begins, in grid coordinates.
+   *
+   * The assembly is keyed to what the user can see — "line 0" is the
+   * leftmost visible one, not the far-off start of a grid that may be three
+   * thousand months wide. Measured once: recomputing on scroll would restart
+   * delays for cells mid-flight.
+   */
+  const introAnchor = React.useMemo(() => {
+    if (!intro) return { first: 0, firstYear: null as number | null };
+    const el = scrollContainerRef.current;
+    const first = Math.floor((el?.scrollLeft ?? 0) / scale.monthWidth);
+    return { first, firstYear: months[first]?.year ?? months[0]?.year ?? null };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intro]);
+
+  /**
+   * The right edge of the fill so far, in viewport pixels.
+   *
+   * The skeleton retires a bar once a real event reaches it. Events arrive
+   * in ascending date order, so the last one placed is the furthest right —
+   * no need to scan them all. Converted out of grid space and past the
+   * current scroll so it lines up with bars positioned in viewport pixels.
+   */
+  const revealedThroughX = React.useMemo(() => {
+    if (!streaming || visibleEvents.length === 0) return null;
+    const last = visibleEvents[visibleEvents.length - 1];
+    const monthIndex = findMonthIndex(months, last.startDate);
+    if (monthIndex === -1) return null;
+    const scrollLeft = scrollContainerRef.current?.scrollLeft ?? 0;
+    return monthIndex * scale.monthWidth - scrollLeft;
+  }, [streaming, visibleEvents, months, scale.monthWidth]);
+
   const layout = React.useMemo<LayoutData>(() => {
     if (groupByCategory) {
       let currentOffset = 0;
@@ -544,12 +604,19 @@ export function Timeline({
             onPointerUp={handleGridPointerUp}
             onPointerCancel={handleGridPointerUp}
           >
-            <TimelineHeader months={months} scale={scale} />
+            <TimelineHeader
+              months={months}
+              scale={scale}
+              intro={intro}
+              introFirstVisible={introAnchor.first}
+              introFirstVisibleYear={introAnchor.firstYear}
+            />
             <div className="relative flex-1 min-h-0 flex flex-col">
               <TimelineVerticalLines
                 months={months}
                 scale={scale}
                 scrollContainerRef={scrollContainerRef}
+                intro={intro}
               />
               {layout.bands.map((band) => (
                 <div
@@ -589,11 +656,24 @@ export function Timeline({
                         onPointerDown={isEditing && onUpdateEvent ? handlePointerDown : undefined}
                         rowHeight={rowHeight}
                         onMounted={handleEventMounted}
+                        revealOnMount={streaming}
+                        suppressStackAnimation={streaming}
                       />
                     );
                   })}
                 </div>
               ))}
+
+              {/* Placeholder rows, in the same coordinate space as the
+                  events that replace them. Absolute over the bands rather
+                  than inside one, because the pattern spans rows and must
+                  not be re-laid-out as band heights grow with the fill. */}
+              {streaming && (
+                <StreamingSkeleton
+                  rowHeight={rowHeight}
+                  revealedThroughX={revealedThroughX}
+                />
+              )}
 
               {/* Filler: extends the body through remaining vertical space.
                   flex-1 lets it fill the scroll container when events are short,
