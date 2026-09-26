@@ -829,11 +829,13 @@ It **widens** the range rather than replacing it, so dropping it is a no-op.
 A model routinely states a span a year wider than its own earliest event; a
 replacing override narrowed the axis by 336px at exactly the moment the
 timeline committed. It stays applied for the committed timeline and clears
-when the editor switches away.
+when the editor loads anything else — see
+[Run-outcome bookkeeping](#run-outcome-bookkeeping-lives-in-the-store).
 
 The view parks **once**, on the range's first year, when `meta` arrives — the
 axis is padded three years either side, so a canvas left at scroll 0 opens on
-empty grid with the first event off to the right. It must not move again.
+empty grid with the first event off to the right. It must not move again, and
+it parks only for a run the editor is rendering.
 
 ### Pacing
 
@@ -896,22 +898,69 @@ the array, so there is nothing else to trigger on and no timestamp to track.
 - **Reduced motion** drops the intro entirely and fades events rather than
   striking them in.
 
-### Known issue: run-outcome bookkeeping lives in the wrong place
+### Run-outcome bookkeeping lives in the store
 
-`streamingRunId`, `committedRunRef` and `parkedRunRef` live in `App.tsx`,
-which unmounts whenever the user leaves `/editor` — while the run lives in a
-store that does not. On re-entry the bookkeeping is blank but the finished run
-persists, so the editor re-handles an outcome it already handled, from state
-read before `start()` lands.
+`App.tsx` unmounts whenever the user leaves `/editor`; `GenerationContext` does
+not. So any record of *what the editor has already done with a run* has to live
+in the store — a record that dies with its reader cannot stop that reader
+acting twice. When it lived in `App` (`streamingRunId`), every re-entry found a
+finished run and a blank record: a cancelled run bounced **every** route into
+the editor back to `/` until a refresh, a successful one was committed a
+second time, and a stale `meta` parked unrelated timelines at another
+subject's start year.
 
-Symptoms: a cancelled run makes **every** route into the editor bounce back to
-`/` until a refresh; re-entering with a finished run commits a duplicate
-timeline; the axis narrows and the view parks on a stale range.
+The record is `resolvedId`: the run the editor has committed, or sent the user
+home for. `markResolved(id)` sets it (a no-op unless `id` is still the run in
+the store); `start()` and `reset()` clear it by spreading `IDLE`.
 
-Fix designed, not yet applied: move the record into the store as a
-`resolvedId` the editor marks once, and treat the store as describing whatever
-the editor currently shows — loading anything else clears it. **Do not add
-more per-run state to `App`** until this is resolved.
+| Reader | Check | Stops |
+|---|---|---|
+| `isStreaming` | `active \|\| (done && resolvedId !== id)` | a committed run found on re-entry rendering as if still streaming |
+| commit effect | `resolvedId === id` → skip; `markResolved` last | a duplicate timeline for the previous subject |
+| bounce effect | `resolvedId === id` → skip; `markResolved` before navigating | the flash-and-nothing on every later route into the editor |
+| `rangeOverride` | `isStreaming \|\| resolvedId === id` | — keeps the declared span on the committed timeline |
+
+The per-mount refs stay, for **within-mount** dedupe only, and they do a
+different job from `resolvedId`: `committedRunRef` covers the window while the
+commit's awaits are in flight and `markResolved` has not landed yet;
+`parkedRunRef` stops a second `meta` re-parking. Both guards are needed. The
+park additionally requires `isStreaming`, so a finished run's `meta` cannot
+park whatever opens next.
+
+Two rules the flag alone does not cover:
+
+- **The store describes what the editor is showing, and nothing else.** Every
+  load that is not a generation calls `reset()`: the `timelineId`, `draftId`,
+  `newTimeline`, `importedEvents` and `aiGenerated` route branches, both
+  no-route-state bootstraps, and the in-editor tile switches. Otherwise a
+  successful run stays `resolvedId === id` and imposes its span on the next
+  timeline opened. The guest branches reset *after* their capacity checks — a
+  refused load leaves the editor's contents, and so the store, as they were —
+  and `handleTimelineSwitch` resets *after* its dedup, or clicking the tile of
+  the timeline just generated narrows its axis in place.
+- **Leaving `/editor` mid-stream abandons the run** (`reset()` from an unmount
+  cleanup, only while `active`). Nothing else would receive it: it would finish
+  into a store nobody reads — the generation spent for nothing — and wait
+  there, unresolved, for the next editor to act on in the middle of loading
+  something else. A finished run is left alone, because the bounce leaves on
+  purpose and the search page reads the error and subject from the store.
+
+**The effects read the render they belong to.** A route effect's `start()` or
+`reset()` is a `setState`, so the commit, park and bounce effects declared
+after it still see the *previous* run in that same pass. Guard them on the
+store's record, never on the assumption that the route effect has already
+replaced it. Anything added to this flow that remembers a run belongs in the
+store for the same reason.
+
+After a cancel or a failure with no events, `AIModePage` passes the store's
+`subject` down as `initialSubject`, seeding the search field once at mount so
+the query comes back rather than an empty box. Not after a success — the page
+is then for starting the next one.
+
+A later visit to a generated timeline derives its axis from the events, like
+any other load. So if the model declared a span wider than its events, the
+axis on a later visit starts that much later than it did while generating —
+by design, and not a jump: nothing was on screen to move.
 
 ---
 

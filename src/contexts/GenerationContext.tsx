@@ -37,6 +37,11 @@ export interface GenerationState {
   /** One per Enter. The editor latches on this so a second generation
    *  re-seeds rather than being mistaken for the one already showing. */
   id: string
+  /** The run whose outcome the editor has already acted on — committed, or
+   *  sent the user home for. Here rather than in the editor because the editor
+   *  unmounts whenever the user leaves /editor and this store does not; a
+   *  record that died with its reader could not stop that reader acting twice. */
+  resolvedId: string | null
   subject: string
   status: GenerationStatus
   subjectType: SubjectType | null
@@ -56,12 +61,16 @@ export interface GenerationContextValue extends GenerationState {
   start: (subject: string, providerOverride?: ByokProvider) => Promise<void>
   cancel: () => void
   reset: () => void
+  /** Record that the editor has acted on this run's outcome. A no-op unless
+   *  `id` is still the run in the store, so a late call cannot mark a newer one. */
+  markResolved: (id: string) => void
   /** The other provider, offered only when the user has a key for it. */
   retryProvider: ByokProvider | null
 }
 
 const IDLE: GenerationState = {
   id: '',
+  resolvedId: null,
   subject: '',
   status: 'idle',
   subjectType: null,
@@ -115,6 +124,12 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
       prev.status === 'classifying' || prev.status === 'streaming'
         ? { ...prev, status: 'cancelled' }
         : prev,
+    )
+  }, [])
+
+  const markResolved = useCallback((id: string) => {
+    setState((prev) =>
+      prev.id === id && prev.resolvedId !== id ? { ...prev, resolvedId: id } : prev,
     )
   }, [])
 
@@ -306,9 +321,10 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
       start,
       cancel,
       reset,
+      markResolved,
       retryProvider,
     }),
-    [state, start, cancel, reset, retryProvider],
+    [state, start, cancel, reset, markResolved, retryProvider],
   )
 
   return (

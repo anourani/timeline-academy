@@ -66,6 +66,7 @@ supabase/
 - **shadcn/ui** — Custom preset, Base UI library, Vega style, Neutral base/theme color, Lucide icons, Inter font, Medium radius, Default menu color, Subtle menu accent.
 - **Component organization**: Feature folders under `src/components/` (e.g., `Auth/`, `Timeline/`, `Navigation/`, `AIMode/`).
 - **State management**: Custom hooks for feature logic; React Context for global state (auth, side panel).
+- **Anything that remembers what the editor did with an AI run lives in `GenerationContext`, not `App.tsx`.** `App` unmounts on every trip off `/editor` and the store does not, so per-run state kept in `App` is blank on re-entry while the run is still there — which is how a cancelled generation once bounced every route into the editor back to `/`. The store's `resolvedId` is that record, and the store describes only what the editor is showing: loading anything else calls `reset()`. See `src/TIMELINE_ARCHITECTURE.md` §AI Generation Streaming.
 - **ESLint** flat config with TypeScript ESLint and React Hooks plugins. No Prettier.
 - **No semicolons or formatting tool** — follow existing code style in each file.
 - **Spreadsheets** use `exceljs` via the shared helper in `src/utils/excelSheet.ts`, lazy-loaded into its own chunk. The `xlsx` package was removed (frozen on npm at 0.18.5 with prototype-pollution and ReDoS advisories, while parsing untrusted uploads). Don't reintroduce it.
@@ -152,4 +153,3 @@ That sentence is the whole model. Everything below is how it is enforced.
 - Migrations are not automated — the other half of the drift problem.
 - `/privacy` and `/terms` are engineering drafts describing the real data flows accurately, but they have not had a legal review.
 - Several paths shipped in August 2026 are deployed but never exercised, including **account deletion, which is destructive**. See the handoff doc's verified/unverified section before trusting them.
-- **A cancelled or failed AI generation makes every route into `/editor` bounce back to `/` until the page is refreshed.** Run-outcome bookkeeping (`streamingRunId`, `committedRunRef`, `parkedRunRef`) lives in `App.tsx`, which unmounts on leaving the editor, while the run lives in `GenerationContext`, which does not. Also causes a duplicate timeline on re-entry after a successful run. Fix designed but not applied — see the Known issue at the end of `src/TIMELINE_ARCHITECTURE.md` §AI Generation Streaming. **Do not add more per-run state to `App.tsx`** until it is resolved.
