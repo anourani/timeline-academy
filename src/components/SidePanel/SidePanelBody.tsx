@@ -22,7 +22,7 @@ import { computeDominantCategoryColor, DEFAULT_DOT_COLOR } from '@/utils/dominan
 import { categoryBreakdown, type CategorySlice } from '@/utils/categoryCounts'
 import { getTimelineYearRange } from '@/utils/timelineUtils'
 import { DEFAULT_CATEGORIES } from '@/constants/categories'
-import { supabase } from '@/lib/supabase'
+import { supabase, readFunctionError } from '@/lib/supabase'
 import { ConfirmationModal } from '@/components/Modal/ConfirmationModal'
 import { DeleteTimelineDialog } from '@/components/Modal/DeleteTimelineDialog'
 import { ImportCSVModal } from '@/components/AIMode/ImportCSVModal'
@@ -514,9 +514,9 @@ export function SidePanelBody() {
     if (isDeletingAccount) return
     setIsDeletingAccount(true)
     try {
-      const { data, error: deleteError } = await supabase.functions.invoke('delete-account')
-      if (deleteError || data?.error) {
-        throw new Error(data?.error || deleteError?.message || 'Deletion failed')
+      const { error: deleteError } = await supabase.functions.invoke('delete-account')
+      if (deleteError) {
+        throw new Error((await readFunctionError(deleteError)) ?? (deleteError.message || 'Deletion failed'))
       }
       // The auth record is gone server-side; clear the local session too.
       await supabase.auth.signOut()

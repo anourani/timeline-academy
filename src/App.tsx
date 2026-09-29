@@ -1249,7 +1249,6 @@ export function App() {
     // deleted. Unbinding the editor is what makes that flush a no-op.
     cancelPendingSave();
     const deletingId = loadedTimelineId;
-    setLoadedTimelineId(null);
 
     try {
       if (user && deletingId) {
@@ -1262,10 +1261,18 @@ export function App() {
         deleteLocalDraft(activeDraftId);
       }
     } catch (err) {
+      // Still bound to the row, which still exists: later edits keep
+      // autosaving and a retry deletes the same timeline. Unbinding before
+      // the delete used to leave a failed attempt in an editor that never
+      // saved again and whose retry deleted nothing.
       console.error('Failed to delete timeline:', err);
       alert('Failed to delete. Please try again.');
       return;
     }
+
+    // Unbind only now that the row is gone, so the unmount flush below is a
+    // no-op instead of a re-insert.
+    setLoadedTimelineId(null);
 
     // Clear the side panel's active id first so the synthetic-row fallback
     // can't keep the deleted tile visible, then force a refetch — the

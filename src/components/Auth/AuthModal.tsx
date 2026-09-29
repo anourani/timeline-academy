@@ -105,7 +105,13 @@ function mapErrorMessage(err: unknown): MappedError {
     return { message: 'Too many attempts. Please try again later.', isRetryable: false };
   }
 
-  // OTP errors
+  // OTP errors. Supabase Auth answers a mistyped code and a genuinely expired
+  // one with the same string, "Token has expired or is invalid", so that case
+  // must not be reported as an expiry — it sends a user with a typo back
+  // through the email flow they didn't need.
+  if (msg.includes('Token has expired or is invalid')) {
+    return { message: "That code didn't work. Check it and try again, or request a new one.", isRetryable: false };
+  }
   if (msg.includes('Token has expired') || msg.includes('otp_expired')) {
     return { message: 'Code expired. Please request a new one.', isRetryable: false };
   }

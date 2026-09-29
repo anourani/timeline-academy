@@ -28,6 +28,8 @@ Weight is 1–10, roughly: user impact × confidence that it's real, discounted 
 
 ## 1. Server error messages never reach the user — weight 9
 
+**Status: done in the same PR as this document.**
+
 **Evidence.** `src/services/aiTimeline.ts:79-87` and `:156-163` throw `error.message` on a non-2xx and then check `'error' in data` on the 2xx body. The function only ever sends `{ error }` with 400/401/429/500 (`supabase/functions/generate-timeline/index.ts:60,63,70,99,131`). supabase-js puts only "Edge Function returned a non-2xx status code" in `error.message`, so the Free-tier "You've reached the daily limit…" (429), "Sign in to generate timelines." (401), and the 500 message are all replaced by that generic string, shown in red at `NewTimelineScreen.tsx:514-516`. `SidePanelBody.tsx:413-415` has the same dead `data?.error` pattern for `delete-account`.
 
 `userApiKey.ts:107-118` already has `readErrorMessage(error)` that reads the real body from `error.context`. It just isn't shared.
@@ -65,6 +67,8 @@ Weight is 1–10, roughly: user impact × confidence that it's real, discounted 
 
 ## 4. Opening Settings writes placeholder text into the description — weight 7
 
+**Status: done in the same PR as this document.**
+
 **Evidence.** `TimelineSettingsPanel.tsx:95-99`: an effect calls `onDescriptionChange(DEFAULT_TIMELINE_DESCRIPTION)` whenever the panel opens with an empty description. Consequences: the timeline goes dirty, autosaves, and its tile jumps to the top of the side panel just from opening Settings; the user cannot clear the description (the effect refills it); and the placeholder copy ("…You can edit the header details in the settings panel.", `defaults.ts:3`) is real content that then renders on the public share page (`TimelineViewer.tsx:117,188-193`).
 
 **Fix.** Delete the effect. Put `DEFAULT_TIMELINE_DESCRIPTION` on the textarea's `placeholder` attribute (`:241-247`). Check `TimelineViewer` and the editor header render nothing when description is empty (they already handle `''`).
@@ -86,6 +90,8 @@ If you'd rather bring the whole indicator back, that's a one-flag flip, but I'd 
 **Files.** `src/components/Navigation/GlobalNav.tsx`, `src/hooks/useEvents.ts`, `src/lib/limits.ts` (reuse).
 
 ## 6. Wrong OTP code is reported as "Code expired" — weight 6
+
+**Status: done in the same PR as this document.**
 
 **Evidence.** `AuthModal.tsx:75-80` checks `'Token has expired'` before `'invalid'`. Supabase Auth returns the single string "Token has expired or is invalid" for both a typo and a real expiry, so every mistyped code shows "Code expired. Please request a new one." and sends the user back through the email flow they didn't need.
 
@@ -132,6 +138,8 @@ This is the largest item by effort. Do the pre-flight now (a few lines) and the 
 **Files.** `src/hooks/useAIMode.ts`, `src/services/aiTimeline.ts`, `src/services/anthropicDirect.ts`, `src/services/openaiDirect.ts`, `src/components/NewTimeline/GeneratingIndicator.tsx`.
 
 ## 9. Failed timeline delete leaves the editor unbound — weight 4
+
+**Status: done in the same PR as this document.**
 
 **Evidence.** `App.tsx:920-938`: `setLoadedTimelineId(null)` runs *before* the delete. On failure the user sees "Failed to delete. Please try again.", but the editor is now unbound: later edits never autosave, Share is disabled, and a retry takes the `activeDraftId` branch (null when signed in), deletes nothing, and navigates away as if it succeeded.
 

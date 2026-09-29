@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase, readFunctionError } from '../lib/supabase';
 import { getActiveModel } from './userApiKey';
 import {
   classifySubjectDirect,
@@ -88,17 +88,13 @@ export async function classifySubject(
     }
   );
 
+  // The function only ever answers `{ error }` with a non-2xx status, so the
+  // message lives on `error.context`, never on `data`.
   if (error) {
-    throw new Error(error.message || 'Failed to classify subject');
+    throw new Error((await readFunctionError(error)) ?? (error.message || 'Failed to classify subject'));
   }
 
-  const result = data as ClassificationResult | { error: string };
-
-  if ('error' in result && typeof result.error === 'string') {
-    throw new Error(result.error);
-  }
-
-  const classified = result as ClassificationResult;
+  const classified = data as ClassificationResult;
   if (!validTypes.includes(classified.type)) {
     return { type: 'topic' };
   }
@@ -166,14 +162,9 @@ export async function generateTimeline(
   );
 
   if (error) {
-    throw new Error(error.message || 'Failed to generate timeline');
+    throw new Error((await readFunctionError(error)) ?? (error.message || 'Failed to generate timeline'));
   }
-
-  const result = data as GeneratedTimeline | { error: string };
-  if ('error' in result && typeof result.error === 'string') {
-    throw new Error(result.error);
-  }
-  return result as GeneratedTimeline;
+  return data as GeneratedTimeline;
 }
 
 // ---------------------------------------------------------------------------
