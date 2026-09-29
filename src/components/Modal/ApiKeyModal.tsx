@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Modal } from './Modal'
+import { PopupShell } from '@/components/ui/PopupShell'
+import { glassButtonClass, primaryGlassButtonClass } from '@/components/ui/glassButton'
 import { PROVIDER_META, PROVIDER_ORDER } from '@/constants/byokProviders'
 import { useAccountTier } from '@/hooks/useAccountTier'
+import { useIsMobile } from '@/hooks/useIsMobile'
+import { cn } from '@/lib/utils'
 import {
   hasAnyKey,
   maskKey,
@@ -32,6 +35,12 @@ const NOT_EDITING: Record<ByokProvider, boolean> = {
   anthropic: false,
 }
 
+// The sign-in card's field: a dark well that takes the brand ring on focus.
+const fieldClass = `
+  flex items-center gap-2 bg-[#0A0A0A] border border-[#404040] transition-colors
+  focus-within:border-[rgba(37,99,235,0.8)] focus-within:ring-1 focus-within:ring-[rgba(37,99,235,0.8)]
+`
+
 export function ApiKeyModal({
   isOpen,
   onClose,
@@ -39,6 +48,7 @@ export function ApiKeyModal({
   onRequestSignIn,
 }: ApiKeyModalProps) {
   const stored = useByokKeys()
+  const isMobile = useIsMobile()
   // Two audiences share this modal. Signed out, it is the gate on the Create
   // page: "sign in or bring a key". Signed in, it is reached from the side
   // panel's "Add API Key" link and the model dropdown's unlock row, where a
@@ -69,7 +79,8 @@ export function ApiKeyModal({
   // Create page behind it (and by the one in editor settings), so there is
   // nothing to choose here — whichever provider's key is saved, the default
   // model for it applies.
-  const save = () => {
+  const save = (e: React.FormEvent) => {
+    e.preventDefault()
     const entries = PROVIDER_ORDER.map(
       (provider) => [provider, drafts[provider].trim()] as const,
     ).filter(([, value]) => value !== '')
@@ -118,137 +129,185 @@ export function ApiKeyModal({
   // Focus the first field the user actually has to fill in.
   const firstEmpty = PROVIDER_ORDER.find((provider) => !stored[provider])
 
-  return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={signedIn ? 'Add API Key' : 'Generate with AI'}
-      size="compact"
-    >
-      <div className="space-y-4">
-        <p className="body-m text-[#c9ced4] m-0">
-          {signedIn
-            ? 'Add your own OpenAI or Anthropic key to unlock higher limits and more models. Usage is billed to that provider account, not to us.'
-            : 'Timeline Academy uses AI to generate event details and timelines. Add your own OpenAI or Anthropic key to generate without an account — usage is billed to that provider account, not to us. Or sign in to use ours.'}
-        </p>
+  const fieldSize = isMobile
+    ? 'h-[52px] rounded-[12px] px-3.5'
+    : 'h-11 rounded-[10px] pl-3.5 pr-1'
+  const actionSize = isMobile
+    ? 'w-full h-[52px] rounded-[12px] text-[16px]'
+    : 'flex-1 h-[38px] py-0'
 
-        {PROVIDER_ORDER.map((provider) => {
-          const meta = PROVIDER_META[provider]
-          const savedKey = stored[provider]
-          const showInput = !savedKey || editing[provider]
+  const fields = PROVIDER_ORDER.map((provider) => {
+    const meta = PROVIDER_META[provider]
+    const savedKey = stored[provider]
+    const showInput = !savedKey || editing[provider]
 
-          return (
-            <div key={provider} className="flex flex-col gap-1">
-              <label
-                htmlFor={`byok-${provider}`}
-                className="label-m-type2 text-[#9B9EA3]"
-              >
-                {meta.label}
-              </label>
+    return (
+      <div key={provider} className="flex flex-col gap-1.5">
+        <label
+          htmlFor={`byok-${provider}`}
+          className="text-[13px] leading-[18px] text-[#9B9EA3]"
+        >
+          {meta.label}
+        </label>
 
-              {showInput ? (
-                <input
-                  id={`byok-${provider}`}
-                  type="password"
-                  placeholder={meta.placeholder}
-                  value={drafts[provider]}
-                  onChange={(e) => {
-                    setDrafts((prev) => ({
-                      ...prev,
-                      [provider]: e.target.value,
-                    }))
-                    // Clear this field's complaint as soon as it is being
-                    // addressed — otherwise a corrected field keeps showing
-                    // the old error until the next save attempt, which reads
-                    // as "still wrong". The form-level error goes too, since
-                    // it only ever means "nothing typed".
-                    setErrors((prev) =>
-                      prev[provider] || prev.form
-                        ? { ...prev, [provider]: undefined, form: undefined }
-                        : prev,
-                    )
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') save()
-                  }}
-                  autoFocus={firstEmpty === provider}
-                  spellCheck={false}
-                  autoComplete="off"
-                  className="w-full h-9 bg-[#242526] border border-[#262626] rounded-[8px] px-3 py-[7.5px] outline-none focus:border-[#404040] font-['JetBrains_Mono',monospace] text-[12px] text-[#DADEE5]"
-                />
-              ) : (
-                <div className="flex items-center justify-between gap-2 h-9 px-3">
-                  <code className="font-['JetBrains_Mono',monospace] text-[12px] text-[#9B9EA3]">
-                    {maskKey(savedKey)}
-                  </code>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setEditing((prev) => ({ ...prev, [provider]: true }))
-                    }
-                    className="font-['Avenir',sans-serif] text-[12px] text-[#9B9EA3] underline hover:text-[#DADEE5]"
-                  >
-                    Replace
-                  </button>
-                </div>
+        {showInput ? (
+          <div className={cn(fieldClass, fieldSize)}>
+            <input
+              id={`byok-${provider}`}
+              type="password"
+              placeholder={meta.placeholder}
+              value={drafts[provider]}
+              onChange={(e) => {
+                setDrafts((prev) => ({
+                  ...prev,
+                  [provider]: e.target.value,
+                }))
+                // Clear this field's complaint as soon as it is being
+                // addressed — otherwise a corrected field keeps showing
+                // the old error until the next save attempt, which reads
+                // as "still wrong". The form-level error goes too, since
+                // it only ever means "nothing typed".
+                setErrors((prev) =>
+                  prev[provider] || prev.form
+                    ? { ...prev, [provider]: undefined, form: undefined }
+                    : prev,
+                )
+              }}
+              autoFocus={firstEmpty === provider}
+              spellCheck={false}
+              autoComplete="off"
+              aria-invalid={Boolean(errors[provider])}
+              className={cn(
+                "min-w-0 flex-1 bg-transparent outline-none font-['JetBrains_Mono',monospace] text-[#DADEE5] placeholder:text-[#6D7073]",
+                // 16px keeps iOS from zooming the page on focus.
+                isMobile ? 'text-[16px]' : 'text-[13px]',
               )}
-
-              {errors[provider] && (
-                <p className="body-m text-destructive m-0">
-                  {errors[provider]}
-                </p>
+            />
+          </div>
+        ) : (
+          <div className={cn(fieldClass, fieldSize, 'justify-between', isMobile && 'pr-1.5')}>
+            <code className="min-w-0 truncate font-['JetBrains_Mono',monospace] text-[13px] text-[#9B9EA3]">
+              {maskKey(savedKey)}
+            </code>
+            <button
+              type="button"
+              onClick={() =>
+                setEditing((prev) => ({ ...prev, [provider]: true }))
+              }
+              className={cn(
+                glassButtonClass,
+                'min-w-0 shrink-0 rounded-[8px] px-3 py-0 outline-none focus-visible:ring-1 focus-visible:ring-white/40',
+                isMobile ? 'h-10' : 'h-[34px]',
               )}
-            </div>
-          )
-        })}
-
-        {errors.form && (
-          <p className="body-m text-destructive m-0">{errors.form}</p>
+            >
+              Replace
+            </button>
+          </div>
         )}
 
-        <p className="font-['Avenir',sans-serif] text-[12px] leading-[16px] text-[#6b6e73] m-0">
-          Get a key at{' '}
-          {PROVIDER_ORDER.map((provider, i) => (
-            <span key={provider}>
-              {i > 0 && ' or '}
-              <a
-                href={PROVIDER_META[provider].consoleUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline hover:text-[#9B9EA3]"
-              >
-                {PROVIDER_META[provider].consoleLabel}
-              </a>
-            </span>
-          ))}
-          .{' '}
-          {signedIn
-            ? 'Saved to your account, encrypted, so it works on every device you sign in on.'
-            : 'Kept only in this browser until you sign in.'}
-        </p>
-
-        <div className="flex flex-col gap-2">
-          <button onClick={save} className={glassPrimary}>
-            {signedIn ? 'Save' : 'Save & continue'}
-          </button>
-          {!signedIn && onRequestSignIn && (
-            <button
-              onClick={onRequestSignIn}
-              className="self-center font-['Avenir',sans-serif] text-[14px] leading-[20px] text-[#9B9EA3] underline hover:text-[#DADEE5] transition-colors"
-            >
-              Sign in instead
-            </button>
-          )}
-        </div>
+        {errors[provider] && (
+          <p className="m-0 text-[13px] leading-[18px] text-[#E06A6A]" role="alert">
+            {errors[provider]}
+          </p>
+        )}
       </div>
-    </Modal>
+    )
+  })
+
+  const help = (
+    <p className={cn('m-0 text-[12px] leading-[18px] text-[#6D7073]', isMobile && 'text-center')}>
+      Get a key at{' '}
+      {PROVIDER_ORDER.map((provider, i) => (
+        <span key={provider}>
+          {i > 0 && ' or '}
+          <a
+            href={PROVIDER_META[provider].consoleUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-[#9B9EA3]"
+          >
+            {PROVIDER_META[provider].consoleLabel}
+          </a>
+        </span>
+      ))}
+      .{' '}
+      {signedIn
+        ? 'Saved to your account, encrypted, so it works on every device you sign in on.'
+        : 'Kept only in this browser until you sign in.'}
+    </p>
+  )
+
+  const submit = (
+    <button
+      type="submit"
+      className={cn(
+        primaryGlassButtonClass,
+        actionSize,
+        'outline-none focus-visible:ring-1 focus-visible:ring-white/40',
+      )}
+    >
+      {signedIn ? 'Save' : 'Save & continue'}
+    </button>
+  )
+
+  const signIn = !signedIn && onRequestSignIn && (
+    <button
+      type="button"
+      onClick={onRequestSignIn}
+      className={cn(
+        glassButtonClass,
+        actionSize,
+        'outline-none focus-visible:ring-1 focus-visible:ring-white/40',
+      )}
+    >
+      Sign in instead
+    </button>
+  )
+
+  return (
+    <PopupShell
+      open={isOpen}
+      onOpenChange={(open) => { if (!open) onClose() }}
+      tall
+      title={signedIn ? 'Add API Key' : 'Generate with AI'}
+      description={signedIn
+        ? 'Unlock higher limits and more models with your own OpenAI or Anthropic key. Usage is billed to that provider, not to us.'
+        : 'Add your own OpenAI or Anthropic key to generate without an account — usage is billed to that provider, not to us. Or sign in to use ours.'}
+      topSlot={
+        <span className="font-['JetBrains_Mono',monospace] text-[11px] uppercase text-[#6D7073]">
+          Bring your own key
+        </span>
+      }
+    >
+      {/* A form so Enter in either field saves, the way it sends the code on
+          the sign-in card. */}
+      <form onSubmit={save} className={cn('flex flex-col gap-3', isMobile && 'flex-1')} noValidate>
+        {fields}
+
+        {errors.form && (
+          <p className="m-0 text-[13px] leading-[18px] text-[#E06A6A]" role="alert" aria-live="polite">
+            {errors.form}
+          </p>
+        )}
+
+        {!isMobile && help}
+
+        {isMobile ? (
+          <>
+            <div className="min-h-6 flex-1" aria-hidden />
+            <div className="flex flex-col gap-2">
+              {submit}
+              {signIn}
+            </div>
+            <div className="mt-1">{help}</div>
+          </>
+        ) : (
+          <div className="mt-1 flex gap-2">
+            {signIn}
+            {submit}
+          </div>
+        )}
+      </form>
+    </PopupShell>
   )
 }
-
-const glassPrimary = `
-  relative px-[16px] py-[8px] rounded-[10px]
-  backdrop-blur-[12px] bg-[rgba(37,99,235,0.8)] border border-white/[0.15]
-  shadow-[0px_8px_32px_rgba(0,0,0,0.4),inset_0px_1px_0px_rgba(255,255,255,0.1)]
-  font-['Avenir',sans-serif] font-medium text-[14px] text-[#dadee5]
-  hover:bg-[rgba(37,99,235,0.9)] transition-all
-`
