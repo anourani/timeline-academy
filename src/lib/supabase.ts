@@ -69,6 +69,25 @@ async function fetchWithRetry(
   throw new Error('Failed to fetch'); // unreachable, satisfies TS
 }
 
+// --- Edge Function errors ---
+
+/**
+ * The function's own `{ error }` body, which carries the message worth
+ * showing. supabase-js only surfaces the status text ("Edge Function returned
+ * a non-2xx status code") on a non-2xx, so every function's rate-limit and
+ * sign-in messages are lost unless the body is read back off `error.context`.
+ */
+export async function readFunctionError(error: unknown): Promise<string | null> {
+  const context = (error as { context?: unknown }).context;
+  if (!(context instanceof Response)) return null;
+  try {
+    const body = await context.clone().json();
+    return typeof body?.error === 'string' ? body.error : null;
+  } catch {
+    return null;
+  }
+}
+
 // --- Supabase client ---
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {

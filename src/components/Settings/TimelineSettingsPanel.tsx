@@ -93,12 +93,6 @@ export function TimelineSettingsPanel({
   );
 
   useEffect(() => {
-    if (isOpen && !timelineDescription) {
-      onDescriptionChange(DEFAULT_TIMELINE_DESCRIPTION);
-    }
-  }, [isOpen, timelineDescription, onDescriptionChange]);
-
-  useEffect(() => {
     if (!isOpen) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -242,6 +236,7 @@ export function TimelineSettingsPanel({
                       id="timelineDescription"
                       value={timelineDescription}
                       onChange={handleDescriptionChange}
+                      placeholder={DEFAULT_TIMELINE_DESCRIPTION}
                       maxLength={maxDescriptionLength}
                       className="w-full h-[76px] bg-[#262626] border border-[#262626] rounded-[8px] p-2 body-m text-[#DADEE5] outline-none focus:border-[#404040]"
                     />

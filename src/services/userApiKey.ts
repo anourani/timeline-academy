@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase, readFunctionError } from '@/lib/supabase'
 import {
   DEFAULT_MODEL_BY_PROVIDER,
   getModelById,
@@ -104,23 +104,10 @@ interface ByokGetResponse {
   model?: string | null
 }
 
-/** The function's own `{ error }` body, which carries the message worth
- *  showing. supabase-js only surfaces the status text on a non-2xx. */
-async function readErrorMessage(error: unknown): Promise<string | null> {
-  const context = (error as { context?: unknown }).context
-  if (!(context instanceof Response)) return null
-  try {
-    const body = await context.clone().json()
-    return typeof body?.error === 'string' ? body.error : null
-  } catch {
-    return null
-  }
-}
-
 async function callByokKeys(body: ByokRequest): Promise<unknown> {
   const { data, error } = await supabase.functions.invoke('byok-keys', { body })
   if (error) {
-    throw new Error((await readErrorMessage(error)) ?? error.message)
+    throw new Error((await readFunctionError(error)) ?? error.message)
   }
   if (data && typeof data === 'object' && 'error' in data) {
     throw new Error(String((data as { error: unknown }).error))
