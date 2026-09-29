@@ -26,6 +26,27 @@ function sourcesEqual(a: EventSource[] | null | undefined, b: EventSource[] | nu
 }
 
 /**
+ * The full `events` row for a client event. Every insert path must go through
+ * this — the migration on sign-in and Duplicate once carried their own
+ * four-column copies of it, which is how descriptions, images and sources were
+ * silently dropped while the diff-save below kept writing them.
+ */
+export function toEventRow(event: TimelineEvent, timelineId: string) {
+  return {
+    id: event.id,
+    timeline_id: timelineId,
+    title: event.title,
+    start_date: event.startDate,
+    end_date: event.endDate,
+    category: event.category,
+    description: event.description ?? null,
+    image_url: event.imageUrl ?? null,
+    image_attribution: event.imageAttribution ?? null,
+    sources: event.sources ?? null,
+  };
+}
+
+/**
  * Diff-based save for timeline events. Compares client events against
  * server state and issues only the necessary INSERT/UPDATE/DELETE operations.
  */
@@ -105,20 +126,7 @@ export async function saveTimelineEvents(
   if (toInsert.length > 0) {
     const { error } = await supabase
       .from('events')
-      .insert(
-        toInsert.map(event => ({
-          id: event.id,
-          timeline_id: timelineId,
-          title: event.title,
-          start_date: event.startDate,
-          end_date: event.endDate,
-          category: event.category,
-          description: event.description ?? null,
-          image_url: event.imageUrl ?? null,
-          image_attribution: event.imageAttribution ?? null,
-          sources: event.sources ?? null,
-        }))
-      );
+      .insert(toInsert.map(event => toEventRow(event, timelineId)));
 
     if (error) throw error;
   }

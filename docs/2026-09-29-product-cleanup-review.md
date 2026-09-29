@@ -42,6 +42,8 @@ Weight is 1–10, roughly: user impact × confidence that it's real, discounted 
 
 ## 2. Sign-in migration and Duplicate drop most of the timeline — weight 8
 
+**Status: done.** `createTimelineFrom` now takes the whole timeline and writes every column through a shared `toEventRow` in `saveEvents.ts`; Duplicate goes through `loadTimeline` + `createTimelineFrom`, so it gets the limit check and every column, and an events-insert failure no longer leaves an empty "(Copy)" row behind.
+
 **Evidence.** Two write paths persist only a subset of what the load path reads (`useTimeline.ts:154-187` reads description, categories, chapters, vertical_scale, group_by_category, and per-event description/image_url/image_attribution/sources):
 
 - **Guest → account migration.** `App.tsx:657` calls `createTimelineFrom(draft.title, draft.events, draft.scale, draft.verticalScale)`. `useTimeline.ts:198-229` inserts `{ title, user_id, scale, vertical_scale }` and events with only id/title/dates/category. `LocalDraft` (`draftStorage.ts:7-19`) carries description, categories, chapters, groupByCategory, and the full events. All of it is dropped at the exact moment the product invites the user to sign in to keep their work.
@@ -55,6 +57,8 @@ Weight is 1–10, roughly: user impact × confidence that it's real, discounted 
 **Files.** `src/hooks/useTimeline.ts`, `src/App.tsx` (call site), `src/components/SidePanel/SidePanelBody.tsx`, `src/utils/saveEvents.ts` (reuse).
 
 ## 3. Excel round-trip loses categories — weight 7
+
+**Status: done.** Export writes the category label; all three call sites pass their categories; the side-panel template uses the default labels its importer matches.
 
 **Evidence.** `excelExport.ts:12` writes `event.category`, which is the id (`category_1`). Both importers match on the *label*: `TimelineSettingsPanel.tsx:126-128` against the timeline's categories, `ImportCSVModal.tsx:105-108` against `DEFAULT_CATEGORIES`, falling back to the first category. So export → import puts every event in category 1. The side-panel template (`SidePanelBody.tsx:555`) also ships sample categories `['Personal Life', 'Career']` that match no default label ("Category 1"–"4"), so the template itself doesn't round-trip.
 
