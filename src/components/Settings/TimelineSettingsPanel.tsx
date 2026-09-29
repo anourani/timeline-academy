@@ -43,7 +43,6 @@ interface TimelineSettingsPanelProps {
   timelineTitle: string;
   timelineDescription: string;
   onImportEvents: (events: Omit<TimelineEvent, 'id'>[]) => AddEventsResult;
-  onClearTimeline: () => void;
   onDescriptionChange: (description: string) => void;
   scale: TimelineScale;
   onScaleChange: (scale: TimelineScale) => void;

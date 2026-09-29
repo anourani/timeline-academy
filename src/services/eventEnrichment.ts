@@ -10,10 +10,6 @@ import type { EventSource, TimelineEvent } from '../types/event'
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string
 
-// Moved to @/types/ai so both direct clients can import it without going
-// through this module. Re-exported so existing importers keep working.
-export type { EnrichmentStreamHandlers } from '@/types/ai'
-
 export async function fetchEventImage(title: string): Promise<{
   imageUrl: string | null
   attribution: string | null

@@ -18,7 +18,6 @@
 
 import {
   getStreamSystemPrompt,
-  getSystemPrompt,
   getUserPrompt,
   buildEnrichUserPrompt,
   CLASSIFICATION_PROMPT,
@@ -27,14 +26,12 @@ import {
 } from './llmPrompts'
 import {
   createNdjsonLineReader,
-  parseTimelineJson,
   readApiError,
   readSseStream,
 } from './llmShared'
 import type { ModelDef } from '@/constants/models'
 import type {
   EnrichmentStreamHandlers,
-  GeneratedTimeline,
   TimelineStreamHandlers,
 } from '@/types/ai'
 import type { EventSource, TimelineEvent } from '@/types/event'
@@ -201,55 +198,6 @@ export async function enrichEventOpenAIDirect(
     if ((err as Error).name === 'AbortError') return
     handlers.onError((err as Error).message || 'Stream interrupted', 'openai')
   }
-}
-
-// ---------------------------------------------------------------------------
-// Timeline generation (non-streaming JSON)
-// ---------------------------------------------------------------------------
-
-export async function generateTimelineOpenAIDirect(
-  subject: string,
-  categories: CategoryDefinition[] | undefined,
-  model: ModelDef,
-  apiKey: string,
-): Promise<GeneratedTimeline> {
-  const userPrompt = categories
-    ? getUserPrompt(subject, categories)
-    : `Generate a biographical timeline for: ${subject}`
-
-  const res = await fetch(OPENAI_CHAT_URL, {
-    method: 'POST',
-    headers: headers(apiKey),
-    body: JSON.stringify({
-      model: model.id,
-      messages: [
-        { role: 'system', content: getSystemPrompt() },
-        { role: 'user', content: userPrompt },
-      ],
-      // No `temperature`: newer reasoning-capable models reject non-default
-      // sampling parameters, and this is a schema-constrained emit anyway.
-      //
-      // `response_format: json_object` and `max_tokens` come from the
-      // registry. `json_object` requires the literal word "JSON" somewhere in
-      // the messages; getSystemPrompt() satisfies that incidentally ("JSON
-      // ONLY", "RESPONSE SCHEMA"), and a future prompt edit that removes the
-      // word would 400 every OpenAI generation while the Anthropic path kept
-      // working.
-      ...model.params.generate,
-    }),
-  })
-
-  if (!res.ok) {
-    throw new Error(
-      await readApiError(res, 'OpenAI API error', model.id, 'openai'),
-    )
-  }
-
-  const json = await res.json()
-  const text = json.choices?.[0]?.message?.content
-  if (!text) throw new Error('Empty response from OpenAI')
-
-  return parseTimelineJson(text as string)
 }
 
 // ---------------------------------------------------------------------------

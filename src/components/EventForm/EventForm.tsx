@@ -20,7 +20,6 @@ const MAX_TITLE_LENGTH = 55
 interface EventFormProps {
   onSubmit: (event: Omit<TimelineEvent, 'id'>) => void
   categories: CategoryConfig[]
-  onImport?: (events: Array<Omit<TimelineEvent, 'id'>>, categories: CategoryConfig[]) => void
   initialStartDate?: string | null
   initialEvent?: TimelineEvent | null
 }

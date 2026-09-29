@@ -47,9 +47,8 @@
 ```
 Timeline
 ├── TimelineCategoryLabels                ─ conditional: groupByCategory
-│                                           (overlay, absolute, top = SCROLL_INDICATOR_HEIGHT + HEADER_HEIGHT)
+│                                           (overlay, absolute, top = HEADER_HEIGHT)
 ├── inner column wrapper
-│   ├── TimelineScrollIndicator
 │   └── scroll container (overflow-auto, scrollbar-hide)
 │       └── timeline-grid wrapper
 │           ├── TimelineHeader
@@ -149,13 +148,12 @@ isFullScreen
 
 Inside the root, the page is a vertical stack:
 
-1. `TimelineScrollIndicator` — height `SCROLL_INDICATOR_HEIGHT` (36px), in normal flow at the top.
-2. Scroll container (`overflow-auto scrollbar-hide`).
+1. Scroll container (`overflow-auto scrollbar-hide`).
    - Inside, the `timeline-grid` wrapper has `min-width: months.length * scale.monthWidth` and `min-height: 100%`.
    - First child is `TimelineHeader` (year + month labels, total 64px tall).
    - Below that is the body column, which contains `TimelineVerticalLines`, the layout bands, and a `flex-1` filler.
 
-When `groupByCategory` is true, a separate `TimelineCategoryLabels` overlay is rendered as the first child of the root, with `position: absolute; left: 0; z-10; pointer-events: none` and `top: SCROLL_INDICATOR_HEIGHT + HEADER_HEIGHT` (= 100px). Its height matches `layout.totalHeight`. The overlay sits outside the horizontal scroll container, so it stays pinned to the left edge as the user scrolls horizontally.
+When `groupByCategory` is true, a separate `TimelineCategoryLabels` overlay is rendered as the first child of the root, with `position: absolute; left: 0; z-10; pointer-events: none` and `top: HEADER_HEIGHT` (= 64px). Its height matches `layout.totalHeight`. The overlay sits outside the horizontal scroll container, so it stays pinned to the left edge as the user scrolls horizontally.
 
 ---
 
@@ -166,7 +164,7 @@ Controlled by the `groupByCategory` prop on `Timeline.tsx`. State lives in `useG
 | `groupByCategory` | Bands | Row height | Category labels |
 |---|---|---|---|
 | `false` (default) | One band containing every visible event, stacked together. | `EVENT_ROW_HEIGHT` (38px) | Hidden |
-| `true` | One band per visible category, in `visibleCategories` order. Each band runs its own stacking pass. | `EVENT_HEIGHT` (36px) | Rendered as the absolute overlay (see §3) |
+| `true` | One band per visible category, in `visibleCategories` order. Each band runs its own stacking pass. | 36px per row | Rendered as the absolute overlay (see §3) |
 
 In grouped mode, each `TimelineEvent` receives `categoryOffset = band.offset` so the event renders at the correct vertical position within the overall body. In default mode, all events share `offset = 0`.
 
@@ -216,7 +214,7 @@ grid-auto-rows:       ${rowHeight}px;
 gap:                  0;
 ```
 
-Where `rowHeight` is `EVENT_HEIGHT` when `groupByCategory` is true, else `EVENT_ROW_HEIGHT`. Events are placed into a band via `gridColumn: ${startColumn} / ${endColumn}` and `gridRow: ${stackIndex + 1}`.
+Where `rowHeight` is 36px when `groupByCategory` is true, else `EVENT_ROW_HEIGHT` (38px). Events are placed into a band via `gridColumn: ${startColumn} / ${endColumn}` and `gridRow: ${stackIndex + 1}`.
 
 ---
 
@@ -249,21 +247,7 @@ Where `rowHeight` is `EVENT_HEIGHT` when `groupByCategory` is true, else `EVENT_
 
 ## Scroll Indicator
 
-`TimelineScrollIndicator.tsx` is a single year label rendered in normal flow at the top of the timeline column. It is **not** an absolutely-positioned vertical bar.
-
-```tsx
-<div
-  className="flex items-start px-[16px] md:px-[24px] pointer-events-none font-mono text-[20px] md:text-[24px] text-[#9b9ea3] whitespace-nowrap overflow-hidden"
-  style={{ height: SCROLL_INDICATOR_HEIGHT }}
->
-  {leftYear != null && <span>{leftYear}</span>}
-  {/* … `· <chapterLabel>` when the timeline has chapters */}
-</div>
-```
-
-The displayed year is `months[Math.max(0, Math.floor(visibleRange.start / 4))]?.year`, where `visibleRange.start` comes from `useTimelineScroll` and is expressed in quarter-columns. `Math.floor(... / 4)` converts back to a month index.
-
-The optional `chapterLabel` prop appends `· <label>` after the year, naming the chapter the viewport is inside. It is truncated rather than allowed to widen the row — this sits above the canvas, and a long chapter name must not introduce a horizontal scrollbar. Absent on a timeline with no chapters, which leaves the bare year exactly as it was.
+There is no longer a year-indicator row above the grid. `TimelineScrollIndicator` was unmounted on 2026-09-19 when the chapter chips took over the year readout, and deleted in the cleanup sweep along with `SCROLL_INDICATOR_HEIGHT`. The scroll container is now the first child of the inner column.
 
 ---
 
@@ -271,7 +255,7 @@ The optional `chapterLabel` prop appends `· <label>` after the year, naming the
 
 `ChaptersStrip.tsx` renders a chapter of the timeline as one chip each — label, year span, event count — with the chip containing the viewport's left edge filled in the timeline's accent colour and carrying a 2px progress rule.
 
-It is **not** part of the `Timeline` subtree. In the editor it is absolutely positioned inside `<main>`'s `pt-[140px]` band (`inset-x-0 bottom-[24px]`), 24px above the scroll indicator. That band was empty before, so the strip appearing or disappearing never moves the canvas — and `TimelineCategoryLabels`, which is positioned relative to `Timeline`'s own root at `SCROLL_INDICATOR_HEIGHT + HEADER_HEIGHT`, stays in sync. In `TimelineViewer` there is no such band, so the strip sits in normal flow above `Timeline` instead.
+It is **not** part of the `Timeline` subtree. In the editor it is absolutely positioned inside `<main>`'s `pt-[140px]` band (`inset-x-0 bottom-[24px]`), 24px above the timeline. That band was empty before, so the strip appearing or disappearing never moves the canvas — and `TimelineCategoryLabels`, which is positioned relative to `Timeline`'s own root at `HEADER_HEIGHT`, stays in sync. In `TimelineViewer` there is no such band, so the strip sits in normal flow above `Timeline` instead.
 
 Chapters themselves are `{ id, label, startDate, endDate }` on `timelines.chapters` (jsonb), generated by the AI pass. `src/utils/chapters.ts` holds the pure logic: `normalizeChapters` (validate, sort, assign ids), `findChapterAtMonth`, `findActiveChapter`, `chapterProgress`, `countEventsInChapter`. A timeline with no chapters renders nothing — except while a generation is streaming, when `placeholderCount` shows placeholder chips for chapters still in flight.
 
@@ -438,7 +422,7 @@ Band heights are computed inline in `Timeline.tsx`'s `layout` `useMemo` (no sepa
 
 ```ts
 maxStack = max(stackedEvents.stackIndex, 0)
-height   = max((maxStack + 1) * EVENT_HEIGHT + CATEGORY_PADDING, CATEGORY_MIN_HEIGHT)
+height   = max((maxStack + 1) * 36 + CATEGORY_PADDING, CATEGORY_MIN_HEIGHT)
 ```
 
 Bands are stacked vertically; each band records its `offset` (sum of prior heights) so events know where their band starts.
@@ -552,7 +536,6 @@ Loading an existing saved timeline via `switchTimeline(timelineId)` does **not**
 - horizontal trackpad gesture, or
 - pressing the `Home` key while the scroll container is focused.
 
-If you change the auto-scroll behavior here, also revisit the `TimelineScrollIndicator` (§8), which derives its displayed year from `visibleRange.start` and will follow the new initial position automatically.
 
 ---
 
@@ -1288,10 +1271,8 @@ list deliberately omits, implying a saved timeline that does not exist.
 
 | Constant | Value | Description |
 |---|---|---|
-| `SCROLL_INDICATOR_HEIGHT` | `36` | Height of the year indicator row above the grid |
 | `HEADER_HEIGHT` | `64` | Year labels (32) + month labels (32) |
-| `EVENT_HEIGHT` | `36` | Height of one event row (used in grouped mode) |
-| `EVENT_ROW_HEIGHT` | `38` | `EVENT_HEIGHT` + 2px vertical gap (used in default mode) |
+| `EVENT_ROW_HEIGHT` | `38` | 36px event row + 2px vertical gap (used in default mode) |
 | `EVENT_MIN_WIDTH` | `120` | Minimum width for event title visibility |
 | `CATEGORY_PADDING` | `8` | Vertical padding within a band |
 | `CATEGORY_MIN_HEIGHT` | `80` | Minimum height of an empty band |

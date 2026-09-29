@@ -2,12 +2,10 @@ import { supabase, readFunctionError } from '../lib/supabase';
 import { getActiveModel } from './userApiKey';
 import {
   classifySubjectDirect,
-  generateTimelineDirect,
   generateTimelineStreamDirect,
 } from './anthropicDirect';
 import {
   classifySubjectOpenAIDirect,
-  generateTimelineOpenAIDirect,
   generateTimelineStreamOpenAIDirect,
 } from './openaiDirect';
 import {
@@ -21,7 +19,6 @@ import type { SubjectType, PillDefinition } from '../constants/pillDefinitions';
 import type {
   ByokProvider,
   ClassificationResult,
-  GeneratedTimeline,
   TimelineStreamHandlers,
 } from '@/types/ai';
 
@@ -38,11 +35,6 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 // that provider's default model for a single call and leaves the stored
 // preference alone, so a one-off retry never silently redefines what the user
 // is on.
-
-// Moved to @/types/ai so llmShared.ts can reference GeneratedTimeline without
-// importing this module (which imports the direct clients, which import
-// llmShared). Re-exported so existing importers keep working.
-export type { ClassificationResult, GeneratedTimeline } from '@/types/ai';
 
 /**
  * Classify a subject into a type.
@@ -99,72 +91,6 @@ export async function classifySubject(
     return { type: 'topic' };
   }
   return classified;
-}
-
-/**
- * Generate a full timeline via LLM.
- *
- * Routes via the BYOK key when present (browser-direct, no rate limit),
- * otherwise hits our edge function with the user's JWT. Logged-out users
- * without a key are gated to sign-in-or-BYOK before this is called.
- */
-export async function generateTimeline(
-  subject: string,
-  subjectType?: SubjectType,
-  categories?: PillDefinition[],
-  providerOverride?: ByokProvider
-): Promise<GeneratedTimeline> {
-  const active = getActiveModel(providerOverride);
-  if (active) {
-    const { model, credential } = active;
-    const categoryDefs =
-      categories && categories.length > 0
-        ? categories.map((c) => ({
-            id: c.id,
-            label: c.label,
-            promptSnippet: c.promptSnippet,
-          }))
-        : undefined;
-    try {
-      return model.provider === 'openai'
-        ? await generateTimelineOpenAIDirect(
-            subject,
-            categoryDefs,
-            model,
-            credential.key
-          )
-        : await generateTimelineDirect(
-            subject,
-            categoryDefs,
-            model,
-            credential.key
-          );
-    } catch (err) {
-      throw new ProviderError((err as Error).message, credential.provider);
-    }
-  }
-
-  const body: Record<string, unknown> = { subject };
-  if (subjectType) body.subjectType = subjectType;
-  if (categories && categories.length > 0) {
-    body.categories = categories.map((c) => ({
-      id: c.id,
-      label: c.label,
-      promptSnippet: c.promptSnippet,
-    }));
-  }
-
-  const { data, error } = await supabase.functions.invoke(
-    'generate-timeline',
-    {
-      body,
-    }
-  );
-
-  if (error) {
-    throw new Error((await readFunctionError(error)) ?? (error.message || 'Failed to generate timeline'));
-  }
-  return data as GeneratedTimeline;
 }
 
 // ---------------------------------------------------------------------------

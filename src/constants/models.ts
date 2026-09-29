@@ -435,11 +435,6 @@ function orderedModels(): ModelDef[] {
   )
 }
 
-/** The models of one provider, in registry order. For grouped rendering. */
-export function modelsByProvider(provider: ByokProvider): ModelDef[] {
-  return MODELS.filter((m) => m.provider === provider)
-}
-
 /**
  * The requested id if these keys can reach it, else the active provider's
  * default.

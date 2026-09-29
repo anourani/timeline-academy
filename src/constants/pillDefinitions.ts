@@ -32,10 +32,3 @@ export const PILL_DEFINITIONS: Record<SubjectType, PillDefinition[]> = {
     { id: 'category_4', label: 'Crises & Controversy', promptSnippet: 'Scandals, lawsuits, near-failures, pivots, layoffs, regulatory battles, restructuring' },
   ],
 }
-
-export const SUBJECT_TYPE_SUFFIX: Record<SubjectType, string> = {
-  person: "'s life.",
-  event: '',
-  topic: '',
-  organization: '',
-}

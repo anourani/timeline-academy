@@ -47,7 +47,7 @@ interface AiStreamingRouteState {
 
 export function App() {
   const {
-    events, addEvent, addEvents, clearEvents, setEvents, updateEvent,
+    events, addEvent, addEvents, setEvents, updateEvent,
     title, description, setTitle, setDescription,
     categories, updateCategories, resetCategories,
     chapters, updateChapters, resetChapters,
@@ -1230,10 +1230,6 @@ export function App() {
     return () => setActiveDominantCategoryColor(null);
   }, [timelineAccentColor, setActiveDominantCategoryColor]);
 
-  const handleClearTimeline = () => {
-    clearEvents();
-  };
-
   const handleDeleteTimeline = async () => {
     // Drop any queued save before the row goes away. This is the one case where
     // cancelling beats flushing: the editor now flushes on unmount, and
@@ -1346,7 +1342,6 @@ export function App() {
         onDescriptionChange={setDescription}
         onAddEvent={addEvent}
         onImportEvents={addEvents}
-        onClearTimeline={handleClearTimeline}
         events={events}
         categories={categories}
         onCategoriesChange={updateCategories}

@@ -10,7 +10,6 @@
 
 import {
   getStreamSystemPrompt,
-  getSystemPrompt,
   getUserPrompt,
   buildEnrichUserPrompt,
   CLASSIFICATION_PROMPT,
@@ -19,7 +18,6 @@ import {
 } from './llmPrompts'
 import {
   createNdjsonLineReader,
-  parseTimelineJson,
   readApiError,
   readSseStream,
   stripCodeFence,
@@ -27,7 +25,6 @@ import {
 import type { ModelDef } from '@/constants/models'
 import type {
   EnrichmentStreamHandlers,
-  GeneratedTimeline,
   TimelineStreamHandlers,
 } from '@/types/ai'
 import type { EventSource, TimelineEvent } from '@/types/event'
@@ -197,49 +194,6 @@ export async function enrichEventDirect(
     if ((err as Error).name === 'AbortError') return
     handlers.onError((err as Error).message || 'Stream interrupted', 'anthropic')
   }
-}
-
-// ---------------------------------------------------------------------------
-// Timeline generation (non-streaming JSON)
-// ---------------------------------------------------------------------------
-
-export async function generateTimelineDirect(
-  subject: string,
-  categories: CategoryDefinition[] | undefined,
-  model: ModelDef,
-  apiKey: string,
-): Promise<GeneratedTimeline> {
-  const userPrompt = categories
-    ? getUserPrompt(subject, categories)
-    : `Generate a biographical timeline for: ${subject}`
-
-  const res = await fetch(ANTHROPIC_URL, {
-    method: 'POST',
-    headers: headers(apiKey),
-    body: JSON.stringify({
-      model: model.id,
-      system: getSystemPrompt(),
-      messages: [{ role: 'user', content: userPrompt }],
-      // No `temperature`: every model in the registry rejects a non-default
-      // value with a 400. The old 0.4 is gone rather than moved — steer with
-      // the prompt.
-      //
-      // How thinking is handled is per-model and lives in the registry: Sonnet
-      // takes `thinking: { type: 'disabled' }` because this call emits a fixed
-      // JSON schema with no tools, while Opus and Fable must leave it alone
-      // (Fable 400s on any explicit value, and Opus can leak <thinking> tags
-      // into the text with it off) and lower `effort` instead.
-      ...model.params.generate,
-    }),
-  })
-
-  if (!res.ok) {
-    throw new Error(
-      await readApiError(res, 'Anthropic API error', model.id, 'anthropic'),
-    )
-  }
-
-  return parseTimelineJson(readMessageText(await res.json()))
 }
 
 // ---------------------------------------------------------------------------
