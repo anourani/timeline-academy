@@ -5,6 +5,7 @@ import type { TimelineChapter } from '../types/timeline';
 import { useAuth } from './useAuth';
 import { DEFAULT_TIMELINE_TITLE } from '../constants/defaults';
 import { notifyUsageChanged } from '../utils/usageChanged';
+import { toEventRow } from '../utils/saveEvents';
 import {
   LimitReachedError,
   getCurrentLimits,
@@ -51,6 +52,9 @@ export interface TimelineData {
   verticalScale?: 'small' | 'medium';
   groupByCategory?: boolean;
 }
+
+/** Everything `createTimelineFrom` writes: a timeline minus the id it mints. */
+export type NewTimelineSource = Omit<TimelineData, 'id'>;
 
 /**
  * Timeline record I/O.
@@ -190,45 +194,52 @@ export function useTimeline() {
 
   /**
    * Unconditionally create a new timeline row from the given data and return
-   * its id. Used by the local-draft migration on login, which always wants a
-   * fresh row — the previous implementation branched on the hook's internal
-   * `timelineId` and would *overwrite* an existing timeline when that pointer
-   * happened to be set.
+   * its id. Used by the local-draft migration on login and by Duplicate, both
+   * of which always want a fresh row — the previous implementation branched on
+   * the hook's internal `timelineId` and would *overwrite* an existing
+   * timeline when that pointer happened to be set.
+   *
+   * Writes every column `loadTimeline` reads. It used to take only a title,
+   * the events and the two scales, so categories, chapters, the description
+   * and every event's details were dropped at the exact moment the product
+   * promised to keep them. Event ids are the caller's: the migration keeps a
+   * draft's ids, Duplicate must mint new ones.
    */
-  const createTimelineFrom = useCallback(async (
-    title: string,
-    events: TimelineEvent[],
-    scale: 'large' | 'medium' | 'small' = 'small',
-    verticalScale: 'small' | 'medium' = 'medium',
-  ): Promise<string> => {
+  const createTimelineFrom = useCallback(async (source: NewTimelineSource): Promise<string> => {
     if (!user) throw new Error('Must be signed in to save');
 
     await checkCreateTimelineLimits(user.id);
 
     const { data: timeline, error: timelineError } = await supabase
       .from('timelines')
-      .insert({ title, user_id: user.id, scale, vertical_scale: verticalScale })
+      .insert({
+        title: source.title,
+        user_id: user.id,
+        description: source.description || null,
+        scale: source.scale ?? 'small',
+        vertical_scale: source.verticalScale ?? 'medium',
+        group_by_category: source.groupByCategory ?? false,
+        // Empty normalises to null, the inverse of loadTimeline's rule.
+        categories: source.categories && source.categories.length > 0 ? source.categories : null,
+        chapters: source.chapters && source.chapters.length > 0 ? source.chapters : null,
+      })
       .select('id')
       .single();
 
     if (timelineError) throw timelineError;
 
-    // Insert events with client-generated IDs
-    if (events.length > 0) {
+    if (source.events.length > 0) {
       const { error: eventsError } = await supabase
         .from('events')
-        .insert(
-          events.map(event => ({
-            id: event.id,
-            timeline_id: timeline.id,
-            title: event.title,
-            start_date: event.startDate,
-            end_date: event.endDate,
-            category: event.category
-          }))
-        );
+        .insert(source.events.map(event => toEventRow(event, timeline.id)));
 
-      if (eventsError) throw eventsError;
+      if (eventsError) {
+        // Two HTTP calls, not one transaction. Without this an events failure
+        // leaves an empty timeline behind — and, on the migration path, the
+        // draft stays too, so the next mount makes a second empty copy.
+        await supabase.from('timelines').delete().eq('id', timeline.id);
+        throw eventsError;
+      }
     }
 
     // After both writes, so one recount covers the new timeline and its events.

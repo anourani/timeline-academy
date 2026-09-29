@@ -109,7 +109,7 @@ export function TimelineSettingsPanel({
   };
 
   const handleExportExcel = () => {
-    exportEventsToExcel(events, timelineTitle);
+    exportEventsToExcel(events, timelineTitle, categories);
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {

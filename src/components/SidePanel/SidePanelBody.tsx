@@ -17,12 +17,14 @@ import { useAuth } from '@/hooks/useAuth'
 import { useAccountTier } from '@/hooks/useAccountTier'
 import { useSidePanel } from '@/hooks/useSidePanel'
 import { useTimelines } from '@/hooks/useTimelines'
+import { useTimeline } from '@/hooks/useTimeline'
 import { useTimelineMetadata } from '@/hooks/useTimelineMetadata'
 import { computeDominantCategoryColor, DEFAULT_DOT_COLOR } from '@/utils/dominantCategory'
 import { categoryBreakdown, type CategorySlice } from '@/utils/categoryCounts'
 import { getTimelineYearRange } from '@/utils/timelineUtils'
 import { DEFAULT_CATEGORIES } from '@/constants/categories'
 import { supabase, readFunctionError } from '@/lib/supabase'
+import { LimitReachedError, limitReachedMessage } from '@/lib/limits'
 import { ConfirmationModal } from '@/components/Modal/ConfirmationModal'
 import { DeleteTimelineDialog } from '@/components/Modal/DeleteTimelineDialog'
 import { ImportCSVModal } from '@/components/AIMode/ImportCSVModal'
@@ -191,6 +193,7 @@ export function SidePanelBody() {
   const tier = useAccountTier()
   const { isOpen, close, onTimelineSelect, onDraftSelect, setRefreshTimelines, activeTimelineId, activeDraftId, activeTimelineTitle, activeEventCount, activeDominantCategoryColor } = useSidePanel()
   const { timelines, isLoading, error, loadTimelines } = useTimelines()
+  const { loadTimeline, createTimelineFrom } = useTimeline()
   const [localDrafts, setLocalDrafts] = useState<LocalDraft[]>([])
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const [pendingDeleteKind, setPendingDeleteKind] = useState<'timeline' | 'draft' | null>(null)
@@ -434,24 +437,14 @@ export function SidePanelBody() {
           alert('Could not find draft to export.')
           return
         }
-        exportEventsToExcel(draft.events, title)
+        exportEventsToExcel(draft.events, title, draft.categories)
         return
       }
 
-      const { data, error: fetchError } = await supabase
-        .from('events')
-        .select('*')
-        .eq('timeline_id', row.id)
-      if (fetchError) throw fetchError
-
-      const events = (data || []).map(event => ({
-        id: event.id,
-        title: event.title,
-        startDate: event.start_date,
-        endDate: event.end_date,
-        category: event.category,
-      }))
-      exportEventsToExcel(events, title)
+      // loadTimeline hands back the row's own categories, which the export
+      // needs to write labels the importers can match.
+      const timeline = await loadTimeline(row.id)
+      exportEventsToExcel(timeline.events, title, timeline.categories ?? DEFAULT_CATEGORIES)
     } catch (err) {
       console.error('Failed to export timeline:', err)
       alert('Failed to export. Please try again.')
@@ -552,7 +545,9 @@ export function SidePanelBody() {
   }
 
   const handleDownloadTemplate = () => {
-    void downloadTemplate(55, ['Personal Life', 'Career'])
+    // The importer behind this button matches against DEFAULT_CATEGORIES, so
+    // the sample rows must use those labels or they land in category 1.
+    void downloadTemplate(55, [DEFAULT_CATEGORIES[0].label, DEFAULT_CATEGORIES[1].label])
   }
 
   const handleImportEvents = (events: TimelineEvent[]) => {
@@ -619,47 +614,31 @@ export function SidePanelBody() {
 
     if (!user) return
     try {
-      const { data: original, error: fetchError } = await supabase
-        .from('timelines')
-        .select('*')
-        .eq('id', row.id)
-        .single()
-      if (fetchError || !original) throw fetchError
-
-      const { data: newTimeline, error: createError } = await supabase
-        .from('timelines')
-        .insert({
-          title: `${original.title} (Copy)`,
-          user_id: user.id,
-          scale: original.scale,
-        })
-        .select()
-        .single()
-      if (createError || !newTimeline) throw createError
-
-      const { data: events, error: eventsError } = await supabase
-        .from('events')
-        .select('*')
-        .eq('timeline_id', row.id)
-      if (eventsError) throw eventsError
-
-      if (events && events.length > 0) {
-        const newEvents = events.map((event) => ({
-          title: event.title,
-          start_date: event.start_date,
-          end_date: event.end_date,
-          category: event.category,
-          timeline_id: newTimeline.id,
-        }))
-        const { error: insertError } = await supabase
-          .from('events')
-          .insert(newEvents)
-        if (insertError) throw insertError
-      }
+      // Same read and write the editor uses, so the copy carries everything
+      // the original does: categories, chapters, description, view settings
+      // and each event's details. createTimelineFrom also runs the plan-limit
+      // check first, so a full account hears the limit instead of a generic
+      // failure after the row insert is rejected.
+      const original = await loadTimeline(row.id)
+      await createTimelineFrom({
+        title: `${original.title} (Copy)`,
+        description: original.description,
+        categories: original.categories,
+        chapters: original.chapters,
+        scale: original.scale,
+        verticalScale: original.verticalScale,
+        groupByCategory: original.groupByCategory,
+        // Fresh ids: the originals are the source rows' primary keys.
+        events: original.events.map((event) => ({ ...event, id: crypto.randomUUID() })),
+      })
 
       loadTimelines()
       notifyUsageChanged()
     } catch (err) {
+      if (err instanceof LimitReachedError) {
+        alert(limitReachedMessage(err.kind))
+        return
+      }
       console.error('Error duplicating timeline:', err)
       alert('Failed to duplicate timeline. Please try again.')
     }

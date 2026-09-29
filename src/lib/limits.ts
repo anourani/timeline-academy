@@ -54,6 +54,15 @@ export function getCurrentLimits(): PlanLimits {
   return PLAN_LIMITS[getCurrentPlan()]
 }
 
+/** The one sentence shown wherever a plan cap stops a write. */
+export function limitReachedMessage(kind: LimitKind): string {
+  const { eventLimit, timelineLimit } = getCurrentLimits()
+  if (kind === 'event') {
+    return `You've reached the ${eventLimit}-event limit. Delete events to make room, or upgrade.`
+  }
+  return `You've reached the ${timelineLimit}-timeline limit. Delete a timeline to create a new one, or upgrade.`
+}
+
 export function isOverEventLimit(eventCount: number): boolean {
   const { eventLimit } = getCurrentLimits()
   return eventLimit !== null && eventCount >= eventLimit

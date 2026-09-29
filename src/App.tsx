@@ -20,7 +20,7 @@ import { useAccountTier, type AccountTier } from './hooks/useAccountTier';
 import { byokAnonDraftStore, trialDraftStore } from './utils/draftStorage';
 import { TimelineEvent, CategoryConfig } from './types/event';
 import type { ScrollTarget } from './types/timeline';
-import { LimitReachedError, getCurrentLimits } from './lib/limits';
+import { LimitReachedError, limitReachedMessage } from './lib/limits';
 import { supabase } from './lib/supabase';
 import { DEFAULT_TIMELINE_TITLE } from './constants/defaults';
 import { DEFAULT_CATEGORIES } from './constants/categories';
@@ -43,14 +43,6 @@ interface AiStreamingRouteState {
   subject: string;
   providerOverride?: 'anthropic' | 'openai';
   fromRect: { top: number; left: number; width: number; height: number } | null;
-}
-
-function limitReachedMessage(kind: 'event' | 'timeline'): string {
-  const { eventLimit, timelineLimit } = getCurrentLimits();
-  if (kind === 'event') {
-    return `You've reached the ${eventLimit}-event limit. Delete events to make room, or upgrade.`;
-  }
-  return `You've reached the ${timelineLimit}-timeline limit. Delete a timeline to create a new one, or upgrade.`;
 }
 
 export function App() {
@@ -654,7 +646,7 @@ export function App() {
           continue;
         }
         try {
-          await createTimelineFrom(draft.title, draft.events, draft.scale, draft.verticalScale ?? 'medium');
+          await createTimelineFrom(draft);
           // Only after the write is confirmed, and only this one. The previous
           // version cleared *everything* after a failure, so hitting the plan
           // cap mid-migration deleted every draft that hadn't been saved yet.
@@ -1170,7 +1162,7 @@ export function App() {
 
   const handleTrialExport = () => {
     try {
-      exportEventsToExcel(events, title || DEFAULT_TIMELINE_TITLE);
+      exportEventsToExcel(events, title || DEFAULT_TIMELINE_TITLE, categories);
     } catch (err) {
       console.error('Failed to export trial timeline:', err);
       alert('Failed to export. Please try again.');
