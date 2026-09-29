@@ -1,6 +1,6 @@
 # Product cleanup review: nine weighted improvements
 
-_2026-09-29. A read-only audit of the client, services, and edge functions. Nothing here has been implemented; it is a ranked backlog with evidence, so each item can be judged before any effort is spent._
+_2026-09-29. A read-only audit of the client, services, and edge functions, written as a ranked backlog with evidence so each item can be judged before any effort is spent. The first pass ran on a checkout ten days behind `main`; every item below was then re-verified against `main` at the merge of PR #130 (the streaming generation work). That re-check changed two things: the Cancel race in item 8 is already fixed upstream, and the streaming rewrite orphaned `useAIMode` and the buffered generate path, which item 7 now lists._
 
 ## Context
 
@@ -21,14 +21,14 @@ Weight is 1–10, roughly: user impact × confidence that it's real, discounted 
 | 5 | Save failures are invisible; no client-side event cap | High | Small | Low (product call) | **6** |
 | 6 | Wrong OTP code is reported as "Code expired" | Medium | Tiny | None | **6** |
 | 7 | Dead code sweep (10 files, 5 packages, stale docs) | Low (users) / Med (maintainers) | Small | None | **5** |
-| 8 | byok-anon generation discarded at draft cap; Cancel race | Medium | Medium | Low | **5** |
+| 8 | byok-anon generation discarded at draft cap; no Cancel button on touch | Medium | Small | Low | **4** |
 | 9 | Failed timeline delete leaves the editor unbound | Low-Med | Tiny | None | **4** |
 
 ---
 
 ## 1. Server error messages never reach the user — weight 9
 
-**Status: done in the same PR as this document.**
+**Status: done in the same PR as this document.** On current `main` the streaming generate route (`aiTimeline.ts` `streamTimeline`) uses a raw `fetch` and already reads the server's `{ error }` body, so the fix matters for the two calls still going through `supabase.functions.invoke`: classify (live, `aiTimeline.ts:94`), delete-account (`SidePanelBody.tsx:519`), and the buffered `generateTimeline` (`:165`), which item 7 now identifies as dead.
 
 **Evidence.** `src/services/aiTimeline.ts:79-87` and `:156-163` throw `error.message` on a non-2xx and then check `'error' in data` on the 2xx body. The function only ever sends `{ error }` with 400/401/429/500 (`supabase/functions/generate-timeline/index.ts:60,63,70,99,131`). supabase-js puts only "Edge Function returned a non-2xx status code" in `error.message`, so the Free-tier "You've reached the daily limit…" (429), "Sign in to generate timelines." (401), and the 500 message are all replaced by that generic string, shown in red at `NewTimelineScreen.tsx:514-516`. `SidePanelBody.tsx:413-415` has the same dead `data?.error` pattern for `delete-account`.
 
@@ -44,24 +44,24 @@ Weight is 1–10, roughly: user impact × confidence that it's real, discounted 
 
 **Evidence.** Two write paths persist only a subset of what the load path reads (`useTimeline.ts:154-187` reads description, categories, chapters, vertical_scale, group_by_category, and per-event description/image_url/image_attribution/sources):
 
-- **Guest → account migration.** `App.tsx:508` calls `createTimelineFrom(draft.title, draft.events, draft.scale, draft.verticalScale)`. `useTimeline.ts:198-229` inserts `{ title, user_id, scale, vertical_scale }` and events with only id/title/dates/category. `LocalDraft` (`draftStorage.ts:7-19`) carries description, categories, chapters, groupByCategory, and the full events. All of it is dropped at the exact moment the UI says "Log in to save your timelines to your account" (`UsageLimits.tsx:175-177`).
-- **Duplicate (signed-in).** `SidePanelBody.tsx:517-561` inserts `{ title, user_id, scale }` and maps events to title/start_date/end_date/category. Same losses, plus: if the event insert fails an empty "(Copy)" row is left behind, and there's no limit pre-check.
+- **Guest → account migration.** `App.tsx:657` calls `createTimelineFrom(draft.title, draft.events, draft.scale, draft.verticalScale)`. `useTimeline.ts:198-229` inserts `{ title, user_id, scale, vertical_scale }` and events with only id/title/dates/category. `LocalDraft` (`draftStorage.ts:7-19`) carries description, categories, chapters, groupByCategory, and the full events. All of it is dropped at the exact moment the product invites the user to sign in to keep their work.
+- **Duplicate (signed-in).** `SidePanelBody.tsx:598-661` inserts `{ title, user_id, scale }` and maps events to title/start_date/end_date/category. Same losses, plus: if the event insert fails an empty "(Copy)" row is left behind, and there's no limit pre-check.
 
 **Fix.**
 - Widen `createTimelineFrom` to accept the whole draft shape (`Pick<LocalDraft, 'title'|'description'|'events'|'categories'|'chapters'|'scale'|'verticalScale'|'groupByCategory'>`) and write every column. Reuse the event-row mapping already in `src/utils/saveEvents.ts` so the column list exists once.
 - Rewrite the signed-in Duplicate to `select('*')` the timeline row, strip id/user_id/created_at/updated_at/is_public, insert it, and copy events with all columns. Run `checkCreateTimelineLimits` first (already exists in `useTimeline.ts`).
-- The byok-anon Duplicate at `:495-515` already spreads the whole draft; leave it.
+- The byok-anon Duplicate at `:599-619` already spreads the whole draft; leave it.
 
 **Files.** `src/hooks/useTimeline.ts`, `src/App.tsx` (call site), `src/components/SidePanel/SidePanelBody.tsx`, `src/utils/saveEvents.ts` (reuse).
 
 ## 3. Excel round-trip loses categories — weight 7
 
-**Evidence.** `excelExport.ts:12` writes `event.category`, which is the id (`category_1`). Both importers match on the *label*: `TimelineSettingsPanel.tsx:132-134` against the timeline's categories, `ImportCSVModal.tsx:70-72` against `DEFAULT_CATEGORIES`, falling back to the first category. So export → import puts every event in category 1. The side-panel template (`SidePanelBody.tsx:451`) also ships sample categories `['Personal Life', 'Career']` that match no default label ("Category 1"–"4"), so the template itself doesn't round-trip.
+**Evidence.** `excelExport.ts:12` writes `event.category`, which is the id (`category_1`). Both importers match on the *label*: `TimelineSettingsPanel.tsx:126-128` against the timeline's categories, `ImportCSVModal.tsx:105-108` against `DEFAULT_CATEGORIES`, falling back to the first category. So export → import puts every event in category 1. The side-panel template (`SidePanelBody.tsx:555`) also ships sample categories `['Personal Life', 'Career']` that match no default label ("Category 1"–"4"), so the template itself doesn't round-trip.
 
 **Fix.**
-- `exportEventsToExcel(events, title, categories)`: write the label, looked up from the categories list. All three call sites have categories in scope (`App.tsx:843`, `SidePanelBody.tsx:333,350`, `TimelineSettingsPanel.tsx:118`; the draft path has `draft.categories`).
+- `exportEventsToExcel(events, title, categories)`: write the label, looked up from the categories list. All three call sites have categories in scope (`App.tsx:1173`, `SidePanelBody.tsx:437,454`, `TimelineSettingsPanel.tsx:112`; the draft path has `draft.categories`).
 - Template: pass the actual default labels instead of the hard-coded pair.
-- Optional, same change: `ImportCSVModal` is titled "Import CSV" but accepts only `.xlsx/.xls` (`:106,116`). Rename the dialog title to "Import spreadsheet". Leave the file name alone unless you want the churn.
+- `ImportCSVModal` still accepts only `.xlsx/.xls` (`:154`); the popup was restyled upstream, so check its visible title says spreadsheet rather than CSV while you're there. Leave the file name alone unless you want the churn.
 
 **Files.** `src/utils/excelExport.ts`, `src/App.tsx`, `src/components/SidePanel/SidePanelBody.tsx`, `src/components/Settings/TimelineSettingsPanel.tsx`, `src/components/AIMode/ImportCSVModal.tsx`.
 
@@ -77,12 +77,12 @@ Weight is 1–10, roughly: user impact × confidence that it's real, discounted 
 
 ## 5. Save failures are invisible; no client-side event cap — weight 6
 
-**Evidence.** `useAutosave.ts:148-157` sets `saveStatus = 'error'` on failure, but `GlobalNav.tsx:64` has `SHOW_SAVE_STATUS = false`, so the indicator never renders and a failed save is only a `console.error`. Separately, `useEvents.ts:12-19` and `addEvents` apply no cap, so a user at their plan limit can add events; the server trigger rejects the insert (`20260803000300_harden_security_definer.sql:47-49` `raise exception 'Event limit reached'`), autosave enters `'error'` silently, and the events vanish on reload.
+**Evidence.** `useAutosave.ts:148-157` sets `saveStatus = 'error'` on failure, but `GlobalNav.tsx:82` has `SHOW_SAVE_STATUS = false`, so the indicator never renders and a failed save is only a `console.error`. Separately, `useEvents.ts:12-19` and `addEvents` apply no cap, so a user at their plan limit can add events; the server trigger rejects the insert (`20260803000300_harden_security_definer.sql:47-49` `raise exception 'Event limit reached'`), autosave enters `'error'` silently, and the events vanish on reload.
 
 The indicator was hidden deliberately ("for now"), so this is partly a product call. The minimum fix that doesn't reopen that decision:
 
 **Fix.**
-- Render `SaveStatusIndicator` **only when `saveStatus === 'error'`** (keep the "hidden for now" behaviour for `saving`/`saved`). One-line change at `GlobalNav.tsx:155`.
+- Render `SaveStatusIndicator` **only when `saveStatus === 'error'`** (keep the "hidden for now" behaviour for `saving`/`saved`). One-line change at `GlobalNav.tsx:192`.
 - Add a cap check to `addEvent`/`addEvents` using `getCurrentLimits()` from `lib/limits.ts`, returning a `LimitReachedError`-style result the callers already know how to alert on (`limitReachedMessage` in `App.tsx`).
 
 If you'd rather bring the whole indicator back, that's a one-flag flip, but I'd treat that as a separate visual decision.
@@ -97,15 +97,14 @@ If you'd rather bring the whole indicator back, that's a one-flag flip, but I'd 
 
 **Fix.** Map that combined message to one honest line: "That code didn't work. Check it and try again, or request a new one." Keep the branch for genuine `otp_expired`.
 
-Cheap adjacent win in the same file if you're there: `OtpInput.tsx:86-96` lacks `autoComplete="one-time-code"`, so browsers/iOS can't offer the code from the SMS/email bar.
-
-**Files.** `src/components/Auth/AuthModal.tsx`, `src/components/Auth/OtpInput.tsx`.
+**Files.** `src/components/Auth/AuthModal.tsx`. (`OtpInput` gained `autoComplete="one-time-code"` upstream, so that adjacent fix is already in.)
 
 ## 7. Dead code sweep — weight 5
 
 This is the explicit cleanup ask. Everything here is verified unreachable from `src/main.tsx`, or exported with zero importers. `tsconfig` already has `noUnusedLocals`, so all dead code in this repo is at the export/file level.
 
-**Delete these files (10, ~600 lines):**
+**Delete these files (11, ~800 lines):**
+- `src/hooks/useAIMode.ts` (191 lines). The streaming `GenerationContext` replaced it; its only remaining mention is a comment at `lib/limits.ts:25`. With it goes the buffered `generateTimeline` in `aiTimeline.ts:111-196`, whose only caller it was (`classifySubject` and `streamTimeline` stay; `LimitReachedError` stays, `useTimeline` and `App.tsx` use it). The `generate-timeline` function keeps its buffered branch for cached bundles per CLAUDE.md.
 - `src/utils/csvParser.ts`, `src/utils/csvExport.ts` (dead since Excel import replaced CSV; `excelSheet.ts`/`excelExport.ts` are the live equivalents)
 - `src/components/ui/card.tsx`, `label.tsx`, `sheet.tsx`, `tabs.tsx`, `tooltip.tsx` (scaffolded shadcn, never imported)
 - `src/components/FeedbackPanel/FeedbackPanel.tsx` (123 lines, never imported)
@@ -116,26 +115,24 @@ This is the explicit cleanup ask. Everything here is verified unreachable from `
 
 **Zero-use exports to delete:** `timelineUtils.getCurrentTimelinePosition` (+ its private `getMonthPosition`, ~40 lines), `useAccountTier.isAnonymousTier`, `viewerEventCache.clearCachedEvent`, `models.modelsByProvider`, `pillDefinitions.SUBJECT_TYPE_SUFFIX`, `timeline.EVENT_HEIGHT`, the compatibility re-exports at `aiTimeline.ts:33` and `eventEnrichment.ts:15`, the `accordion-*` keyframes in `tailwind.config.js`.
 
-**Dead parameters/props:** `subjectType` is sent by `aiTimeline.ts:140` but no function version has ever read it and the BYOK path ignores it too — drop the param through `useAIMode` → `aiTimeline`. `onClearTimeline` (`Header.tsx:112` → `TimelineSettingsPanel.tsx:46`) and `EventForm`'s `onImport` prop (`:23`) are passed but unused. The three `alert`s in `EventForm.tsx:106-119` are unreachable (submit is disabled until valid, `maxLength` blocks long titles).
+**Dead parameters/props:** `subjectType` is sent by `aiTimeline.ts:148` (and threaded into `streamTimeline` at `:308`) but no function version has ever read it and the BYOK path ignores it too — drop the param through `GenerationContext` → `aiTimeline`. `onClearTimeline` (`Header.tsx:112` → `TimelineSettingsPanel.tsx:46`) and `EventForm`'s `onImport` prop (`:23`) are passed but unused. The three `alert`s in `EventForm.tsx:106-119` are unreachable (submit is disabled until valid, `maxLength` blocks long titles).
 
-**Stale docs/comments to fix in the same commit:** CLAUDE.md still lists `csvParser` under `utils/`; `excelSheet.ts:42` mentions "the CSV importer"; `panels.ts:4,37` and `EventDetailPanel.tsx:414` describe `FeedbackPanel` as live; `TIMELINE_ARCHITECTURE.md` describes `TimelineScrollIndicator` as rendered (lines ~49, 51, 151, 157, 251-265, 273, 552, 1084) and a `chapterLabel` prop that doesn't exist; `FloatingToolbar.tsx:93-97` refers to a Present toggle that isn't there; `_shared/prompts.ts:4`, `llmPrompts.ts:82`, `classify.ts:5`.
+**Stale docs/comments to fix in the same commit:** CLAUDE.md still lists `csvParser` under `utils/`; `excelSheet.ts:42` mentions "the CSV importer"; `EventDetailPanel.tsx:414` describes `FeedbackPanel` as live; `TIMELINE_ARCHITECTURE.md` describes `TimelineScrollIndicator` as rendered (lines ~49, 51, 151, 157, 251-265, 273, 552, 1084) and a `chapterLabel` prop that doesn't exist; `FloatingToolbar.tsx:138` refers to a Present toggle that isn't there; `_shared/prompts.ts:4`, `llmPrompts.ts:82`, `classify.ts:5`.
 
 **Not part of this sweep (deliberate per CLAUDE.md):** `set-byok-flag` function, the `_shared/cors.ts` header echo, tolerated old request shapes in `generate-timeline`, the client/server prompt copies, `useIsMobile` vs `useIsNarrow` (different breakpoints on purpose).
 
-## 8. byok-anon generation discarded at the draft cap; Cancel race — weight 5
+## 8. byok-anon generation discarded at the draft cap; no Cancel on touch — weight 4
 
-**Evidence.**
-- `useAIMode.ts:63-90`: the pre-flight limit check runs only `if (user)`. A byok-anon user with 3 drafts pays their provider for a full generation, then `App.tsx:267-281` gets `null` from `createDraft()`, alerts the limit, and navigates back to `/`. The result is thrown away.
-- `useAIMode.ts:54,92,121,158-171`: `abort()` only sets a flag (no `AbortController` reaches the fetch at `anthropicDirect.ts:210` or the edge call). The next Generate resets the flag, so the cancelled run's late result passes the check and can open the editor with the *previous* subject; its `finally` also clears the spinner while the new run is still going. Cancel is Esc-only (`GeneratingIndicator.tsx:80`), so phone users can't cancel at all.
+**Evidence.** The streaming rewrite on `main` moved generation into `src/contexts/GenerationContext.tsx` and, in doing so, fixed the Cancel race the first pass found: each run now owns an `AbortController` and a run id (`:106-143`), so a cancelled run's late result is dropped and the fetch is actually aborted. Two things remain:
+
+- `GenerationContext.tsx:176`: the pre-flight limit check still runs only `if (user)`. A byok-anon user with 3 drafts pays their provider for a full generation, then `App.tsx` gets `null` from `createDraft()`, alerts the limit, and navigates back to `/`. The result is thrown away.
+- Cancel is still Esc-only (`App.tsx:1415` "Press Esc to cancel"), so phone users can't cancel a generation at all.
 
 **Fix.**
-- Extend the pre-flight to byok-anon: `byokAnonDraftStore.getAllDrafts().length >= MAX_DRAFTS` (both already exported from `draftStorage.ts`).
-- Give each run a token (`runIdRef`) and compare on completion instead of a shared boolean; pass an `AbortController.signal` through `generateTimeline` to the fetches so Cancel actually cancels (and stops burning a daily slot on the server path).
-- Add a visible Cancel button to `GeneratingIndicator` for touch.
+- Extend the pre-flight to byok-anon: `byokAnonDraftStore.getAllDrafts().length >= MAX_DRAFTS` (both already exported from `draftStorage.ts`), failing with the same `limitReachedMessage('timeline')` the editor uses.
+- Add a visible Cancel button next to the Esc hint that calls the context's `cancel()`.
 
-This is the largest item by effort. Do the pre-flight now (a few lines) and the race/abort together as a small follow-up if you'd rather split it.
-
-**Files.** `src/hooks/useAIMode.ts`, `src/services/aiTimeline.ts`, `src/services/anthropicDirect.ts`, `src/services/openaiDirect.ts`, `src/components/NewTimeline/GeneratingIndicator.tsx`.
+**Files.** `src/contexts/GenerationContext.tsx`, `src/App.tsx`.
 
 ## 9. Failed timeline delete leaves the editor unbound — weight 4
 
@@ -178,6 +175,6 @@ No test framework exists, so every check is manual. For each PR:
    - **5:** sign in as Free, pad to 300 events, add one more; expect a limit message rather than a silent drop after reload.
    - **6:** enter a wrong OTP code; message says the code didn't work, not that it expired.
    - **7:** `npm run build` passes; `grep -rn "csvParser\|FeedbackPanel\|auth-ui" src package.json` returns nothing; open `/`, `/editor`, `/view/:id`, `/privacy`, `/terms` once each.
-   - **8:** as byok-anon with 3 drafts, hit Generate; expect the limit before any provider call (check the Network tab). Start a generation, press Esc, start another with a different subject; the editor opens with the second subject only.
+   - **8:** as byok-anon with 3 drafts, hit Generate; expect the limit before any provider call (check the Network tab). On a phone, the Cancel button stops a generation.
    - **9:** block the delete (e.g. go offline), delete a timeline, see the failure alert, then make an edit and confirm it still autosaves once back online.
 3. Production only: after the dead-code PR merges, load the live site once and confirm no CSP error in the console (no new hosts are added, so none expected).
