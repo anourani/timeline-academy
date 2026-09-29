@@ -1,14 +1,9 @@
 import { useRef } from 'react'
-import { FileUp, Download } from 'lucide-react'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
+import { FileUp, Download, type LucideIcon } from 'lucide-react'
+import { PopupShell } from '@/components/ui/PopupShell'
 import { DEFAULT_CATEGORIES } from '@/constants/categories'
+import { useIsMobile } from '@/hooks/useIsMobile'
+import { cn } from '@/lib/utils'
 import type { TimelineEvent, TimelineCategory } from '@/types/event'
 import {
   downloadTemplate,
@@ -23,6 +18,47 @@ interface ImportCSVModalProps {
   isOpen: boolean
   onClose: () => void
   onImportEvents: (events: TimelineEvent[]) => void
+}
+
+interface ImportOptionProps {
+  icon: LucideIcon
+  label: string
+  meta: string
+  onClick: () => void
+}
+
+/**
+ * One choice, drawn as a tile in the same dark well the delete dialog uses for
+ * its timeline preview: a label over a mono caption saying what it takes or
+ * gives.
+ */
+function ImportOption({ icon: Icon, label, meta, onClick }: ImportOptionProps) {
+  const isMobile = useIsMobile()
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'group flex w-full items-center gap-3 rounded-[10px] border border-[#262626] bg-[#0A0A0A] px-3.5 text-left',
+        'transition-colors hover:border-[#404040] hover:bg-[#111111]',
+        'outline-none focus-visible:ring-1 focus-visible:ring-white/40',
+        isMobile ? 'min-h-[64px] rounded-[12px] py-3.5' : 'py-3',
+      )}
+    >
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className={cn('text-[#DADEE5]', isMobile ? 'text-[16px]' : 'body-m')}>{label}</span>
+        <span className="font-['JetBrains_Mono',monospace] text-[11px] uppercase text-[#6D7073]">
+          {meta}
+        </span>
+      </span>
+      <Icon
+        size={18}
+        strokeWidth={1.5}
+        className="shrink-0 text-[#6D7073] transition-colors group-hover:text-[#C9CED4]"
+        aria-hidden
+      />
+    </button>
+  )
 }
 
 export function ImportCSVModal({ isOpen, onClose, onImportEvents }: ImportCSVModalProps) {
@@ -100,42 +136,43 @@ export function ImportCSVModal({ isOpen, onClose, onImportEvents }: ImportCSVMod
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose() }}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>Import CSV</DialogTitle>
-          <DialogDescription>
-            Import events from an Excel file or download a template to get started.
-          </DialogDescription>
-        </DialogHeader>
+    <PopupShell
+      open={isOpen}
+      onOpenChange={(open) => { if (!open) onClose() }}
+      title="Import data"
+      description="Add events from an Excel file, or download the template to start one."
+      topSlot={
+        <span className="font-['JetBrains_Mono',monospace] text-[11px] uppercase text-[#6D7073]">
+          Spreadsheet import
+        </span>
+      }
+    >
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        accept=".xlsx,.xls"
+        style={{ display: 'none' }}
+      />
 
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleFileChange}
-          accept=".xlsx,.xls"
-          style={{ display: 'none' }}
+      <div className="flex flex-col gap-2">
+        <ImportOption
+          icon={FileUp}
+          label="Choose a file"
+          meta=".xlsx or .xls"
+          onClick={() => fileInputRef.current?.click()}
         />
+        <ImportOption
+          icon={Download}
+          label="Download template"
+          meta="Title · Start · End · Category"
+          onClick={handleDownloadTemplate}
+        />
+      </div>
 
-        <div className="flex flex-col gap-2 pt-2">
-          <Button
-            variant="outline"
-            onClick={() => fileInputRef.current?.click()}
-            className="w-full justify-between px-4 py-3 h-auto"
-          >
-            <span>Import Data</span>
-            <FileUp size={20} className="text-muted-foreground" />
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleDownloadTemplate}
-            className="w-full justify-between px-4 py-3 h-auto"
-          >
-            <span>Download Import Template</span>
-            <Download size={20} className="text-muted-foreground" />
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+      <p className="m-0 text-[12px] leading-[18px] text-[#6D7073]">
+        Event Title and Start Date are required. Titles can be up to {MAX_TITLE_LENGTH} characters.
+      </p>
+    </PopupShell>
   )
 }
