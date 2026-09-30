@@ -78,8 +78,6 @@ export function GlobalNav({
     alert('Share link copied to clipboard! Anyone with the link can view this timeline.')
   }
 
-  // SaveStatusIndicator is hidden for now — flip to true to re-enable.
-  const SHOW_SAVE_STATUS = false
   const showTitleCluster = variant === 'timeline' && typeof timelineTitle === 'string'
   const yearRange = !showTitleCluster
     ? ''
@@ -188,8 +186,10 @@ export function GlobalNav({
             />
           )}
           <div className="hidden md:flex items-center gap-2">
-            {/* SaveStatusIndicator hidden for now — keeping wiring in place for future reuse */}
-            {SHOW_SAVE_STATUS && variant === 'timeline' && saveStatus && (
+            {/* Only a failed save is shown. 'saving' and 'saved' are deliberately
+                hidden: autosave is meant to be invisible when it works, and the
+                one state the user must not miss is the one where it didn't. */}
+            {variant === 'timeline' && saveStatus === 'error' && (
               <div className="mr-2">
                 <SaveStatusIndicator status={saveStatus} lastSaved={lastSavedTime} />
               </div>

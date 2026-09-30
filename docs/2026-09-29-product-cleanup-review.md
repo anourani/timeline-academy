@@ -81,6 +81,8 @@ Weight is 1–10, roughly: user impact × confidence that it's real, discounted 
 
 ## 5. Save failures are invisible; no client-side event cap — weight 6
 
+**Status: done.** The indicator renders only its error state; the account-wide cap gates the event form, the Settings import and the table editor in `App.tsx`, reading `useEventUsage`'s count. The side-panel "import as new timeline" path is left to the server backstop.
+
 **Evidence.** `useAutosave.ts:148-157` sets `saveStatus = 'error'` on failure, but `GlobalNav.tsx:82` has `SHOW_SAVE_STATUS = false`, so the indicator never renders and a failed save is only a `console.error`. Separately, `useEvents.ts:12-19` and `addEvents` apply no cap, so a user at their plan limit can add events; the server trigger rejects the insert (`20260803000300_harden_security_definer.sql:47-49` `raise exception 'Event limit reached'`), autosave enters `'error'` silently, and the events vanish on reload.
 
 The indicator was hidden deliberately ("for now"), so this is partly a product call. The minimum fix that doesn't reopen that decision:
@@ -128,6 +130,8 @@ This is the explicit cleanup ask. Everything here is verified unreachable from `
 **Not part of this sweep (deliberate per CLAUDE.md):** `set-byok-flag` function, the `_shared/cors.ts` header echo, tolerated old request shapes in `generate-timeline`, the client/server prompt copies, `useIsMobile` vs `useIsNarrow` (different breakpoints on purpose).
 
 ## 8. byok-anon generation discarded at the draft cap; no Cancel on touch — weight 4
+
+**Status: pre-flight done.** `GenerationContext` now refuses a byok-anon run at `MAX_DRAFTS` before any provider call. Cancel stays Esc-only by decision.
 
 **Evidence.** The streaming rewrite on `main` moved generation into `src/contexts/GenerationContext.tsx` and, in doing so, fixed the Cancel race the first pass found: each run now owns an `AbortController` and a run id (`:106-143`), so a cancelled run's late result is dropped and the fetch is actually aborted. Two things remain:
 

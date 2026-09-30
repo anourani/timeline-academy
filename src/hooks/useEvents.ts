@@ -4,6 +4,8 @@ import { TimelineEvent } from '../types/event';
 export interface AddEventsResult {
   added: number;
   duplicates: number;
+  /** Set when the plan's event cap refused the whole batch before dedup ran. */
+  rejected?: number;
 }
 
 export function useEvents() {

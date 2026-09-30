@@ -10,13 +10,13 @@ import { classifySubject, streamTimeline } from '@/services/aiTimeline'
 import { getKey } from '@/services/userApiKey'
 import { supabase } from '@/lib/supabase'
 import {
-  getCurrentLimits,
   isOverEventLimit,
   isOverTimelineLimit,
+  limitReachedMessage,
 } from '@/lib/limits'
 import { DEFAULT_CATEGORIES } from '@/constants/categories'
 import { PILL_DEFINITIONS, type SubjectType } from '@/constants/pillDefinitions'
-import { trialDraftStore } from '@/utils/draftStorage'
+import { byokAnonDraftStore, trialDraftStore, MAX_DRAFTS } from '@/utils/draftStorage'
 import type { CategoryConfig, TimelineEvent } from '@/types/event'
 import type {
   ByokProvider,
@@ -183,23 +183,25 @@ export function GenerationProvider({ children }: { children: ReactNode }) {
           ])
           if (!isCurrent()) return
 
-          const { eventLimit, timelineLimit } = getCurrentLimits()
           const eventCount =
             typeof eventsResult.data === 'number' ? eventsResult.data : 0
           const timelineCount = timelinesResult.count ?? 0
 
           if (isOverTimelineLimit(timelineCount)) {
-            fail(
-              `You've reached the ${timelineLimit}-timeline limit. Delete a timeline to create a new one, or upgrade.`,
-            )
+            fail(limitReachedMessage('timeline'))
             return
           }
           if (isOverEventLimit(eventCount)) {
-            fail(
-              `You've reached the ${eventLimit}-event limit. Delete events to make room, or upgrade.`,
-            )
+            fail(limitReachedMessage('event'))
             return
           }
+        } else if (byokAnonDraftStore.getAllDrafts().length >= MAX_DRAFTS) {
+          // Signed out with a key: byok-anon, whose timelines are localStorage
+          // drafts capped at MAX_DRAFTS. Without this the user paid their
+          // provider for a generation that the editor then had nowhere to put
+          // and threw away. Synchronous, so it costs nothing to check.
+          fail(limitReachedMessage('timeline'))
+          return
         }
       } catch (err) {
         fail((err as Error).message || 'Could not check your plan limits')
