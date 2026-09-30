@@ -135,7 +135,9 @@ export function TimelineSettingsPanel({
 
         if (imported.length > 0) {
           const result = onImportEvents(imported);
-          if (result.added === 0) {
+          // A cap refusal has already told the user why; don't follow it with
+          // a second, wrong explanation.
+          if (result.added === 0 && !result.rejected) {
             alert('All events already exist in the timeline');
           }
         } else {

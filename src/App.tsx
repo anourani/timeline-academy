@@ -16,6 +16,8 @@ import { exportEventsToExcel } from './utils/excelExport';
 import { notifyUsageChanged } from './utils/usageChanged';
 import { EventDetailPanel } from './components/EventDetailPanel/EventDetailPanel';
 import { useLocalDraft } from './hooks/useLocalDraft';
+import { useEventUsage } from './hooks/useEventUsage';
+import type { AddEventsResult } from './hooks/useEvents';
 import { useAccountTier, type AccountTier } from './hooks/useAccountTier';
 import { byokAnonDraftStore, trialDraftStore } from './utils/draftStorage';
 import { TimelineEvent, CategoryConfig } from './types/event';
@@ -57,6 +59,13 @@ export function App() {
   } = useTimelineState();
   const { user, authReady } = useAuth();
   const tier = useAccountTier();
+  // The server's event cap counts every timeline the account owns, so the
+  // gates below need the account-wide count, not this editor's length. The
+  // hook refetches after each autosave (`notifyUsageChanged`), so it lags the
+  // editor by at most one debounce; the server trigger stays the backstop,
+  // and a rejected save now shows as "Changes not saved" in the nav.
+  const { eventCount: accountEventCount, eventLimit } = useEventUsage();
+  const eventRoom = eventLimit === null ? Infinity : Math.max(0, eventLimit - accountEventCount);
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   // Where this visitor's browser-held work lives. Trial gets sessionStorage —
   // one timeline, gone when the tab closes; byok-anon keeps the localStorage
@@ -1281,6 +1290,22 @@ export function App() {
     routerNavigate('/');
   };
 
+  const handleAddEvent = (event: Omit<TimelineEvent, 'id'>): TimelineEvent | undefined => {
+    if (eventRoom < 1) {
+      alert(limitReachedMessage('event'));
+      return undefined;
+    }
+    return addEvent(event);
+  };
+
+  const handleImportEvents = (imported: Omit<TimelineEvent, 'id'>[]): AddEventsResult => {
+    if (imported.length > eventRoom) {
+      alert(limitReachedMessage('event'));
+      return { added: 0, duplicates: 0, rejected: imported.length };
+    }
+    return addEvents(imported);
+  };
+
   const handleUpdateEvent = (updatedEvent: TimelineEvent) => {
     updateEvent(updatedEvent);
   };
@@ -1290,6 +1315,14 @@ export function App() {
   };
 
   const handleBulkEventsChange = (newEvents: TimelineEvent[]) => {
+    // Net growth, not rows added: the table editor hands back deletions and
+    // additions in one array, and the account count doesn't yet reflect the
+    // deletions.
+    if (newEvents.length - events.length > eventRoom) {
+      alert(limitReachedMessage('event'));
+      return;
+    }
+
     const currentIds = new Set(events.map(e => e.id));
     const addedEvents = newEvents.filter(e => !currentIds.has(e.id));
 
@@ -1340,8 +1373,8 @@ export function App() {
         title={title}
         description={description}
         onDescriptionChange={setDescription}
-        onAddEvent={addEvent}
-        onImportEvents={addEvents}
+        onAddEvent={handleAddEvent}
+        onImportEvents={handleImportEvents}
         events={events}
         categories={categories}
         onCategoriesChange={updateCategories}
@@ -1432,7 +1465,7 @@ export function App() {
             // editable", so no extra prop is needed — and it is the honest
             // state: the array on screen belongs to the generation store and
             // is replaced wholesale when it commits.
-            onAddEvent={mode === 'edit' && !isStreaming ? addEvent : undefined}
+            onAddEvent={mode === 'edit' && !isStreaming ? handleAddEvent : undefined}
             onUpdateEvent={mode === 'edit' && !isStreaming ? handleUpdateEvent : undefined}
             onOpenDetails={(event) => setDetailPanelEvent(event)}
             scale={currentScale}
