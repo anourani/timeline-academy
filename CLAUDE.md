@@ -38,7 +38,7 @@ src/
 │                     #   llmShared (provider-neutral), eventEnrichment,
 │                     #   llmPrompts, userApiKey, viewerEventCache,
 │                     #   wikipediaSearch, wikipediaImage
-├── utils/            # Helpers (csvParser, excelSheet/excelExport, dateUtils,
+├── utils/            # Helpers (excelSheet/excelExport, dateUtils,
 │                     #   eventStacking, draftStorage, saveEvents, etc.)
 ├── types/            # TypeScript type definitions (event.ts, timeline.ts)
 ├── constants/        # App constants (categories, defaults, scales, plans, models)

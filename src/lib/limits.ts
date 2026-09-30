@@ -22,7 +22,7 @@ export class LimitReachedError extends Error {
 //
 // Deliberately resolves only the three *durable* plans — the ephemeral trial
 // state is not represented here. Everything downstream of this module either
-// runs signed-in only (useTimeline, useAIMode) or wants byok-anon's numbers;
+// runs signed-in only (useTimeline, GenerationContext) or wants byok-anon's numbers;
 // the one place that needs to say "limits don't apply" is useEventUsage, which
 // asks useAccountTier() directly rather than routing through this cache.
 let cachedPlan: Plan = 'byok-anon'

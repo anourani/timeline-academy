@@ -39,7 +39,7 @@ export type SheetRow = Record<string, SheetCellValue>
  * The previous `new Date(value).toISOString().split('T')[0]` round-tripped
  * through local time and landed a day early east of UTC, and could not express
  * a pre-1900 date at all. Text cells go through the same `normalizeDate` the
- * CSV importer uses, so the two paths finally agree on what a date looks like.
+ * event form uses, so the two paths agree on what a date looks like.
  */
 export function toDateString(value: SheetCellValue | undefined): string {
   if (value == null) return ''

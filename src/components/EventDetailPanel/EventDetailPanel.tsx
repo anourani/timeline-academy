@@ -411,8 +411,8 @@ export function EventDetailPanel({
 
   return createPortal(
     <>
-      {/* Backdrop — same bg-black/50 overlay used by FeedbackPanel and
-          TimelineSettingsPanel. Clicking dismisses the panel. */}
+      {/* Backdrop — same bg-black/50 overlay TimelineSettingsPanel uses.
+          Clicking dismisses the panel. */}
       <div
         onClick={onClose}
         className={`fixed inset-0 z-40 bg-black/50 transition-opacity duration-300 ease-out ${

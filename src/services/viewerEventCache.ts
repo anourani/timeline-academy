@@ -91,16 +91,6 @@ export function setCachedEvent(
   }
 }
 
-export function clearCachedEvent(
-  timelineId: string,
-  eventId: string,
-): void {
-  try {
-    localStorage.removeItem(key(timelineId, eventId))
-  } catch {
-    // ignore
-  }
-}
 
 export function clearAllCachedEvents(): void {
   try {

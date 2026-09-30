@@ -105,6 +105,8 @@ If you'd rather bring the whole indicator back, that's a one-flag flip, but I'd 
 
 ## 7. Dead code sweep — weight 5
 
+**Status: done**, as a deletions-only PR. `subjectType` was left alone: dropping it edits the live streaming signature rather than deleting anything, so it belongs with item 8's `GenerationContext` change.
+
 This is the explicit cleanup ask. Everything here is verified unreachable from `src/main.tsx`, or exported with zero importers. `tsconfig` already has `noUnusedLocals`, so all dead code in this repo is at the export/file level.
 
 **Delete these files (11, ~800 lines):**

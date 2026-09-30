@@ -49,8 +49,3 @@ export function useAccountTier(): AccountTier {
   if (!user) return hasKey ? 'byok-anon' : 'trial'
   return hasKey ? 'byok' : 'free'
 }
-
-/** True for the two states whose content lives in the browser, not Supabase. */
-export function isAnonymousTier(tier: AccountTier): boolean {
-  return tier === 'trial' || tier === 'byok-anon'
-}

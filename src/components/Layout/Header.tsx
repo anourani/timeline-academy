@@ -20,7 +20,6 @@ interface HeaderProps {
   onDescriptionChange: (description: string) => void;
   onAddEvent: (event: Omit<TimelineEvent, 'id'>) => void;
   onImportEvents: (events: Omit<TimelineEvent, 'id'>[]) => AddEventsResult;
-  onClearTimeline: () => void;
   events: TimelineEvent[];
   categories: CategoryConfig[];
   onCategoriesChange: (categories: CategoryConfig[]) => void;
@@ -47,7 +46,6 @@ export function Header({
   onDescriptionChange,
   onAddEvent,
   onImportEvents,
-  onClearTimeline,
   events,
   categories,
   onCategoriesChange,
@@ -116,7 +114,6 @@ export function Header({
         timelineTitle={title}
         timelineDescription={description}
         onImportEvents={onImportEvents}
-        onClearTimeline={onClearTimeline}
         onDescriptionChange={onDescriptionChange}
         categories={categories}
         onCategoriesChange={onCategoriesChange}
