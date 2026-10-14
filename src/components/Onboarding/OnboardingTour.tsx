@@ -418,7 +418,7 @@ function stepCopy(
   return {
     title: 'Where your work is kept',
     body: isTrial
-      ? `Once you build a timeline it shows up here — but only in this tab, so closing it loses it. A key keeps up to ${byokAnonCap} timelines in this browser; an account keeps them everywhere.`
+      ? `Right now, only in this tab — close it and it's gone. A key keeps up to ${byokAnonCap} timelines in this browser; an account keeps them everywhere.`
       : `Your key is saved. Up to ${byokAnonCap} timelines now stay in this browser. Log in to keep ${byokCap} across devices.`,
   }
 }

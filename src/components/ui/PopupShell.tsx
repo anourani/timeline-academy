@@ -82,8 +82,11 @@ export function PopupShell({
     </div>
   )
 
-  // `role` passes through Radix's Content props and overrides its "dialog".
-  const role = alert ? 'alertdialog' : undefined
+  // `role` passes through Radix's Content props and overrides its "dialog" —
+  // so it is only passed at all for an alert. Passing `role={undefined}` for
+  // the rest stripped the role off every popup, which left screen readers
+  // without a dialog to announce and the onboarding tour unable to see one.
+  const roleProps = alert ? { role: 'alertdialog' as const } : {}
   // Silences Radix's missing-description warning when there is none.
   const describedBy = description ? {} : { 'aria-describedby': undefined }
 
@@ -111,7 +114,7 @@ export function PopupShell({
         <DialogPortal>
           <DialogOverlay className="bg-black/50" />
           <DialogPrimitive.Content
-            role={role}
+            {...roleProps}
             {...describedBy}
             onOpenAutoFocus={handleOpenAutoFocus}
             style={{
@@ -162,7 +165,7 @@ export function PopupShell({
       <DialogPortal>
         <DialogOverlay className="bg-black/50" />
         <DialogPrimitive.Content
-          role={role}
+          {...roleProps}
           {...describedBy}
           onOpenAutoFocus={handleOpenAutoFocus}
           // Inline for the same reason as the legend's popover: the arbitrary

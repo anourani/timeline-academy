@@ -19,6 +19,13 @@ import { cn } from '@/lib/utils'
  */
 
 type UsageMeterSize = 'sm' | 'md'
+type UsageMeterVariant = 'default' | 'preview'
+
+/**
+ * The preview fill: a grey stripe rather than the brand blue. Blue means "your
+ * plan"; a guest has none, and is being shown what a free account would hold.
+ */
+const PREVIEW_FILL = 'repeating-linear-gradient(135deg, #6b6e73 0 2px, #404040 2px 4px)'
 
 const SIZES = {
   sm: {
@@ -58,6 +65,13 @@ interface UsageMeterProps {
   className?: string
   /** Track tone, which depends on the parent surface. See the note above. */
   trackClass?: string
+  /**
+   * `preview` measures a guest's work in this tab against a plan they don't
+   * have yet. Striped, and never red: a guest has no limit, so going past the
+   * previewed cap is not an error — the bar clamps and the text keeps the real
+   * count.
+   */
+  variant?: UsageMeterVariant
 }
 
 /**
@@ -80,7 +94,9 @@ export function UsageMeter({
   pending = false,
   className,
   trackClass = 'bg-[#0A0A0A]',
+  variant = 'default',
 }: UsageMeterProps) {
+  const isPreview = variant === 'preview'
   const s = SIZES[size]
 
   const head = (
@@ -104,7 +120,7 @@ export function UsageMeter({
   }
 
   const pct = pending ? 0 : meterPercent(count, limit)
-  const isOver = !pending && count > limit
+  const isOver = !pending && count > limit && !isPreview
 
   return (
     <div className={cn('flex flex-row items-center', s.gap, className)}>
@@ -114,22 +130,32 @@ export function UsageMeter({
           an over-cap state reads "14 of 10" rather than the clamped 100%. */}
       <div
         role="progressbar"
-        aria-label={`${label} used`}
+        aria-label={isPreview ? `${label} in this tab` : `${label} used`}
         aria-valuemin={0}
         aria-valuemax={limit}
         aria-valuenow={pending ? undefined : count}
-        aria-valuetext={pending ? undefined : `${count} of ${limit}`}
+        aria-valuetext={
+          pending
+            ? undefined
+            : isPreview
+              ? `${count} — a free account holds ${limit}`
+              : `${count} of ${limit}`
+        }
         aria-busy={pending || undefined}
         className={cn('flex-1 min-w-[40px] h-[6px] rounded-full overflow-hidden', trackClass)}
       >
         <div
           className={cn(
             'h-full rounded-full transition-[width] duration-300 ease-out motion-reduce:transition-none',
-            isOver ? 'bg-destructive' : 'bg-[#2563EB]'
+            isPreview ? undefined : isOver ? 'bg-destructive' : 'bg-[#2563EB]'
           )}
           // A nonzero count must never render as nothing, so a sliver survives
           // rounding. `rounded-full` makes it a dot rather than a chip.
-          style={{ width: `${pct}%`, minWidth: !pending && count > 0 ? 3 : 0 }}
+          style={{
+            width: `${pct}%`,
+            minWidth: !pending && count > 0 ? 3 : 0,
+            background: isPreview ? PREVIEW_FILL : undefined,
+          }}
         />
       </div>
     </div>
