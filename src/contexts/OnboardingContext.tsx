@@ -44,6 +44,16 @@ interface OnboardingContextValue {
   back: () => void
   goToStep: (step: TourStep) => void
   endTour: (outcome: TourOutcome) => void
+  /**
+   * The welcome modal that comes before the tour, so a first-time guest is
+   * greeted and asked rather than dropped straight into step 1.
+   */
+  welcomeOpen: boolean
+  openWelcome: () => void
+  /** "Take the tour": close the welcome and start at step 1. */
+  acceptWelcome: () => void
+  /** Skip, Esc, overlay or swipe: close the welcome and record a skip. */
+  skipWelcome: () => void
   checklist: ChecklistState
   checklistVisible: boolean
   hideChecklist: () => void
@@ -84,6 +94,9 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
   const [tourStatus, setTourStatus] = useState(readTourStatus)
   const [stored, setStored] = useState(readChecklist)
   const [tourActive, setTourActive] = useState(false)
+  // Not persisted: a reload before choosing simply greets them again. Either
+  // choice persists `tourStatus`, which is what keeps it from returning.
+  const [welcomeOpen, setWelcomeOpen] = useState(false)
   const [step, setStep] = useState<TourStep>(0)
 
   useEffect(() => {
@@ -144,6 +157,7 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 
   const endTour = useCallback((outcome: TourOutcome) => {
     setTourActive(false)
+    setWelcomeOpen(false)
     setTourStatus(outcome)
     try {
       localStorage.setItem(TOUR_KEY, outcome)
@@ -152,6 +166,17 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     }
     tick('tour')
   }, [tick])
+
+  const openWelcome = useCallback(() => setWelcomeOpen(true), [])
+
+  const acceptWelcome = useCallback(() => {
+    setWelcomeOpen(false)
+    startTour()
+  }, [startTour])
+
+  const skipWelcome = useCallback(() => {
+    endTour('skipped')
+  }, [endTour])
 
   const next = useCallback(() => {
     if (step >= TOUR_STEP_COUNT - 1) endTour('done')
@@ -184,10 +209,14 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     back,
     goToStep: setStep,
     endTour,
+    welcomeOpen,
+    openWelcome,
+    acceptWelcome,
+    skipWelcome,
     checklist,
     checklistVisible,
     hideChecklist,
-  }), [tourActive, step, tourSeen, startTour, next, back, endTour, checklist, checklistVisible, hideChecklist])
+  }), [tourActive, step, tourSeen, startTour, next, back, endTour, welcomeOpen, openWelcome, acceptWelcome, skipWelcome, checklist, checklistVisible, hideChecklist])
 
   return (
     <OnboardingContext.Provider value={value}>

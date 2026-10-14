@@ -6,6 +6,7 @@ import { AuthModal } from '@/components/Auth/AuthModal'
 import { ApiKeyModal } from '@/components/Modal/ApiKeyModal'
 import { OnboardingTour } from '@/components/Onboarding/OnboardingTour'
 import { GettingStartedChecklist } from '@/components/Onboarding/GettingStartedChecklist'
+import { WelcomeModal } from '@/components/Onboarding/WelcomeModal'
 import { isForeignDialogOpen } from '@/components/Onboarding/foreignLayers'
 import { Toast, type ToastMessage } from '@/components/ui/Toast'
 import { useAccountTier } from '@/hooks/useAccountTier'
@@ -44,28 +45,30 @@ export function AIModePage() {
   const [toast, setToast] = useState<ToastMessage | null>(null)
   const dismissToast = useCallback(() => setToast(null), [])
 
-  // First visit as a keyless guest: walk them through the page before they
-  // find the key gate by pressing Generate. Waits for the tier to resolve and
-  // the page to settle, and never starts over an error or another modal.
+  // First visit as a keyless guest: greet them and offer a walk through the
+  // page before they find the key gate by pressing Generate. Waits for the
+  // tier to resolve and the page to settle, and never starts over an error or
+  // another modal. The welcome modal decides whether the tour itself runs.
   const shouldStartTour =
     tier === 'trial' &&
     !onboarding.tourSeen &&
     !onboarding.tourActive &&
+    !onboarding.welcomeOpen &&
     generation.status !== 'error' &&
     !showApiKeyModal &&
     !showAuthModal &&
     // The mobile drawer covers the whole page, composer included.
     !(isMobile && panelOpen)
-  const { startTour } = onboarding
+  const { openWelcome } = onboarding
   useEffect(() => {
     if (!shouldStartTour) return
     const t = window.setTimeout(() => {
       if (isForeignDialogOpen()) return
       if (!document.querySelector('[data-onboarding="composer"]')) return
-      startTour()
+      openWelcome()
     }, 400)
     return () => window.clearTimeout(t)
-  }, [shouldStartTour, startTour])
+  }, [shouldStartTour, openWelcome])
 
   const openKeyFromOnboarding = () => {
     keyFromOnboardingRef.current = true
@@ -130,7 +133,7 @@ export function AIModePage() {
   // Resume a pending generation after the user signs in through the gate.
   useEffect(() => {
     // Signing in settles "how AI runs", which is what the tour was for.
-    if (user && onboarding.tourActive) onboarding.endTour('done')
+    if (user && (onboarding.tourActive || onboarding.welcomeOpen)) onboarding.endTour('done')
     if (user && pendingSubjectRef.current) {
       const subject = pendingSubjectRef.current
       pendingSubjectRef.current = null
@@ -215,6 +218,7 @@ export function AIModePage() {
         suspended={showApiKeyModal || showAuthModal}
         onAddKey={openKeyFromOnboarding}
       />
+      <WelcomeModal />
       <GettingStartedChecklist onAddKey={openKeyFromOnboarding} />
       <Toast toast={toast} onDismiss={dismissToast} />
     </div>

@@ -7,6 +7,7 @@ import { useIsMobile } from '@/hooks/useIsMobile'
 import { useOnboarding } from '@/hooks/useOnboarding'
 import { useSidePanel } from '@/hooks/useSidePanel'
 import { cn } from '@/lib/utils'
+import { focusComposer } from './anchors'
 
 interface GettingStartedChecklistProps {
   /** Opens the Create page's `ApiKeyModal`. */
@@ -24,12 +25,6 @@ const ITEMS: Item[] = [
   { key: 'ai', label: 'Choose how AI runs', hint: 'Key / sign in' },
   { key: 'first', label: 'Make your first timeline', hint: 'Search' },
 ]
-
-function focusComposer() {
-  document
-    .querySelector<HTMLInputElement>('[data-onboarding="composer"] input')
-    ?.focus()
-}
 
 /**
  * What's left of onboarding once the tour is over: a card in the corner on
