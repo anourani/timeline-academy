@@ -3,21 +3,16 @@ import { getTimelineYearRange } from '../../utils/timelineUtils';
 
 interface TimelineTitleProps {
   title: string;
-  description: string;
   events: TimelineEvent[];
-  showDescription?: boolean;
   onTitleChange?: (title: string) => void;
 }
 
 export function TimelineTitle({
   title,
-  description,
   events,
-  showDescription = false,
   onTitleChange
 }: TimelineTitleProps) {
   const timelineRange = getTimelineYearRange(events);
-  const hasDescription = showDescription && description.trim().length > 0;
   const isEditable = !!onTitleChange;
 
   return (
@@ -53,12 +48,6 @@ export function TimelineTitle({
           {timelineRange}
         </span>
       </div>
-
-      {hasDescription && (
-        <p className="font-mono text-xs font-light leading-[140%] text-gray-300 max-w-[560px] text-center">
-          {description}
-        </p>
-      )}
     </div>
   );
 }

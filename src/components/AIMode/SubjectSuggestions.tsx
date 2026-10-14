@@ -69,15 +69,12 @@ export function SubjectSuggestions({
        is the only place it can do anything. A blur on this element has an
        empty backdrop to work on; the wrapper's entrance animation leaves a
        transform on it, and a transformed element is a backdrop root, so
-       nothing painted outside it is visible to a filter inside it.
-
-       `[color-scheme:dark]` is what keeps the scrollbar dark: without it the
-       browser draws its light default on this near-black panel. */
+       nothing painted outside it is visible to a filter inside it. */
     <div
       id={SUGGESTIONS_LISTBOX_ID}
       role="listbox"
       aria-busy={isLoading ? 'true' : 'false'}
-      className="flex flex-col gap-[2px] w-full p-[8px] rounded-[16px] border border-[#262626] bg-[rgba(23,23,23,0.94)] shadow-[0_16px_40px_rgba(0,0,0,0.5)] overflow-y-auto max-h-[270px] max-md:max-h-[340px] [color-scheme:dark] [scrollbar-width:thin]"
+      className="flex flex-col gap-[2px] w-full p-[8px] rounded-[16px] border border-[#262626] bg-[rgba(23,23,23,0.94)] shadow-[0_16px_40px_rgba(0,0,0,0.5)] overflow-y-auto max-h-[270px] max-md:max-h-[340px]"
     >
       {isLoading
         ? SKELETON_WIDTHS.map((width, i) => (

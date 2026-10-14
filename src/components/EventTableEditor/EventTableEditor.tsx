@@ -721,7 +721,7 @@ export function EventTableEditor({
                   </div>
 
                   {/* Scrollable Event Rows */}
-                  <div className="flex-1 overflow-y-auto scrollbar-hide py-1 pb-4 space-y-1">
+                  <div className="flex-1 overflow-y-auto py-1 pb-4 space-y-1">
                     {displayEvents.map((event) => {
                       const empty = isEmptyRow(event.id)
 
@@ -865,7 +865,7 @@ export function EventTableEditor({
                 </div>
 
                 {/* Scrollable category rows */}
-                <div className="flex-1 overflow-y-auto scrollbar-hide pt-1 pb-5 space-y-2">
+                <div className="flex-1 overflow-y-auto pt-1 pb-5 space-y-2">
                   <DndContext
                     sensors={sensors}
                     collisionDetection={closestCenter}

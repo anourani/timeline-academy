@@ -454,7 +454,7 @@ export function EventDetailPanel({
           <div
             ref={contentRef}
             aria-busy={state === 'generating'}
-            className="flex flex-col items-stretch p-[24px_20px] gap-[16px] overflow-y-auto scrollbar-hide flex-1 min-h-0"
+            className="flex flex-col items-stretch p-[24px_20px] gap-[16px] overflow-y-auto flex-1 min-h-0"
           >
             {event && (
               <>

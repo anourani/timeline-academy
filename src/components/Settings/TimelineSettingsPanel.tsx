@@ -213,7 +213,7 @@ export function TimelineSettingsPanel({
               </div>
 
               {/* Body */}
-              <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
+              <div className="flex-1 min-h-0 overflow-y-auto">
                 <div className="flex flex-col px-5 pt-6 pb-2 gap-8 min-h-full">
                   {/* Visual Settings */}
                   <div className="flex flex-col gap-2.5">
