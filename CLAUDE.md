@@ -70,6 +70,7 @@ supabase/
 - **Component organization**: Feature folders under `src/components/` (e.g., `Auth/`, `Timeline/`, `Navigation/`, `AIMode/`).
 - **State management**: Custom hooks for feature logic; React Context for global state (auth, side panel).
 - **Anything that remembers what the editor did with an AI run lives in `GenerationContext`, not `App.tsx`.** `App` unmounts on every trip off `/editor` and the store does not, so per-run state kept in `App` is blank on re-entry while the run is still there — which is how a cancelled generation once bounced every route into the editor back to `/`. The store's `resolvedId` is that record, and the store describes only what the editor is showing: loading anything else calls `reset()`. See `src/TIMELINE_ARCHITECTURE.md` §AI Generation Streaming.
+- **Side panels never show a scrollbar.** Every scroll container inside one (Settings, Timelines, Events, event detail, the Categories drawer) carries `scrollbar-hide` (`src/index.css`); content still scrolls, the bar is just hidden.
 - **ESLint** flat config with TypeScript ESLint and React Hooks plugins. No Prettier.
 - **No semicolons or formatting tool** — follow existing code style in each file.
 - **Spreadsheets** use `exceljs` via the shared helper in `src/utils/excelSheet.ts`, lazy-loaded into its own chunk. The `xlsx` package was removed (frozen on npm at 0.18.5 with prototype-pollution and ReDoS advisories, while parsing untrusted uploads). Don't reintroduce it.

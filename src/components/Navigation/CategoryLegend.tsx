@@ -212,7 +212,7 @@ export function CategoryLegend({ categories, events, onCategoriesChange }: Categ
             </div>
             {/* Escape, focus trap, return-focus-to-trigger and the body scroll
                 lock all come from Dialog. Nothing here re-implements them. */}
-            <div className="flex-1 min-h-0 overflow-y-auto p-2">{rows}</div>
+            <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide p-2">{rows}</div>
           </DialogPrimitive.Content>
         </DialogPortal>
       </Dialog>

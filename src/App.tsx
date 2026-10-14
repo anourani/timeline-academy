@@ -1371,8 +1371,6 @@ export function App() {
         intro={introPlaying}
         streaming={isStreaming}
         title={title}
-        description={description}
-        onDescriptionChange={setDescription}
         onAddEvent={handleAddEvent}
         onImportEvents={handleImportEvents}
         events={events}
