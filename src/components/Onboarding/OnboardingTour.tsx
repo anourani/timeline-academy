@@ -198,9 +198,7 @@ export function OnboardingTour({ suspended, onAddKey }: OnboardingTourProps) {
     : [{ inset: 0 }]
 
   const isTrial = tier === 'trial'
-  const byokAnonCap = PLAN_LIMITS['byok-anon'].timelineLimit
-  const byokCap = PLAN_LIMITS.byok.timelineLimit
-  const copy = stepCopy(step, isTrial, isMobile, byokAnonCap, byokCap)
+  const copy = stepCopy(step, isTrial, isMobile)
   const showModelTable = step === 1 && isTrial
   const isLast = step === TOUR_STEP_COUNT - 1
   const titleId = 'onboarding-tip-title'
@@ -390,12 +388,12 @@ export function OnboardingTour({ suspended, onAddKey }: OnboardingTourProps) {
   )
 }
 
+const { free, 'byok-anon': byokAnon, byok } = PLAN_LIMITS
+
 function stepCopy(
   step: TourStep,
   isTrial: boolean,
   isMobile: boolean,
-  byokAnonCap: number | null,
-  byokCap: number | null,
 ): { title: string; body: string } {
   if (step === 0) {
     return {
@@ -416,11 +414,17 @@ function stepCopy(
     }
   }
   return {
-    title: 'Where your work is kept',
+    title: 'Keep track of your usage',
+    // Numbers from PLAN_LIMITS, as the card under the spotlight draws them.
     body: isTrial
-      ? `Right now, only in this tab — close it and it's gone. A key keeps up to ${byokAnonCap} timelines in this browser; an account keeps them everywhere.`
-      : `Your key is saved. Up to ${byokAnonCap} timelines now stay in this browser. Log in to keep ${byokCap} across devices.`,
+      ? `This card measures what you've built against a free account — ${cap(free.timelineLimit)} timelines and ${cap(free.eventLimit)} events. As a guest, it's only kept in this tab until you log in.`
+      : `Your key gives you ${cap(byokAnon.timelineLimit)} timelines and ${cap(byokAnon.eventLimit)} events, saved in this browser. Log in to raise it to ${cap(byok.timelineLimit)} and ${cap(byok.eventLimit)}, on every device.`,
   }
+}
+
+/** "1,200", or "unlimited" for a cap this codebase spells as null. */
+function cap(limit: number | null): string {
+  return limit == null ? 'unlimited' : limit.toLocaleString()
 }
 
 const MODEL_ROWS = [
