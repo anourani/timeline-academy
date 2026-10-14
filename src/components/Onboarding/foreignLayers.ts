@@ -1,13 +1,19 @@
 import { useEffect, useState } from 'react'
 
 /**
- * Open Radix dialogs anywhere on the page — the side panel's own key and
- * sign-in modals, account settings, the checklist's sheet. The onboarding
- * layer steps aside for all of them, not just the ones `AIModePage` owns.
- * The tour's own tip is a `role="dialog"` too, but carries no `data-state`.
+ * Radix dialogs anywhere on the page — the side panel's own key and sign-in
+ * modals, account settings, the checklist's sheet, the welcome modal. The
+ * onboarding layer steps aside for all of them, not just the ones
+ * `AIModePage` owns. The tour's own tip is a `role="dialog"` too, but carries
+ * no `data-state`.
+ *
+ * Any `data-state`, not just `open`: a closing dialog stays in the DOM as
+ * `closed` for its exit animation, and the tour appearing under a sheet that
+ * is still sliding away is exactly the overlap it is meant to avoid. Radix
+ * removes the node when the animation ends, which the observer below sees.
  */
 const OPEN_DIALOG =
-  '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]'
+  '[role="dialog"][data-state], [role="alertdialog"][data-state]'
 
 /** Dialogs plus open menus — the model dropdown claims Esc for itself. */
 const OPEN_LAYER = `${OPEN_DIALOG}, [role="menu"][data-state="open"]`

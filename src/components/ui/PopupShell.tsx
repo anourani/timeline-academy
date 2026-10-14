@@ -25,6 +25,27 @@ interface PopupShellProps {
   alert?: boolean
   /** Receives focus on open instead of Radix's first-focusable default. */
   initialFocusRef?: React.RefObject<HTMLElement | null>
+  /**
+   * Radix's close-time focus hook. `preventDefault()` on the event stops focus
+   * returning to whatever had it before, for a popup whose outcome decides
+   * where focus belongs next.
+   */
+  onCloseAutoFocus?: (e: Event) => void
+  /** Centres the top row and the title block — for announcement-style popups. */
+  centered?: boolean
+  /**
+   * Drops the desktop card's visible X, for a popup whose own buttons are the
+   * way out. A screen-reader close stays, as it does on the sheet.
+   */
+  hideClose?: boolean
+  /** Merged onto the Content (twMerge), e.g. to change its padding or gap. */
+  className?: string
+  /**
+   * Replaces the title's type style (`header-small` by default) rather than
+   * adding to it: `header-small` lives in the utilities layer after Tailwind's
+   * own utilities, so an arbitrary `text-[28px]` stacked on it silently loses.
+   */
+  titleClassName?: string
 }
 
 /** Drag distance past which releasing the grabber dismisses the sheet. */
@@ -53,6 +74,11 @@ export function PopupShell({
   tall = false,
   alert = false,
   initialFocusRef,
+  onCloseAutoFocus,
+  centered = false,
+  hideClose = false,
+  className,
+  titleClassName,
 }: PopupShellProps) {
   const isMobile = useIsMobile()
   const [dragY, setDragY] = useState(0)
@@ -72,10 +98,14 @@ export function PopupShell({
   }
 
   const titleBlock = (
-    <div className="flex flex-col gap-1.5">
-      <DialogPrimitive.Title className="header-small text-[#DADEE5] m-0">{title}</DialogPrimitive.Title>
+    <div className={cn('flex flex-col gap-1.5', centered && 'items-center text-center')}>
+      <DialogPrimitive.Title className={cn(titleClassName ?? 'header-small', 'text-[#DADEE5] m-0')}>
+        {title}
+      </DialogPrimitive.Title>
       {description && (
-        <DialogPrimitive.Description className="body-m text-[#9B9EA3] m-0">
+        <DialogPrimitive.Description
+          className={cn('body-m text-[#9B9EA3] m-0', centered && '[text-wrap:balance]')}
+        >
           {description}
         </DialogPrimitive.Description>
       )}
@@ -117,6 +147,7 @@ export function PopupShell({
             {...roleProps}
             {...describedBy}
             onOpenAutoFocus={handleOpenAutoFocus}
+            onCloseAutoFocus={onCloseAutoFocus}
             style={{
               animationDuration: '300ms',
               transform: dragY > 0 ? `translateY(${dragY}px)` : undefined,
@@ -134,6 +165,7 @@ export function PopupShell({
               // See CategoryLegend: the guard has to carry the same attribute
               // selector as the animation it cancels, or it loses on specificity.
               'motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none',
+              className,
             )}
           >
             {/* The grabber's row is the swipe target — padded out so a thumb
@@ -151,7 +183,9 @@ export function PopupShell({
             {/* No visible X on a sheet — the overlay and the swipe dismiss it —
                 but a screen reader still needs a way out. */}
             <DialogPrimitive.Close className="sr-only">Close</DialogPrimitive.Close>
-            {topSlot && <div className="flex items-center">{topSlot}</div>}
+            {topSlot && (
+              <div className={cn('flex items-center', centered && 'justify-center')}>{topSlot}</div>
+            )}
             {titleBlock}
             {children}
           </DialogPrimitive.Content>
@@ -168,6 +202,7 @@ export function PopupShell({
           {...roleProps}
           {...describedBy}
           onOpenAutoFocus={handleOpenAutoFocus}
+          onCloseAutoFocus={onCloseAutoFocus}
           // Inline for the same reason as the legend's popover: the arbitrary
           // duration utility is ambiguous to Tailwind.
           style={{ animationDuration: '120ms', width }}
@@ -183,17 +218,27 @@ export function PopupShell({
             'data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0',
             'data-[state=open]:zoom-in-[0.98] data-[state=closed]:zoom-out-[0.98]',
             'motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none',
+            className,
           )}
         >
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center">{topSlot}</div>
-            <DialogPrimitive.Close
-              aria-label="Close"
-              className="-mr-1 shrink-0 rounded p-1 text-[#6D7073] transition-colors hover:text-[#C9CED4] outline-none focus-visible:ring-1 focus-visible:ring-white/40"
-            >
-              <X size={16} strokeWidth={1.25} />
-            </DialogPrimitive.Close>
-          </div>
+          {hideClose ? (
+            <>
+              <DialogPrimitive.Close className="sr-only">Close</DialogPrimitive.Close>
+              {topSlot && (
+                <div className={cn('flex items-center', centered && 'justify-center')}>{topSlot}</div>
+              )}
+            </>
+          ) : (
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center">{topSlot}</div>
+              <DialogPrimitive.Close
+                aria-label="Close"
+                className="-mr-1 shrink-0 rounded p-1 text-[#6D7073] transition-colors hover:text-[#C9CED4] outline-none focus-visible:ring-1 focus-visible:ring-white/40"
+              >
+                <X size={16} strokeWidth={1.25} />
+              </DialogPrimitive.Close>
+            </div>
+          )}
           {titleBlock}
           {children}
         </DialogPrimitive.Content>

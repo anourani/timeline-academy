@@ -397,7 +397,7 @@ function stepCopy(
 ): { title: string; body: string } {
   if (step === 0) {
     return {
-      title: 'Welcome. Start with a search.',
+      title: 'Start with a search',
       body: isMobile
         ? "Type any person, era, or event and we'll draft the whole timeline. Or tap a moment below."
         : "Type any person, era, or event and we'll draft the whole timeline. Not sure? Drop into one of the moments below.",

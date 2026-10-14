@@ -27,7 +27,7 @@ No test framework is configured — every check is manual. This is the direct re
 src/
 ├── components/       # Feature-folder organized React components
 │   ├── Legal/        # /privacy and /terms pages
-│   ├── Onboarding/   # First-visit tour + "Getting started" checklist on /
+│   ├── Onboarding/   # First-visit welcome modal → tour, + "Getting started" checklist on /
 │   │                 #   (trial guests only; anchors are data-onboarding="…")
 │   └── ui/           # shadcn/ui primitives
 ├── hooks/            # Custom React hooks (useTimeline, useEvents, useAutosave,
