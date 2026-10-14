@@ -20,7 +20,6 @@ import {
 
 interface TimelineData {
   title: string;
-  description: string;
   events: TimelineEvent[];
   categories: CategoryConfig[];
   chapters: TimelineChapter[];
@@ -114,7 +113,6 @@ export function TimelineViewer() {
 
         setTimeline({
           title: timelineData.title || 'Untitled Timeline',
-          description: timelineData.description || '',
           events: formattedEvents,
           categories: categories,
           // Present only once the chapters migration has been applied AND
@@ -187,9 +185,7 @@ export function TimelineViewer() {
       <div className="px-[120px] pt-[40px] pb-8 flex flex-col items-center">
         <TimelineTitle
           title={timeline.title}
-          description={timeline.description}
           events={timeline.events}
-          showDescription
         />
       </div>
 

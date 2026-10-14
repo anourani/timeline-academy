@@ -13,6 +13,22 @@
 }
 
 @layer base {
+  /* No scrollbars anywhere — panels, modals, dropdowns, pages. Content still
+     scrolls; a surface whose content runs past its edge is cut off there, and
+     that cut is the cue to scroll. In `base` so it is the default everywhere,
+     including things not yet built. `scrollbar-width` also governs Chrome 121+
+     and Safari 18.2+, where it overrides any `::-webkit-scrollbar` styling, so
+     an element-level `scrollbar-width` (e.g. `[scrollbar-width:thin]`) would
+     bring a bar back — don't add one. */
+  * {
+    -ms-overflow-style: none;  /* IE and legacy Edge */
+    scrollbar-width: none;  /* Firefox, Chrome 121+, Safari 18.2+ */
+  }
+
+  *::-webkit-scrollbar {
+    display: none;  /* Older Chrome and Safari */
+  }
+
   :root {
     /* The three curves the AI-generation intro is built from. Named rather
        than inlined so the axis build, the title flight and the toolbar all

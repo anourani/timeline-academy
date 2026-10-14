@@ -12,7 +12,6 @@ import { PanelResizeHandle } from '../ui/PanelResizeHandle';
 import { usePanelWidth } from '../../hooks/usePanelWidth';
 import { useWindowResizing } from '../../hooks/useWindowResizing';
 import { SETTINGS_PANEL_DEFAULT_WIDTH } from '../../constants/panels';
-import { DEFAULT_TIMELINE_DESCRIPTION } from '../../constants/defaults';
 import {
   isInstructionRow,
   parseSheetRows,
@@ -41,9 +40,7 @@ interface TimelineSettingsPanelProps {
   onClose: () => void;
   events: TimelineEvent[];
   timelineTitle: string;
-  timelineDescription: string;
   onImportEvents: (events: Omit<TimelineEvent, 'id'>[]) => AddEventsResult;
-  onDescriptionChange: (description: string) => void;
   scale: TimelineScale;
   onScaleChange: (scale: TimelineScale) => void;
   verticalScale: VerticalScale;
@@ -60,9 +57,7 @@ export function TimelineSettingsPanel({
   onClose,
   events,
   timelineTitle,
-  timelineDescription,
   onImportEvents,
-  onDescriptionChange,
   scale,
   onScaleChange,
   verticalScale,
@@ -82,7 +77,6 @@ export function TimelineSettingsPanel({
   const isWindowResizing = useWindowResizing();
   const skipTransition = isResizing || isWindowResizing;
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const maxDescriptionLength = 260;
 
   // Settings is the widest panel by default — its scale selectors and BYOK key
   // rows were cramped at the 314px card the other panels use.
@@ -99,13 +93,6 @@ export function TimelineSettingsPanel({
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [isOpen, onClose]);
-
-  const handleDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newDescription = e.target.value;
-    if (newDescription.length <= maxDescriptionLength) {
-      onDescriptionChange(newDescription);
-    }
-  };
 
   const handleExportExcel = () => {
     exportEventsToExcel(events, timelineTitle, categories);
@@ -228,21 +215,6 @@ export function TimelineSettingsPanel({
               {/* Body */}
               <div className="flex-1 min-h-0 overflow-y-auto">
                 <div className="flex flex-col px-5 pt-6 pb-2 gap-8 min-h-full">
-                  {/* Description */}
-                  <div>
-                    <label htmlFor="timelineDescription" className="label-m-type2 text-[#9B9EA3] mb-1 block">
-                      Description <span className="text-muted-foreground">({timelineDescription.length}/{maxDescriptionLength})</span>
-                    </label>
-                    <textarea
-                      id="timelineDescription"
-                      value={timelineDescription}
-                      onChange={handleDescriptionChange}
-                      placeholder={DEFAULT_TIMELINE_DESCRIPTION}
-                      maxLength={maxDescriptionLength}
-                      className="w-full h-[76px] bg-[#262626] border border-[#262626] rounded-[8px] p-2 body-m text-[#DADEE5] outline-none focus:border-[#404040]"
-                    />
-                  </div>
-
                   {/* Visual Settings */}
                   <div className="flex flex-col gap-2.5">
                     <span className="label-m-type2 text-[#9B9EA3]">Visual Settings</span>

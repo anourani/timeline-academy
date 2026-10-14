@@ -16,8 +16,6 @@ interface HeaderProps {
   intro?: boolean
   streaming?: boolean
   title: string;
-  description: string;
-  onDescriptionChange: (description: string) => void;
   onAddEvent: (event: Omit<TimelineEvent, 'id'>) => void;
   onImportEvents: (events: Omit<TimelineEvent, 'id'>[]) => AddEventsResult;
   events: TimelineEvent[];
@@ -42,8 +40,6 @@ interface HeaderProps {
 
 export function Header({
   title,
-  description,
-  onDescriptionChange,
   onAddEvent,
   onImportEvents,
   events,
@@ -112,9 +108,7 @@ export function Header({
         onClose={closePanel}
         events={events}
         timelineTitle={title}
-        timelineDescription={description}
         onImportEvents={onImportEvents}
-        onDescriptionChange={onDescriptionChange}
         categories={categories}
         onCategoriesChange={onCategoriesChange}
         scale={scale}
