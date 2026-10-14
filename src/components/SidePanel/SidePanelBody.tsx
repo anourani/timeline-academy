@@ -34,8 +34,11 @@ import {
   byokAnonDraftStore,
   DRAFTS_CHANGED_EVENT,
   MAX_DRAFTS,
+  TRIAL_CHANGED_EVENT,
+  trialDraftStore,
   type LocalDraft,
 } from '@/utils/draftStorage'
+import { TIER_LABELS } from '@/constants/tierLabels'
 import { notifyUsageChanged } from '@/utils/usageChanged'
 import { exportEventsToExcel } from '@/utils/excelExport'
 import { downloadTemplate } from '@/utils/excelSheet'
@@ -187,6 +190,58 @@ function TileMenuButton({
   )
 }
 
+/**
+ * The trial's one timeline, which lives in sessionStorage and dies with the
+ * tab.
+ *
+ * Deliberately not a tile in the list: every tile affordance — share,
+ * duplicate, export, delete — either can't work or means nothing for it, so
+ * it has no menu, and keeping it out of `rows` keeps those code paths from
+ * ever seeing it. The dashed outline and the "Not saved" tag (the same string
+ * as the account row's) say what it is; the card below says how to keep it.
+ */
+function UnsavedTrialRow({
+  draft,
+  isActive,
+  liveTitle,
+  liveCount,
+  liveColor,
+  onOpen,
+}: {
+  draft: LocalDraft
+  isActive: boolean
+  liveTitle: string | null
+  liveCount: number | null
+  liveColor: string | null
+  onOpen: () => void
+}) {
+  // While the editor has it open, its live values beat the last write.
+  const title = isActive && liveTitle != null
+    ? (liveTitle.length > 0 ? liveTitle : DEFAULT_TIMELINE_TITLE)
+    : draft.title || DEFAULT_TIMELINE_TITLE
+  const count = isActive && liveCount != null ? liveCount : draft.events.length
+  const color = isActive && liveColor != null
+    ? liveColor
+    : computeDominantCategoryColor(draft.events, draft.categories)
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={`${title}, ${count} ${count === 1 ? 'event' : 'events'}, not saved`}
+      className="flex h-10 items-center gap-1.5 rounded-[10px] border border-dashed border-[#404040] bg-surface-primary px-1.5 pr-2 text-left outline-none focus-visible:ring-1 focus-visible:ring-[#6b6e73]"
+    >
+      <span className="label-s-type1 shrink-0 w-4 text-left" style={{ color }}>
+        {count}
+      </span>
+      <span className="flex-1 min-w-0 body-m truncate text-[#dadee5]">{title}</span>
+      <span className="shrink-0 font-['Avenir',sans-serif] text-[12px] leading-[16px] text-[#6b6e73]">
+        {TIER_LABELS.trial}
+      </span>
+    </button>
+  )
+}
+
 export function SidePanelBody() {
   const navigate = useNavigate()
   const { user, signOut } = useAuth()
@@ -195,6 +250,7 @@ export function SidePanelBody() {
   const { timelines, isLoading, error, loadTimelines } = useTimelines()
   const { loadTimeline, createTimelineFrom } = useTimeline()
   const [localDrafts, setLocalDrafts] = useState<LocalDraft[]>([])
+  const [trialDraft, setTrialDraft] = useState<LocalDraft | null>(null)
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const [pendingDeleteKind, setPendingDeleteKind] = useState<'timeline' | 'draft' | null>(null)
   const [deleteDetails, setDeleteDetails] = useState<DeleteDetails | null>(null)
@@ -236,6 +292,22 @@ export function SidePanelBody() {
     window.addEventListener(DRAFTS_CHANGED_EVENT, reread)
     return () => window.removeEventListener(DRAFTS_CHANGED_EVENT, reread)
   }, [tier])
+
+  // The trial's one timeline, shown as its own unsaved row above the list
+  // rather than as a tile in it — see `UnsavedTrialRow`. Same freshness rules
+  // as the byok-anon drafts: re-read on the store's own write event, and on
+  // `activeDraftId`, because the first write after a generation lands while
+  // the panel is mounted and never remounts it.
+  useEffect(() => {
+    if (tier !== 'trial') {
+      setTrialDraft(null)
+      return
+    }
+    const reread = () => setTrialDraft(trialDraftStore.getAllDrafts()[0] ?? null)
+    reread()
+    window.addEventListener(TRIAL_CHANGED_EVENT, reread)
+    return () => window.removeEventListener(TRIAL_CHANGED_EVENT, reread)
+  }, [tier, isOpen, activeDraftId])
 
   // Freshen the list when the panel opens so the tile labels reflect any
   // recent edits that haven't come through the realtime channel yet.
@@ -690,12 +762,29 @@ export function SidePanelBody() {
       {/* Body */}
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="flex flex-col p-3">
+          {trialDraft && (
+            <UnsavedTrialRow
+              draft={trialDraft}
+              isActive={trialDraft.id === activeDraftId}
+              liveTitle={activeTimelineTitle}
+              liveCount={activeEventCount}
+              liveColor={activeDominantCategoryColor}
+              onOpen={() => {
+                onDraftSelect(trialDraft.id)
+                dismissIfOverlay()
+              }}
+            />
+          )}
           {!user && rows.length === 0 ? (
-            <div className="px-2 py-6 text-center">
-              <p className="text-[14px] text-[#9b9ea3] leading-[20px]">
-                Sign in to save timelines and access them from anywhere.
-              </p>
-            </div>
+            // The usage card below carries the sign-in message now, so the
+            // list only says what belongs in it.
+            !trialDraft && (
+              <div className="px-2 py-6 text-center">
+                <p className="text-[14px] text-[#9b9ea3] leading-[20px]">
+                  Saved timelines show up here.
+                </p>
+              </div>
+            )
           ) : isLoading && user ? (
             <div className="px-2 py-4 text-[14px] text-[#9b9ea3]">Loading timelines…</div>
           ) : error && user && rows.length === 0 ? (

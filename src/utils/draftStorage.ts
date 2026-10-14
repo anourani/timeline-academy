@@ -170,7 +170,8 @@ export function createDraftStore(config: DraftStoreConfig): DraftStore {
  * they're called from.
  */
 export const DRAFTS_CHANGED_EVENT = 'timeline-academy:drafts-changed'
-const TRIAL_CHANGED_EVENT = 'timeline-academy:trial-changed'
+/** The trial store's equivalent, for the side panel's unsaved row. */
+export const TRIAL_CHANGED_EVENT = 'timeline-academy:trial-changed'
 
 // Drafts are byok-anon-tier only by definition — they live in localStorage,
 // not the database. Decoupled from the signed-in user timeline cap.
@@ -191,8 +192,8 @@ export const byokAnonDraftStore = createDraftStore({
  *
  * sessionStorage, so it survives a refresh but dies with the tab, and a single
  * slot: there is no draft list for this state, just the one thing being tried.
- * Its own event name so writes here don't wake the side panel, which never
- * shows trial content.
+ * Its own event name, so a trial write only wakes the side panel's single
+ * unsaved row rather than the byok-anon draft list.
  */
 export const trialDraftStore = createDraftStore({
   storage: () => sessionStorage,

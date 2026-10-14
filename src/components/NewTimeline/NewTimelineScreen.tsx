@@ -302,6 +302,7 @@ export function NewTimelineScreen({
               <div className="relative w-full">
                 <div
                   ref={composerRef}
+                  data-onboarding="composer"
                   className={`flex flex-col gap-[16px] md:gap-[20px] rounded-[20px] border bg-surface-secondary shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-colors duration-150 pt-[16px] pr-[8px] pb-[8px] pl-[16px] md:pt-[18px] md:pr-[12px] md:pb-[12px] md:pl-[20px] ${
                     renderDropdown
                       ? 'border-[#404040]'

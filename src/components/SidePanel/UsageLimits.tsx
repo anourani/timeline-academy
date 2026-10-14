@@ -8,8 +8,6 @@ import { UsageMeter } from '@/components/ui/UsageMeter'
 import { PLAN_LIMITS } from '@/constants/plans'
 import type { AccountTier } from '@/hooks/useAccountTier'
 
-const TRIAL_LABEL_CLASS =
-  "font-['Avenir',sans-serif] text-[12px] leading-[140%] font-medium text-[#9B9EA3]"
 const CTA_TEXT_CLASS =
   "m-0 px-2 font-['Avenir',sans-serif] text-[12px] leading-[16px] text-[#6b6e73]"
 // One class for every inline call to action in this card — the trial copy and
@@ -47,16 +45,15 @@ export function UsageLimits() {
   const freeCaps = PLAN_LIMITS.free
   const byokCaps = PLAN_LIMITS.byok
 
-  // The trial has no plan and no numbers to show. Until it holds something
-  // there is nothing worth saying at all, so the card renders as a single line
-  // rather than meters against caps someone hasn't opted into yet.
   if (tier === 'loading') return null
 
   if (tier === 'trial') {
     return (
       <>
-        <TrialStatus
+        <TrialPreview
           eventCount={eventCount}
+          timelineCount={timelineCount}
+          pending={isLoading}
           onLogIn={handleLogIn}
           onAddKey={handleAddApiKey}
         />
@@ -89,7 +86,7 @@ export function UsageLimits() {
 
   return (
     <>
-      <div className="px-3 pb-2.5">
+      <div className="px-3 pb-2.5" data-onboarding="usage">
         <div className="bg-[#0A0A0A] rounded-[8px] pt-4 pb-3 px-2 flex flex-col gap-3">
           {/* Header row */}
           <div className="flex flex-row items-center px-2">
@@ -207,48 +204,92 @@ function renderUpgradeCta({
 }
 
 /**
- * The trial's entire presence in this panel.
+ * The guest's card: the signed-in Usage Limits card in preview mode.
  *
- * Not a meter and not a stat tile: this visitor has no plan, no caps and no
- * saved timeline list, and drawing a bar against a limit would imply all three.
+ * A trial has no plan, so its own allowance has nothing to draw. What it does
+ * have is work in this tab, and the useful thing to show against that work is
+ * what logging in would give them — logging in from trial lands on `free`, so
+ * the meters measure against free's caps, the same way the byok-anon line
+ * projects the tier its CTA actually leads to. The header names the plan being
+ * previewed and the fill is a grey stripe rather than the brand blue, so the
+ * numbers aren't read as the guest's own allowance. A trial can outgrow the
+ * preview (it has no event cap); that is not an error, so it is never red.
  *
- * It does still always render, though — this is the only way in to sign-in or
- * BYOK from the side panel, and the whole tier table it replaced carried those
- * two calls to action. Hiding it until the visitor had made something left a
- * first-time visitor with no way to log in at all.
+ * One filled primary action, because the account is the durable path; the key
+ * stays one click away as a secondary link. This card is also the only way in
+ * to sign-in or BYOK from the side panel, so it always renders.
  */
-function TrialStatus({
+function TrialPreview({
   eventCount,
+  timelineCount,
+  pending,
   onLogIn,
   onAddKey,
 }: {
   eventCount: number
+  timelineCount: number
+  pending: boolean
   onLogIn: () => void
   onAddKey: () => void
 }) {
+  const freeCaps = PLAN_LIMITS.free
+  const byokEventCap = PLAN_LIMITS.byok.eventLimit
   const hasWork = eventCount > 0
+  const overFreeEvents = freeCaps.eventLimit != null && eventCount > freeCaps.eventLimit
+
+  const caption = overFreeEvents
+    ? `More than a free account holds. Log in and add a key for up to ${capPhrase(byokEventCap, 'events')}.`
+    : hasWork
+      ? 'Your timeline above, measured against a free account.'
+      : 'What a free account holds. Until then, timelines stay in this tab.'
 
   return (
-    <div className="px-3 pb-2.5">
-      <div className="bg-[#0A0A0A] rounded-[8px] py-3 px-4 flex flex-col gap-1.5">
-        <span className={TRIAL_LABEL_CLASS}>
-          {hasWork
-            ? `${eventCount} event${eventCount === 1 ? '' : 's'} · not saved`
-            : 'Nothing saved yet'}
-        </span>
-        <span className="font-['Avenir',sans-serif] text-[12px] leading-[16px] text-[#6b6e73]">
-          {hasWork
-            ? 'This timeline lives in this tab only. '
-            : 'Timelines you build stay in this tab. '}
-          <button type="button" onClick={onLogIn} className={LINK_CLASS}>
-            Log in
-          </button>{' '}
-          or{' '}
-          <button type="button" onClick={onAddKey} className={LINK_CLASS}>
-            add an API key
-          </button>{' '}
-          {hasWork ? 'to keep it.' : 'to keep them.'}
-        </span>
+    <div className="px-3 pb-2.5" data-onboarding="usage">
+      <div className="bg-[#0A0A0A] rounded-[8px] pt-4 pb-3 px-2 flex flex-col gap-3">
+        <div className="flex flex-row items-baseline justify-between gap-2 px-2">
+          <h3 className="m-0 font-['Aleo',serif] text-[14px] leading-[140%] font-normal text-[#9B9EA3]">
+            Usage Limits
+          </h3>
+          <span className="font-['Avenir',sans-serif] text-[12px] leading-[16px] text-[#6b6e73]">
+            Free account
+          </span>
+        </div>
+
+        <div className="bg-[#171717] rounded-md px-2.5 py-2 flex flex-col gap-2">
+          <UsageMeter
+            label="Timelines"
+            count={timelineCount}
+            limit={freeCaps.timelineLimit}
+            pending={pending}
+            variant="preview"
+          />
+          <UsageMeter
+            label="Events"
+            count={eventCount}
+            limit={freeCaps.eventLimit}
+            pending={pending}
+            variant="preview"
+          />
+        </div>
+
+        <p className={CTA_TEXT_CLASS}>{caption}</p>
+
+        <div className="flex flex-col gap-2 px-2">
+          <button
+            type="button"
+            onClick={onLogIn}
+            className="h-8 w-full rounded-[8px] bg-[#2563EB] hover:brightness-110 transition-[filter] font-['Avenir',sans-serif] text-[13px] font-medium text-white outline-none focus-visible:ring-1 focus-visible:ring-[#6b6e73]"
+          >
+            Log in to save
+          </button>
+          <p className="m-0 text-center font-['Avenir',sans-serif] text-[12px] leading-[16px] text-[#6b6e73]">
+            or{' '}
+            <button type="button" onClick={onAddKey} className={LINK_CLASS}>
+              add an API key
+            </button>
+            , no account needed
+          </p>
+        </div>
       </div>
     </div>
   )

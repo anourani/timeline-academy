@@ -203,6 +203,8 @@ export function ModelSelector({
           // announcement and the chosen model would vanish from it. The same
           // holds for the pill, whose visible text is only the model name.
           aria-label={`Model: ${selected?.label ?? ''}`}
+          // The onboarding tour's second step points at the Create page's pill.
+          data-onboarding={isPill ? 'model-pill' : undefined}
           className={cn(TRIGGER_BASE, TRIGGER_VARIANTS[variant], className)}
         >
           {isPill ? (

@@ -1,18 +1,30 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { GlobalNav } from '@/components/Navigation/GlobalNav'
 import { NewTimelineScreen } from '@/components/NewTimeline/NewTimelineScreen'
 import { AuthModal } from '@/components/Auth/AuthModal'
 import { ApiKeyModal } from '@/components/Modal/ApiKeyModal'
+import { OnboardingTour } from '@/components/Onboarding/OnboardingTour'
+import { GettingStartedChecklist } from '@/components/Onboarding/GettingStartedChecklist'
+import { isForeignDialogOpen } from '@/components/Onboarding/foreignLayers'
+import { Toast, type ToastMessage } from '@/components/ui/Toast'
+import { useAccountTier } from '@/hooks/useAccountTier'
+import { useIsMobile } from '@/hooks/useIsMobile'
+import { useOnboarding } from '@/hooks/useOnboarding'
+import { useSidePanel } from '@/hooks/useSidePanel'
 import { useGeneration } from '@/hooks/useGeneration'
 import { useAuth } from '@/hooks/useAuth'
-import { awaitByokSync, hasAnyKey } from '@/services/userApiKey'
+import { awaitByokSync, getKey, hasAnyKey } from '@/services/userApiKey'
 import type { ByokProvider } from '@/types/ai'
 
 export function AIModePage() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const generation = useGeneration()
+  const tier = useAccountTier()
+  const isMobile = useIsMobile()
+  const { isOpen: panelOpen } = useSidePanel()
+  const onboarding = useOnboarding()
 
   // Server-funded generation requires sign-in; anonymous visitors can instead
   // add their own OpenAI or Anthropic key. When a signed-out, keyless visitor
@@ -26,6 +38,39 @@ export function AIModePage() {
   // is cleared as soon as the gate resolves.
   const lastSubjectRef = useRef<string | null>(null)
   const lastRectRef = useRef<DOMRect | null>(null)
+  // Whether the key modal was opened by onboarding (the tour's button or the
+  // checklist), which is what earns a confirmation toast on save.
+  const keyFromOnboardingRef = useRef(false)
+  const [toast, setToast] = useState<ToastMessage | null>(null)
+  const dismissToast = useCallback(() => setToast(null), [])
+
+  // First visit as a keyless guest: walk them through the page before they
+  // find the key gate by pressing Generate. Waits for the tier to resolve and
+  // the page to settle, and never starts over an error or another modal.
+  const shouldStartTour =
+    tier === 'trial' &&
+    !onboarding.tourSeen &&
+    !onboarding.tourActive &&
+    generation.status !== 'error' &&
+    !showApiKeyModal &&
+    !showAuthModal &&
+    // The mobile drawer covers the whole page, composer included.
+    !(isMobile && panelOpen)
+  const { startTour } = onboarding
+  useEffect(() => {
+    if (!shouldStartTour) return
+    const t = window.setTimeout(() => {
+      if (isForeignDialogOpen()) return
+      if (!document.querySelector('[data-onboarding="composer"]')) return
+      startTour()
+    }, 400)
+    return () => window.clearTimeout(t)
+  }, [shouldStartTour, startTour])
+
+  const openKeyFromOnboarding = () => {
+    keyFromOnboardingRef.current = true
+    setShowApiKeyModal(true)
+  }
 
   /**
    * Leave for the editor, which starts the generation.
@@ -84,6 +129,8 @@ export function AIModePage() {
 
   // Resume a pending generation after the user signs in through the gate.
   useEffect(() => {
+    // Signing in settles "how AI runs", which is what the tour was for.
+    if (user && onboarding.tourActive) onboarding.endTour('done')
     if (user && pendingSubjectRef.current) {
       const subject = pendingSubjectRef.current
       pendingSubjectRef.current = null
@@ -95,6 +142,20 @@ export function AIModePage() {
 
   const handleKeySaved = () => {
     setShowApiKeyModal(false)
+    const fromOnboarding = keyFromOnboardingRef.current
+    keyFromOnboardingRef.current = false
+    // A key saved mid-tour — from the tip or from the model menu's own unlock
+    // row — moves on to where that key now keeps the visitor's work.
+    if (onboarding.tourActive) onboarding.goToStep(2)
+    // On mobile, step 3's card docks where the toast would sit and already
+    // opens with "Your key is saved", so the toast would only cover it.
+    const tipCoversToast = isMobile && onboarding.tourActive
+    if ((fromOnboarding || onboarding.tourActive) && !tipCoversToast) {
+      const anthropic = Boolean(getKey('anthropic'))
+      const openai = Boolean(getKey('openai'))
+      const which = anthropic && openai ? 'Both keys' : anthropic ? 'Anthropic key' : 'OpenAI key'
+      setToast({ id: Date.now(), text: `${which} saved in this browser · all models unlocked` })
+    }
     const subject = pendingSubjectRef.current
     pendingSubjectRef.current = null
     if (subject) go(subject, lastRectRef.current)
@@ -138,6 +199,7 @@ export function AIModePage() {
         onClose={() => {
           setShowApiKeyModal(false)
           pendingSubjectRef.current = null
+          keyFromOnboardingRef.current = false
         }}
         onKeySaved={handleKeySaved}
         onRequestSignIn={() => {
@@ -149,6 +211,12 @@ export function AIModePage() {
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
       />
+      <OnboardingTour
+        suspended={showApiKeyModal || showAuthModal}
+        onAddKey={openKeyFromOnboarding}
+      />
+      <GettingStartedChecklist onAddKey={openKeyFromOnboarding} />
+      <Toast toast={toast} onDismiss={dismissToast} />
     </div>
   )
 }
