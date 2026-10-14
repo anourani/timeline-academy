@@ -89,7 +89,7 @@ export function UsageLimits() {
 
   return (
     <>
-      <div className="px-3 pb-2.5">
+      <div className="px-3 pb-2.5" data-onboarding="usage">
         <div className="bg-[#0A0A0A] rounded-[8px] pt-4 pb-3 px-2 flex flex-col gap-3">
           {/* Header row */}
           <div className="flex flex-row items-center px-2">
@@ -229,7 +229,7 @@ function TrialStatus({
   const hasWork = eventCount > 0
 
   return (
-    <div className="px-3 pb-2.5">
+    <div className="px-3 pb-2.5" data-onboarding="usage">
       <div className="bg-[#0A0A0A] rounded-[8px] py-3 px-4 flex flex-col gap-1.5">
         <span className={TRIAL_LABEL_CLASS}>
           {hasWork

@@ -6,6 +6,7 @@ import { PrivacyPolicyPage } from './components/Legal/PrivacyPolicyPage';
 import { TermsPage } from './components/Legal/TermsPage';
 import { SidePanelProvider } from './contexts/SidePanelContext';
 import { GenerationProvider } from './contexts/GenerationContext';
+import { OnboardingProvider } from './contexts/OnboardingContext';
 import { GlobalLayout } from './components/Layout/GlobalLayout';
 
 function LayoutRoute() {
@@ -15,9 +16,13 @@ function LayoutRoute() {
           on `/editor`, so the store has to outlive the route change that
           happens in the middle of it. */}
       <GenerationProvider>
-        <GlobalLayout>
-          <Outlet />
-        </GlobalLayout>
+        {/* Inside the generation store: "make your first timeline" is ticked
+            by a generation starting, wherever the visitor is by then. */}
+        <OnboardingProvider>
+          <GlobalLayout>
+            <Outlet />
+          </GlobalLayout>
+        </OnboardingProvider>
       </GenerationProvider>
     </SidePanelProvider>
   );
