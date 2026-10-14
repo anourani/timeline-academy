@@ -46,14 +46,31 @@ const MIN_MOBILE_TIP_HEIGHT = 220
  * catches the card growing when the meters appear; window resizes and the
  * panel's transition (which moves the target without resizing it) are covered
  * by `version` and the settle timer.
+ *
+ * A target still sitting off-screen — the usage card before the side panel has
+ * slid in — is not taken as its position: the previous one is kept, so the
+ * spotlight waits where it was and then travels to the card, rather than
+ * flying in from off the left edge. `anchor` reports which target `rect`
+ * belongs to, so the tip is only placed against its own target.
  */
-function useAnchorRect(anchor: string, paused: boolean, version: string): DOMRect | null {
-  const [rect, setRect] = useState<DOMRect | null>(null)
+function useAnchorRect(
+  anchor: string,
+  paused: boolean,
+  version: string,
+): { anchor: string | null; rect: DOMRect | null } {
+  const [measured, setMeasured] = useState<{ anchor: string | null; rect: DOMRect | null }>({
+    anchor: null,
+    rect: null,
+  })
 
   useLayoutEffect(() => {
     if (paused) return
     const query = () => document.querySelector<HTMLElement>(`[data-onboarding="${anchor}"]`)
-    const measure = () => setRect(query()?.getBoundingClientRect() ?? null)
+    const measure = () => {
+      const rect = query()?.getBoundingClientRect() ?? null
+      if (rect && (rect.right <= 0 || rect.left >= window.innerWidth)) return
+      setMeasured({ anchor, rect })
+    }
     measure()
 
     const el = query()
@@ -68,7 +85,7 @@ function useAnchorRect(anchor: string, paused: boolean, version: string): DOMRec
     }
   }, [anchor, paused, version])
 
-  return rect
+  return measured
 }
 
 function desktopTipPosition(step: TourStep, rect: DOMRect | null): CSSProperties {
@@ -113,7 +130,7 @@ export function OnboardingTour({ suspended, onAddKey }: OnboardingTourProps) {
 
   const hidden = !tourActive || suspended || foreignDialogOpen
   const target = STEPS[step]
-  const rect = useAnchorRect(
+  const { anchor: measuredAnchor, rect } = useAnchorRect(
     target.anchor,
     hidden || settling,
     `${tier}|${panelOpen}|${panelWidth}|${isMobile}`,
@@ -127,10 +144,11 @@ export function OnboardingTour({ suspended, onAddKey }: OnboardingTourProps) {
     const previous = document.activeElement as HTMLElement | null
     return () => previous?.focus?.()
   }, [tourActive])
+  const tipShown = !hidden && !settling && measuredAnchor === target.anchor
   useEffect(() => {
-    if (hidden || settling) return
+    if (!tipShown) return
     primaryRef.current?.focus({ preventScroll: true })
-  }, [hidden, settling, step])
+  }, [tipShown, step])
 
   // Esc means Skip — unless it belongs to a menu or dialog on top of us.
   useEffect(() => {
@@ -360,7 +378,8 @@ export function OnboardingTour({ suspended, onAddKey }: OnboardingTourProps) {
           }}
         />
       )}
-      {!settling && tip}
+      {/* Only once the spotlight has reached this step's target. */}
+      {tipShown && tip}
       {/* Outside the tip, which remounts per step: a live region has to be
           in the page before its text changes to be announced. */}
       <span className="sr-only" aria-live="polite">
@@ -399,7 +418,7 @@ function stepCopy(
   return {
     title: 'Where your work is kept',
     body: isTrial
-      ? `Right now, only in this tab — close it and it's gone. A key keeps up to ${byokAnonCap} timelines in this browser; an account keeps them everywhere.`
+      ? `Once you build a timeline it shows up here — but only in this tab, so closing it loses it. A key keeps up to ${byokAnonCap} timelines in this browser; an account keeps them everywhere.`
       : `Your key is saved. Up to ${byokAnonCap} timelines now stay in this browser. Log in to keep ${byokCap} across devices.`,
   }
 }

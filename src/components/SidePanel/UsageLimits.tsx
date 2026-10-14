@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAccountTier } from '@/hooks/useAccountTier'
 import { useEventUsage } from '@/hooks/useEventUsage'
 import { useSidePanel } from '@/hooks/useSidePanel'
+import { useOnboarding } from '@/hooks/useOnboarding'
 import { AuthModal } from '@/components/Auth/AuthModal'
 import { ApiKeyModal } from '@/components/Modal/ApiKeyModal'
 import { UsageMeter } from '@/components/ui/UsageMeter'
@@ -12,6 +13,10 @@ const TRIAL_LABEL_CLASS =
   "font-['Avenir',sans-serif] text-[12px] leading-[140%] font-medium text-[#9B9EA3]"
 const CTA_TEXT_CLASS =
   "m-0 px-2 font-['Avenir',sans-serif] text-[12px] leading-[16px] text-[#6b6e73]"
+const EXAMPLE_LABEL_CLASS =
+  "font-['JetBrains_Mono',monospace] text-[11px] leading-[140%] uppercase text-[#6D7073]"
+/** The sample guest the onboarding tour shows in place of an empty card. */
+const EXAMPLE_EVENT_COUNT = 24
 // One class for every inline call to action in this card — the trial copy and
 // the upgrade line both used their own copy of this string before.
 const LINK_CLASS =
@@ -21,6 +26,7 @@ export function UsageLimits() {
   const tier = useAccountTier()
   const { eventCount, timelineCount, isLoading } = useEventUsage()
   const { onOpenSettings, hasSettingsHandler } = useSidePanel()
+  const { tourActive, step } = useOnboarding()
 
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [showApiKeyModal, setShowApiKeyModal] = useState(false)
@@ -53,10 +59,17 @@ export function UsageLimits() {
   if (tier === 'loading') return null
 
   if (tier === 'trial') {
+    // The onboarding tour's last step points here to answer "where is my work
+    // kept?", and for a brand-new guest the honest answer — "Nothing saved
+    // yet" — shows nothing about what saving looks like. So for that one step
+    // the card renders exactly as it will once they have built a timeline,
+    // labelled as an example. A guest with real work sees their real card.
+    const showExample = tourActive && step === 2 && eventCount === 0
     return (
       <>
         <TrialStatus
-          eventCount={eventCount}
+          eventCount={showExample ? EXAMPLE_EVENT_COUNT : eventCount}
+          example={showExample}
           onLogIn={handleLogIn}
           onAddKey={handleAddApiKey}
         />
@@ -219,10 +232,13 @@ function renderUpgradeCta({
  */
 function TrialStatus({
   eventCount,
+  example = false,
   onLogIn,
   onAddKey,
 }: {
   eventCount: number
+  /** Sample content for the onboarding tour, marked as such. */
+  example?: boolean
   onLogIn: () => void
   onAddKey: () => void
 }) {
@@ -231,6 +247,7 @@ function TrialStatus({
   return (
     <div className="px-3 pb-2.5" data-onboarding="usage">
       <div className="bg-[#0A0A0A] rounded-[8px] py-3 px-4 flex flex-col gap-1.5">
+        {example && <span className={EXAMPLE_LABEL_CLASS}>Example</span>}
         <span className={TRIAL_LABEL_CLASS}>
           {hasWork
             ? `${eventCount} event${eventCount === 1 ? '' : 's'} · not saved`
