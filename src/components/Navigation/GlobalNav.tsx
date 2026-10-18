@@ -18,6 +18,8 @@ interface GlobalNavProps {
   /** Category legend — only rendered on variant="timeline", and only with a setter */
   categories?: CategoryConfig[]
   onCategoriesChange?: (categories: CategoryConfig[]) => void
+  /** False on AI timelines, whose legend lives in the dock instead. */
+  showLegend?: boolean
   timelineAccentColor?: string
   /** Save status — only rendered on variant="timeline" */
   saveStatus?: SaveStatus
@@ -50,6 +52,7 @@ export function GlobalNav({
   events = [],
   categories,
   onCategoriesChange,
+  showLegend = true,
   timelineAccentColor = '#4196E4',
   saveStatus,
   lastSavedTime,
@@ -179,7 +182,7 @@ export function GlobalNav({
             cluster. The Edit/Present toggle used to live here and now sits in
             the dock, so the dock is the only place that switches modes. */}
         <div className="ml-auto flex items-center gap-2">
-          {variant === 'timeline' && categories && onCategoriesChange && (
+          {variant === 'timeline' && showLegend && categories && onCategoriesChange && (
             <CategoryLegend
               categories={categories}
               events={events}

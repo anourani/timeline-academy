@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { TimelineSettingsPanel } from '../Settings/TimelineSettingsPanel';
 import { EventTableEditor } from '../EventTableEditor/EventTableEditor';
 import { FloatingToolbar } from '../FloatingToolbar/FloatingToolbar';
@@ -28,14 +29,23 @@ interface HeaderProps {
   onVerticalScaleChange: (scale: 'small' | 'medium') => void;
   groupByCategory: boolean;
   onGroupByCategoryChange: (value: boolean) => void;
-  activePanel: 'events' | 'settings' | null;
-  onActivePanelChange: (panel: 'events' | 'settings' | null) => void;
+  activePanel: 'events' | 'settings' | 'legend' | null;
+  onActivePanelChange: (panel: 'events' | 'settings' | 'legend' | null) => void;
   showAddEventModal: boolean;
   onAddEventClick: () => void;
   onCloseAddEventModal: () => void;
   onDeleteTimeline: () => Promise<void> | void;
   mode?: 'edit' | 'view';
   onModeChange?: (mode: 'edit' | 'view') => void;
+  /** AI timeline: the dock carries the legend and the add controls go. */
+  aiGenerated?: boolean;
+  /**
+   * What the dock's legend shows. The generation store's categories and
+   * events while streaming, like the nav legend, so its dots are the run's
+   * rather than whatever the editor held before.
+   */
+  legendCategories?: CategoryConfig[];
+  legendEvents?: TimelineEvent[];
 }
 
 export function Header({
@@ -62,10 +72,24 @@ export function Header({
   onModeChange,
   intro = false,
   streaming = false,
+  aiGenerated = false,
+  legendCategories = categories,
+  legendEvents = events,
 }: HeaderProps) {
+  // Which tab the events modal opens on: the dock's Events button opens the
+  // table, the legend's "Edit categories" opens the categories editor.
+  const [eventsInitialView, setEventsInitialView] = useState<'events' | 'categories'>('events');
   const closePanel = () => onActivePanelChange(null);
-  const togglePanel = (panel: 'events' | 'settings') => {
+  const togglePanel = (panel: 'events' | 'settings' | 'legend') => {
     onActivePanelChange(activePanel === panel ? null : panel);
+  };
+  const openEvents = () => {
+    setEventsInitialView('events');
+    togglePanel('events');
+  };
+  const openCategoriesEditor = () => {
+    setEventsInitialView('categories');
+    onActivePanelChange('events');
   };
 
   const handleAddEventSubmit = (event: Omit<TimelineEvent, 'id'>) => {
@@ -80,13 +104,25 @@ export function Header({
           edit-only buttons instead. */}
       <FloatingToolbar
         onAddEventClick={onAddEventClick}
-        onEventsClick={() => togglePanel('events')}
+        onEventsClick={openEvents}
         onSettingsClick={() => togglePanel('settings')}
         activePanel={activePanel}
         mode={mode}
         onModeChange={onModeChange}
         intro={intro}
         streaming={streaming}
+        aiGenerated={aiGenerated}
+        legend={{
+          categories: legendCategories,
+          events: legendEvents,
+          onCategoriesChange,
+          groupByCategory,
+          onGroupByCategoryChange,
+          onEditCategories: openCategoriesEditor,
+        }}
+        // Radix reports closes (Escape, outside click) here; opening goes
+        // through the same toggle as the other dock buttons.
+        onLegendOpenChange={(open) => onActivePanelChange(open ? 'legend' : null)}
       />
 
       <Dialog open={showAddEventModal} onOpenChange={(open) => { if (!open) onCloseAddEventModal(); }}>
@@ -128,6 +164,8 @@ export function Header({
         categories={categories}
         onCategoriesChange={onCategoriesChange}
         mode={mode}
+        initialView={eventsInitialView}
+        aiGenerated={aiGenerated}
       />
     </>
   );

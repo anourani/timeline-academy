@@ -2,6 +2,15 @@ import { useState, useCallback } from 'react';
 import { CategoryConfig } from '../types/event';
 import { DEFAULT_CATEGORIES } from '../constants/categories';
 
+/**
+ * A saved set with every category hidden would draw an empty canvas with no
+ * way back from the legend, which refuses to hide the last one. Show them all.
+ */
+export function ensureSomeVisible(categories: CategoryConfig[]): CategoryConfig[] {
+  if (categories.length === 0 || categories.some(c => c.visible)) return categories;
+  return categories.map(c => ({ ...c, visible: true }));
+}
+
 export function useCategories() {
   const [categories, setCategories] = useState<CategoryConfig[]>(DEFAULT_CATEGORIES);
 
@@ -11,7 +20,7 @@ export function useCategories() {
       setCategories(DEFAULT_CATEGORIES);
       return;
     }
-    setCategories(newCategories);
+    setCategories(ensureSomeVisible(newCategories));
   }, []);
 
   const resetCategories = useCallback(() => {

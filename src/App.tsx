@@ -4,7 +4,8 @@ import { Header } from './components/Layout/Header';
 import { GlobalNav } from '@/components/Navigation/GlobalNav';
 import { Timeline } from './components/Timeline/Timeline';
 import { useTimelineState } from './hooks/useTimelineState';
-import { useTimeline, type TimelineData } from './hooks/useTimeline';
+import { ensureSomeVisible } from './hooks/useCategories';
+import { useTimeline, markTimelineAiGenerated, type TimelineData } from './hooks/useTimeline';
 import { useAuth } from './hooks/useAuth';
 import { useAutosave } from './hooks/useAutosave';
 import { useSidePanel } from './hooks/useSidePanel';
@@ -19,7 +20,7 @@ import { useLocalDraft } from './hooks/useLocalDraft';
 import { useEventUsage } from './hooks/useEventUsage';
 import type { AddEventsResult } from './hooks/useEvents';
 import { useAccountTier, type AccountTier } from './hooks/useAccountTier';
-import { byokAnonDraftStore, trialDraftStore } from './utils/draftStorage';
+import { byokAnonDraftStore, trialDraftStore, isDraftAiGenerated } from './utils/draftStorage';
 import { TimelineEvent, CategoryConfig } from './types/event';
 import type { ScrollTarget } from './types/timeline';
 import { LimitReachedError, limitReachedMessage } from './lib/limits';
@@ -56,6 +57,7 @@ export function App() {
     scale, currentScale, handleScaleChange,
     verticalScale, currentVerticalScale, handleVerticalScaleChange,
     groupByCategory, handleGroupByCategoryChange,
+    isAiGenerated, handleAiGeneratedChange,
   } = useTimelineState();
   const { user, authReady } = useAuth();
   const tier = useAccountTier();
@@ -87,7 +89,7 @@ export function App() {
   const routerNavigate = useNavigate();
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [activePanel, setActivePanel] = useState<'events' | 'settings' | null>(null);
+  const [activePanel, setActivePanel] = useState<'events' | 'settings' | 'legend' | null>(null);
   const [showAddEventModal, setShowAddEventModal] = useState(false);
   const [mode, setMode] = useState<'edit' | 'view'>('edit');
   const [detailPanelEvent, setDetailPanelEvent] = useState<TimelineEvent | null>(null);
@@ -201,6 +203,9 @@ export function App() {
   // The subject stands in until the model names the timeline, so the nav has
   // something true to show from the first frame rather than "Untitled".
   const streamTitle = generation.meta?.title || generation.subject;
+  // A generation in flight is an AI timeline before it is committed, so the
+  // dock takes its AI shape from the first frame rather than flipping at done.
+  const isAiTimeline = isStreaming || isAiGenerated;
 
   // Derive the dominant category color for the nav's status dot and the side-panel badge.
   const timelineAccentColor = useMemo(
@@ -375,6 +380,7 @@ export function App() {
         setEvents(imported);
         updateCategories(newDraft.categories);
         updateChapters(newDraft.chapters);
+        handleAiGeneratedChange(false);
         handleScaleChange(newDraft.scale);
         handleVerticalScaleChange(newDraft.verticalScale ?? 'medium');
         if (imported.length > 0) {
@@ -408,6 +414,7 @@ export function App() {
         setEvents(aiEvents);
         updateCategories(aiCategories);
         updateChapters(normalizeChapters(aiChapters));
+        handleAiGeneratedChange(true);
         handleScaleChange(newDraft.scale);
         handleVerticalScaleChange(newDraft.verticalScale ?? 'medium');
         if (aiEvents.length > 0) {
@@ -439,6 +446,7 @@ export function App() {
         setEvents(newDraft.events);
         updateCategories(newDraft.categories);
         updateChapters(newDraft.chapters);
+        handleAiGeneratedChange(false);
         handleScaleChange(newDraft.scale);
         handleVerticalScaleChange(newDraft.verticalScale ?? 'medium');
         // Reset grouping too, or the previous draft's setting leaks into this
@@ -481,6 +489,7 @@ export function App() {
           setEvents(draft.events);
           updateCategories(draft.categories);
           updateChapters(draft.chapters);
+          handleAiGeneratedChange(isDraftAiGenerated(draft));
           handleScaleChange(draft.scale);
           handleVerticalScaleChange(draft.verticalScale ?? 'medium');
           handleGroupByCategoryChange(draft.groupByCategory ?? false);
@@ -501,6 +510,7 @@ export function App() {
           setEvents(mostRecent.events);
           updateCategories(mostRecent.categories);
           updateChapters(mostRecent.chapters);
+          handleAiGeneratedChange(isDraftAiGenerated(mostRecent));
           handleScaleChange(mostRecent.scale);
           handleVerticalScaleChange(mostRecent.verticalScale ?? 'medium');
           handleGroupByCategoryChange(mostRecent.groupByCategory ?? false);
@@ -515,7 +525,7 @@ export function App() {
       // Clear the route state so refreshing doesn't re-trigger
       routerNavigate('/editor', { replace: true, state: {} });
     }
-  }, [authReady, storageReconciled, tier, user, draftHydrated, beginStreaming, resetGeneration, createDraft, getDraftCount, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange, loadAllDrafts, loadDraft, location.state, location.key, routerNavigate, setDescription, setEvents, setTitle, updateCategories, updateChapters]);
+  }, [authReady, storageReconciled, tier, user, draftHydrated, beginStreaming, resetGeneration, createDraft, getDraftCount, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange, handleAiGeneratedChange, loadAllDrafts, loadDraft, location.state, location.key, routerNavigate, setDescription, setEvents, setTitle, updateCategories, updateChapters]);
 
   // Guest drafts save on a 500 ms debounce, so a rename followed immediately by
   // closing the tab or navigating away would be lost — the draft path has no
@@ -575,10 +585,11 @@ export function App() {
         scale: currentScale.value,
         verticalScale: currentVerticalScale.value,
         groupByCategory,
+        isAiGenerated,
         savedAt: new Date().toISOString()
       });
     }
-  }, [user, storageReconciled, draftHydrated, activeDraftId, title, description, events, categories, chapters, currentScale.value, currentVerticalScale.value, groupByCategory, saveDraft]);
+  }, [user, storageReconciled, draftHydrated, activeDraftId, title, description, events, categories, chapters, currentScale.value, currentVerticalScale.value, groupByCategory, isAiGenerated, saveDraft]);
 
   /**
    * Move any work that is sitting in a store below the visitor's current tier
@@ -737,7 +748,9 @@ export function App() {
     // fingerprints differently from the defaults that land a moment later —
     // and every load would write itself straight back, reordering the panel
     // just for having been opened.
-    const categories = data.categories?.length ? data.categories : DEFAULT_CATEGORIES;
+    // Through `ensureSomeVisible` here too, so the baseline matches what
+    // `updateCategories` will put in state.
+    const categories = data.categories?.length ? ensureSomeVisible(data.categories) : DEFAULT_CATEGORIES;
     // Same reasoning, one step simpler: chapters have no defaults to fall back
     // to, so the empty array IS the resolved value and both sides get it.
     const chapters = data.chapters ?? [];
@@ -761,13 +774,15 @@ export function App() {
     setEvents(data.events);
     updateCategories(categories);
     updateChapters(chapters);
+    handleAiGeneratedChange(data.isAiGenerated ?? false);
     handleScaleChange(scale);
     handleVerticalScaleChange(verticalScale);
     handleGroupByCategoryChange(groupByCategory);
     setLoadedTimelineId(data.id);
-  }, [markClean, setTitle, setDescription, setEvents, updateCategories, updateChapters, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange]);
+  }, [markClean, setTitle, setDescription, setEvents, updateCategories, updateChapters, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange, handleAiGeneratedChange]);
 
-  const switchTimeline = useCallback(async (newTimelineId: string) => {
+  /** Resolves to the id the editor is now bound to, or null if the load failed. */
+  const switchTimeline = useCallback(async (newTimelineId: string): Promise<string | null> => {
     try {
       // Commit anything still pending for the outgoing timeline before its
       // contents are replaced. The debounced save holds a snapshot of its
@@ -781,6 +796,7 @@ export function App() {
       // Only update state after a successful load, and via the single
       // atomic writer so the id and the contents can't drift apart.
       applyLoadedTimeline(data);
+      return data.id;
     } catch (error) {
       console.error('Error switching timeline:', error);
       // `.single()` returns PGRST116 when the row doesn't exist — that's the
@@ -790,15 +806,16 @@ export function App() {
       if (code === 'PGRST116') {
         setLoadedTimelineId(null);
         routerNavigate('/', { replace: true });
-        return;
+        return null;
       }
       // Creating a timeline goes through here too ('new'), so the plan cap is
       // a normal outcome — telling the user to retry would be a lie.
       if (error instanceof LimitReachedError) {
         alert(limitReachedMessage(error.kind));
-        return;
+        return null;
       }
       alert('Failed to load timeline. Please try again.');
+      return null;
     }
   }, [flushPendingSave, loadTimeline, applyLoadedTimeline, routerNavigate]);
 
@@ -850,12 +867,14 @@ export function App() {
       (async () => {
         // Creates the timeline row in Supabase and binds the editor to it, so
         // autosave persists the state updates below to the new row.
-        await switchTimeline('new');
+        const newId = await switchTimeline('new');
+        if (newId) void markTimelineAiGenerated(newId);
         setTitle(aiData.title);
         setDescription(aiData.description);
         setEvents(aiData.events);
         updateCategories(aiData.categories);
         updateChapters(normalizeChapters(aiData.chapters));
+        handleAiGeneratedChange(true);
         if (aiData.events.length > 0) {
           const earliest = aiData.events.reduce((a, b) => a.startDate < b.startDate ? a : b);
           setPendingScrollTarget(earliest.startDate);
@@ -886,7 +905,7 @@ export function App() {
       }
       routerNavigate('/editor', { replace: true, state: {} });
     }
-  }, [location.state, location.key, authReady, storageReconciled, user, beginStreaming, resetGeneration, routerNavigate, setDescription, setEvents, setTitle, switchTimeline, updateCategories, updateChapters]);
+  }, [location.state, location.key, authReady, storageReconciled, user, beginStreaming, resetGeneration, routerNavigate, setDescription, setEvents, setTitle, switchTimeline, updateCategories, updateChapters, handleAiGeneratedChange]);
 
   /**
    * Commit a finished generation into the editor — the one and only write.
@@ -930,7 +949,8 @@ export function App() {
       if (user) {
         // Creates the Supabase row and binds autosave to it. Deferred all
         // the way to here so a generation that failed leaves nothing behind.
-        await switchTimeline('new');
+        const newId = await switchTimeline('new');
+        if (newId) void markTimelineAiGenerated(newId);
       } else {
         const newDraft = createDraft();
         if (!newDraft) {
@@ -951,6 +971,7 @@ export function App() {
       setEvents(streamed);
       updateCategories(finalCategories);
       updateChapters(normalizeChapters(finalChapters));
+      handleAiGeneratedChange(true);
       setDraftHydrated(true);
       // Last, so the canvas swaps from the store to committed state only once
       // that state actually holds the timeline. Flipping first would show an
@@ -960,7 +981,7 @@ export function App() {
   }, [
     generation, authReady, storageReconciled, user, markResolved, switchTimeline, createDraft,
     handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange,
-    setTitle, setDescription, setEvents, updateCategories, updateChapters,
+    setTitle, setDescription, setEvents, updateCategories, updateChapters, handleAiGeneratedChange,
   ]);
 
   /**
@@ -1140,6 +1161,7 @@ export function App() {
     setEvents(draft.events);
     updateCategories(draft.categories);
     updateChapters(draft.chapters);
+    handleAiGeneratedChange(isDraftAiGenerated(draft));
     handleScaleChange(draft.scale);
     handleVerticalScaleChange(draft.verticalScale ?? 'medium');
     handleGroupByCategoryChange(draft.groupByCategory ?? false);
@@ -1285,6 +1307,7 @@ export function App() {
     setEvents([]);
     resetCategories();
     resetChapters();
+    handleAiGeneratedChange(false);
     setActiveDraftId(null);
     setActivePanel(null);
     routerNavigate('/');
@@ -1346,6 +1369,7 @@ export function App() {
         events={streamEvents}
         categories={streamCategories}
         onCategoriesChange={updateCategories}
+        showLegend={!isAiTimeline}
         timelineAccentColor={timelineAccentColor}
         saveStatus={saveStatus}
         lastSavedTime={lastSavedTime}
@@ -1390,6 +1414,9 @@ export function App() {
         onCloseAddEventModal={() => setShowAddEventModal(false)}
         onDeleteTimeline={handleDeleteTimeline}
         mode={mode}
+        aiGenerated={isAiTimeline}
+        legendCategories={streamCategories}
+        legendEvents={streamEvents}
         onModeChange={(newMode) => {
           setMode(newMode);
           if (newMode === 'view') {

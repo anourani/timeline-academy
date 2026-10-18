@@ -15,7 +15,20 @@ export interface LocalDraft {
   scale: 'large' | 'medium' | 'small'
   verticalScale?: 'small' | 'medium'
   groupByCategory?: boolean
+  /**
+   * Optional: drafts written before the flag existed don't have it. Read it
+   * through `isDraftAiGenerated`, which falls back to the chapters heuristic.
+   */
+  isAiGenerated?: boolean
   savedAt: string
+}
+
+/**
+ * Only an AI generation produces chapters, so a draft that predates the flag
+ * but carries chapters was AI-generated.
+ */
+export function isDraftAiGenerated(draft: Pick<LocalDraft, 'isAiGenerated' | 'chapters'>): boolean {
+  return draft.isAiGenerated ?? (draft.chapters?.length ?? 0) > 0
 }
 
 export interface DraftStore {
