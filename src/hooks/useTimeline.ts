@@ -51,6 +51,26 @@ export interface TimelineData {
   scale?: 'large' | 'medium' | 'small';
   verticalScale?: 'small' | 'medium';
   groupByCategory?: boolean;
+  /** Came from an AI generation. Gates the dock's Legend and the add controls. */
+  isAiGenerated?: boolean;
+}
+
+/**
+ * Record that a timeline came from an AI generation. Best effort, never throws.
+ *
+ * Deliberately its own write rather than a field on the insert or autosave's
+ * update. Migrations here are applied by hand and the site can go live before
+ * one is, and PostgREST rejects a write naming a column that doesn't exist —
+ * so carrying `is_ai_generated` on those calls would break every save in that
+ * window. Failing here loses only the flag, and `loadTimeline` falls back to
+ * the chapters heuristic.
+ */
+export async function markTimelineAiGenerated(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('timelines')
+    .update({ is_ai_generated: true })
+    .eq('id', id);
+  if (error) console.warn('Could not record the timeline as AI-generated:', error.message);
 }
 
 /** Everything `createTimelineFrom` writes: a timeline minus the id it mints. */
@@ -188,7 +208,11 @@ export function useTimeline() {
         : undefined,
       scale: timeline.scale || 'large',
       verticalScale: timeline.vertical_scale || 'medium',
-      groupByCategory: timeline.group_by_category ?? false
+      groupByCategory: timeline.group_by_category ?? false,
+      // Absent until the column's migration is applied; only an AI generation
+      // produces chapters, so they stand in for the flag until then.
+      isAiGenerated: timeline.is_ai_generated ??
+        (Array.isArray(timeline.chapters) && timeline.chapters.length > 0)
     };
   }, [user]);
 
@@ -241,6 +265,8 @@ export function useTimeline() {
         throw eventsError;
       }
     }
+
+    if (source.isAiGenerated) await markTimelineAiGenerated(timeline.id);
 
     // After both writes, so one recount covers the new timeline and its events.
     notifyUsageChanged();

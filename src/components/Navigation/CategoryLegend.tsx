@@ -1,8 +1,9 @@
-import { useCallback, useMemo, useRef } from 'react'
+import { useCallback, useMemo, useRef, type ReactNode } from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { Eye, EyeOff, X } from 'lucide-react'
 import { Dialog, DialogOverlay, DialogPortal, DialogTrigger } from '@/components/ui/dialog'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
+import { buttonVariants } from '@/components/ui/buttonVariants'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { countEventsByCategory } from '@/utils/categoryCounts'
 import { cn } from '@/lib/utils'
@@ -12,7 +13,24 @@ interface CategoryLegendProps {
   categories: CategoryConfig[]
   events: TimelineEvent[]
   onCategoriesChange: (categories: CategoryConfig[]) => void
+  /**
+   * Places the legend in the dock (AI timelines) instead of the nav. Open
+   * state is then controlled, so the dock can keep the legend and the Events
+   * modal mutually exclusive; the trigger becomes a dock-sized glass button;
+   * and the popover opens upward from it.
+   */
+  dock?: {
+    open: boolean
+    onOpenChange: (open: boolean) => void
+    /** Held disabled while a generation streams, like the rest of the dock. */
+    disabled?: boolean
+  }
+  /** Extra controls rendered below the category rows, on both surfaces. */
+  children?: ReactNode
 }
+
+/** Popover gap above the dock: 17px clear of its edge, plus its 8px padding and 1px border. */
+const DOCK_SIDE_OFFSET = 26
 
 /**
  * Nav control that says which colour means which category, and lets the reader
@@ -33,9 +51,11 @@ interface CategoryLegendProps {
  * Open/closed is left uncontrolled in both — Radix's `Popover.Trigger` and
  * `Dialog.Trigger` each supply `aria-haspopup="dialog"`, `aria-expanded` and
  * `data-state` on the trigger, so the open-state fill is pure CSS and there is
- * no React state to keep in sync (or to persist).
+ * no React state to keep in sync (or to persist). The dock placement is the
+ * exception: it is controlled from `activePanel`, which is what lets opening
+ * Events close the legend and the reverse.
  */
-export function CategoryLegend({ categories, events, onCategoriesChange }: CategoryLegendProps) {
+export function CategoryLegend({ categories, events, onCategoriesChange, dock, children }: CategoryLegendProps) {
   const counts = useMemo(() => countEventsByCategory(events), [events])
   const visibleCount = useMemo(() => categories.filter(c => c.visible).length, [categories])
   const rowRefs = useRef<(HTMLButtonElement | null)[]>([])
@@ -77,7 +97,26 @@ export function CategoryLegend({ categories, events, onCategoriesChange }: Categ
 
   // Hoisted so either root can take it through `asChild`. Only one tree is
   // mounted at a time, so there is no duplicate-ref question.
-  const trigger = (
+  //
+  // The dock's trigger is a plain <button> wearing the `glass` variant rather
+  // than `<Button>`: on React 18 that component doesn't forward its ref, and
+  // without one Radix has nothing to anchor the popover to.
+  const trigger = dock ? (
+    <button
+      type="button"
+      aria-label="Category legend"
+      data-active={dock.open}
+      disabled={dock.disabled}
+      tabIndex={dock.disabled ? -1 : undefined}
+      className={cn(
+        buttonVariants({ variant: 'glass', size: 'none' }),
+        dock.disabled && 'opacity-50 pointer-events-none',
+      )}
+    >
+      <CategoryDots categories={categories} />
+      Legend
+    </button>
+  ) : (
     <button
       type="button"
       aria-label="Category legend"
@@ -164,7 +203,7 @@ export function CategoryLegend({ categories, events, onCategoriesChange }: Categ
   // lock on unmount, so nothing is stranded.
   if (isMobile) {
     return (
-      <Dialog>
+      <Dialog open={dock?.open} onOpenChange={dock?.onOpenChange}>
         <DialogTrigger asChild>{trigger}</DialogTrigger>
         <DialogPortal>
           {/* Covered by the content once open, but it carries the fade and is
@@ -212,7 +251,10 @@ export function CategoryLegend({ categories, events, onCategoriesChange }: Categ
             </div>
             {/* Escape, focus trap, return-focus-to-trigger and the body scroll
                 lock all come from Dialog. Nothing here re-implements them. */}
-            <div className="flex-1 min-h-0 overflow-y-auto p-2">{rows}</div>
+            <div className="flex-1 min-h-0 overflow-y-auto p-2">
+              {rows}
+              {children}
+            </div>
           </DialogPrimitive.Content>
         </DialogPortal>
       </Dialog>
@@ -220,13 +262,14 @@ export function CategoryLegend({ categories, events, onCategoriesChange }: Categ
   }
 
   return (
-    <Popover>
+    <Popover open={dock?.open} onOpenChange={dock?.onOpenChange}>
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
 
       <PopoverContent
         unstyled
+        side={dock ? 'top' : 'bottom'}
         align="end"
-        sideOffset={8}
+        sideOffset={dock ? DOCK_SIDE_OFFSET : 8}
         collisionPadding={16}
         aria-label="Category legend"
         onOpenAutoFocus={focusFirstRow}
@@ -262,6 +305,7 @@ export function CategoryLegend({ categories, events, onCategoriesChange }: Categ
         </div>
 
         {rows}
+        {children}
       </PopoverContent>
     </Popover>
   )
@@ -272,7 +316,7 @@ export function CategoryLegend({ categories, events, onCategoriesChange }: Categ
  * page background so they read as separate. Always shows every category
  * regardless of visibility — it is an affordance, not a status readout.
  */
-function CategoryDots({ categories }: { categories: CategoryConfig[] }) {
+export function CategoryDots({ categories }: { categories: CategoryConfig[] }) {
   return (
     <span className="flex shrink-0 items-center" aria-hidden>
       {categories.map((cat, i) => (

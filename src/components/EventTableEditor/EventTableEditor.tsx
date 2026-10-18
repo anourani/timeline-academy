@@ -62,6 +62,30 @@ interface EventTableEditorProps {
    * the dock keeps its Events button while presenting.
    */
   mode?: 'edit' | 'view'
+  /** Which page to open on. The dock legend's "Edit categories" asks for Categories. */
+  initialView?: 'events' | 'categories'
+  /**
+   * AI timelines come from a prompt: events and categories can be edited and
+   * deleted, but not added, and categories can't be deleted either.
+   */
+  aiGenerated?: boolean
+}
+
+const AI_NO_ADD_EVENT = "Events can't be added to an AI-generated timeline"
+const AI_NO_ADD_CATEGORY = "Categories can't be added to an AI-generated timeline"
+const AI_NO_DELETE_CATEGORY = "Categories can't be deleted from an AI-generated timeline"
+
+/**
+ * Explains a disabled button on hover. The title has to sit on a wrapper: the
+ * button's own `disabled:pointer-events-none` means it never sees the hover.
+ */
+function DisabledReason({ reason, children }: { reason?: string; children: React.ReactNode }) {
+  if (!reason) return <>{children}</>
+  return (
+    <span title={reason} className="inline-flex cursor-not-allowed">
+      {children}
+    </span>
+  )
 }
 
 interface DraftEvent extends Omit<TimelineEvent, 'id'> {
@@ -184,6 +208,7 @@ function SortableCategoryRow({
   onVisibilityToggle,
   onDelete,
   canDelete,
+  deleteDisabledReason,
 }: {
   cat: CategoryConfig
   editingLabel: string
@@ -193,6 +218,7 @@ function SortableCategoryRow({
   onVisibilityToggle: (catId: string) => void
   onDelete: (catId: string) => void
   canDelete: boolean
+  deleteDisabledReason?: string
 }) {
   const {
     attributes,
@@ -258,13 +284,15 @@ function SortableCategoryRow({
           >
             {cat.visible ? 'Hide' : 'Show'}
           </button>
-          <button
-            onClick={() => onDelete(cat.id)}
-            disabled={!canDelete}
-            className={`${glassButtonClass} disabled:opacity-50 disabled:pointer-events-none`}
-          >
-            Delete
-          </button>
+          <DisabledReason reason={deleteDisabledReason}>
+            <button
+              onClick={() => onDelete(cat.id)}
+              disabled={!canDelete}
+              className={`${glassButtonClass} disabled:opacity-50 disabled:pointer-events-none`}
+            >
+              Delete
+            </button>
+          </DisabledReason>
         </div>
       </div>
     </div>
@@ -404,6 +432,8 @@ export function EventTableEditor({
   categories,
   onCategoriesChange,
   mode = 'edit',
+  initialView = 'events',
+  aiGenerated = false,
 }: EventTableEditorProps) {
   const isEditing = mode === 'edit'
   const [activePageTab, setActivePageTab] = useState<'events' | 'categories'>('events')
@@ -420,9 +450,10 @@ export function EventTableEditor({
       setDraftCategories(categories)
       setEmptyRows([])
       setHasChanges(false)
-      setActivePageTab('events')
+      // The Categories page doesn't exist in view mode.
+      setActivePageTab(isEditing ? initialView : 'events')
     }
-  }, [isOpen, events, categories])
+  }, [isOpen, events, categories, isEditing, initialView])
 
   const displayEvents = useMemo(() => {
     const filteredEvents = activeCategory
@@ -886,7 +917,8 @@ export function EventTableEditor({
                           onColorChange={handleCategoryColorChange}
                           onVisibilityToggle={handleCategoryVisibilityToggle}
                           onDelete={handleCategoryDelete}
-                          canDelete={draftCategories.length > 1}
+                          canDelete={!aiGenerated && draftCategories.length > 1}
+                          deleteDisabledReason={aiGenerated ? AI_NO_DELETE_CATEGORY : undefined}
                         />
                       ))}
                     </SortableContext>
@@ -908,21 +940,27 @@ export function EventTableEditor({
             {!isEditing ? (
               <span />
             ) : activePageTab === 'events' ? (
-              <button
-                onClick={handleAddRow}
-                disabled={emptyRows.length >= MAX_EMPTY_ROWS}
-                className={`${glassButtonClass} disabled:opacity-50 disabled:pointer-events-none`}
-              >
-                Add Event
-              </button>
+              // Disabling Add Event is also what keeps AI timelines free of
+              // blank entry rows — they only ever come from this button.
+              <DisabledReason reason={aiGenerated ? AI_NO_ADD_EVENT : undefined}>
+                <button
+                  onClick={handleAddRow}
+                  disabled={aiGenerated || emptyRows.length >= MAX_EMPTY_ROWS}
+                  className={`${glassButtonClass} disabled:opacity-50 disabled:pointer-events-none`}
+                >
+                  Add Event
+                </button>
+              </DisabledReason>
             ) : (
-              <button
-                onClick={handleAddCategory}
-                disabled={draftCategories.length >= 4}
-                className={`${glassButtonClass} disabled:opacity-50 disabled:pointer-events-none`}
-              >
-                Add Category
-              </button>
+              <DisabledReason reason={aiGenerated ? AI_NO_ADD_CATEGORY : undefined}>
+                <button
+                  onClick={handleAddCategory}
+                  disabled={aiGenerated || draftCategories.length >= 4}
+                  className={`${glassButtonClass} disabled:opacity-50 disabled:pointer-events-none`}
+                >
+                  Add Category
+                </button>
+              </DisabledReason>
             )}
 
             {/* Cancel + Save (right) */}

@@ -2,6 +2,8 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Plus, CalendarFold, Bolt } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ModeTabs } from '@/components/FloatingToolbar/ModeTabs'
+import { DockLegend, type DockLegendProps } from '@/components/FloatingToolbar/DockLegend'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import { useSidePanel } from '@/hooks/useSidePanel'
 import { useWindowResizing } from '@/hooks/useWindowResizing'
 
@@ -9,7 +11,7 @@ interface FloatingToolbarProps {
   onAddEventClick: () => void
   onEventsClick: () => void
   onSettingsClick: () => void
-  activePanel: 'events' | 'settings' | null
+  activePanel: 'events' | 'settings' | 'legend' | null
   mode?: 'edit' | 'view'
   onModeChange?: (mode: 'edit' | 'view') => void
   /**
@@ -19,6 +21,13 @@ interface FloatingToolbarProps {
    */
   intro?: boolean
   streaming?: boolean
+  /**
+   * AI timelines are built from a prompt, so the dock drops Add Event and
+   * carries the category legend instead (after Settings, in both modes).
+   */
+  aiGenerated?: boolean
+  legend?: Omit<DockLegendProps, 'open' | 'onOpenChange' | 'mode' | 'disabled'>
+  onLegendOpenChange?: (open: boolean) => void
 }
 
 const INTRO_RISE_MS = 550
@@ -34,6 +43,9 @@ export function FloatingToolbar({
   intro = false,
   streaming = false,
   onModeChange,
+  aiGenerated = false,
+  legend,
+  onLegendOpenChange,
 }: FloatingToolbarProps) {
   // The pill is centered on the viewport, then shifted by half the side
   // panel's width to recenter over the visible timeline area. The width is
@@ -49,6 +61,20 @@ export function FloatingToolbar({
     : '-50%'
 
   const isEditing = mode === 'edit'
+
+  // Both trees below are always mounted and split by CSS, so the legend may
+  // only render into the visible one — two controlled popovers sharing one
+  // open flag would open twice. `useIsMobile` is the exact complement of `md`.
+  const isMobile = useIsMobile()
+  const legendControl = aiGenerated && legend && onLegendOpenChange ? (
+    <DockLegend
+      {...legend}
+      open={activePanel === 'legend'}
+      onOpenChange={onLegendOpenChange}
+      mode={mode}
+      disabled={streaming}
+    />
+  ) : null
 
   /**
    * The intro's rise, composed into the existing transform.
@@ -96,18 +122,20 @@ export function FloatingToolbar({
           transition: introTransition,
         }}
       >
-        <Collapsible open={isEditing}>
-          <Button
-            variant="glass" size="none"
-            className={lockedClass}
-            onClick={onAddEventClick}
-            disabled={streaming}
-            tabIndex={isEditing && !streaming ? 0 : -1}
-          >
-            <Plus size={20} />
-            Add Event
-          </Button>
-        </Collapsible>
+        {!aiGenerated && (
+          <Collapsible open={isEditing}>
+            <Button
+              variant="glass" size="none"
+              className={lockedClass}
+              onClick={onAddEventClick}
+              disabled={streaming}
+              tabIndex={isEditing && !streaming ? 0 : -1}
+            >
+              <Plus size={20} />
+              Add Event
+            </Button>
+          </Collapsible>
+        )}
         <Button
           variant="glass" size="none"
           className={lockedClass}
@@ -131,6 +159,7 @@ export function FloatingToolbar({
             Settings
           </Button>
         </Collapsible>
+        {!isMobile && legendControl}
         {onModeChange && <ModeTabs mode={mode} onChange={onModeChange} />}
       </div>
 
@@ -140,18 +169,20 @@ export function FloatingToolbar({
           mode, so a desktop window narrowed while presenting always has a way
           back rather than stranding the reader in a mode it cannot leave. */}
       <div className="fixed bottom-0 left-0 right-0 z-30 w-full flex md:hidden justify-center items-center gap-2 px-4 pt-2 pb-6 bg-black border-t border-[#3d3e40]">
-        <Collapsible open={isEditing}>
-          <Button
-            variant="glass" size="none"
-            className={lockedClass}
-            onClick={onAddEventClick}
-            disabled={streaming}
-            tabIndex={isEditing && !streaming ? 0 : -1}
-          >
-            <Plus size={20} />
-            Add Event
-          </Button>
-        </Collapsible>
+        {!aiGenerated && (
+          <Collapsible open={isEditing}>
+            <Button
+              variant="glass" size="none"
+              className={lockedClass}
+              onClick={onAddEventClick}
+              disabled={streaming}
+              tabIndex={isEditing && !streaming ? 0 : -1}
+            >
+              <Plus size={20} />
+              Add Event
+            </Button>
+          </Collapsible>
+        )}
         <Button
           variant="glass" size="none"
           className={lockedClass}
@@ -175,6 +206,7 @@ export function FloatingToolbar({
             Settings
           </Button>
         </Collapsible>
+        {isMobile && legendControl}
         {!isEditing && onModeChange && <ModeTabs mode={mode} onChange={onModeChange} />}
       </div>
     </>

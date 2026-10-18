@@ -700,6 +700,7 @@ export function SidePanelBody() {
         scale: original.scale,
         verticalScale: original.verticalScale,
         groupByCategory: original.groupByCategory,
+        isAiGenerated: original.isAiGenerated,
         // Fresh ids: the originals are the source rows' primary keys.
         events: original.events.map((event) => ({ ...event, id: crypto.randomUUID() })),
       })
