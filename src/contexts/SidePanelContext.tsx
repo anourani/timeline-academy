@@ -62,18 +62,25 @@ const STORAGE_KEY = 'side_panel_open'
 const WIDTH_STORAGE_KEY = 'side_panel_width'
 
 /**
- * Open by default — except on a viewport too narrow to hold the panel and
- * anything else beside it. Below `PANEL_RESIZE_BREAKPOINT` the resize handles
- * are hidden and `clampPanelWidth` shrinks the panel to
- * `viewportWidth - MIN_CONTENT_GUTTER`, so a first visit on a phone used to
- * land on a 64px strip of page next to a panel nobody asked for.
+ * Open by default — except on a phone or a tablet. Below
+ * `PANEL_RESIZE_BREAKPOINT` the resize handles are hidden and
+ * `clampPanelWidth` shrinks the panel to `viewportWidth - MIN_CONTENT_GUTTER`,
+ * so a first visit on a phone used to land on a 64px strip of page next to a
+ * panel nobody asked for. A tablet clears that width but still gives up a third
+ * of its screen to a panel before the visitor has seen the page.
+ *
+ * Tablets are told apart by a touch-only primary pointer rather than by width:
+ * an iPad in landscape is as wide as a small laptop window, and a mouse-driven
+ * window that narrow should keep the panel it has always had.
  *
  * Only the nothing-stored case moves. A returning user's own choice still wins
- * on every device, and at desktop widths this is the `true` it has always been.
+ * on every device, and on desktop this is the `true` it has always been.
  */
 function readStoredIsOpen(): boolean {
   const defaultIsOpen =
-    typeof window === 'undefined' || window.innerWidth >= PANEL_RESIZE_BREAKPOINT
+    typeof window === 'undefined' ||
+    (window.innerWidth >= PANEL_RESIZE_BREAKPOINT &&
+      !window.matchMedia('(hover: none) and (pointer: coarse)').matches)
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw === null) return defaultIsOpen
