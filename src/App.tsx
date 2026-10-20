@@ -1489,9 +1489,11 @@ export function App() {
             // undefined is how this component already expresses "not
             // editable", so no extra prop is needed — and it is the honest
             // state: the array on screen belongs to the generation store and
-            // is replaced wholesale when it commits.
-            onAddEvent={mode === 'edit' && !isStreaming ? handleAddEvent : undefined}
-            onUpdateEvent={mode === 'edit' && !isStreaming ? handleUpdateEvent : undefined}
+            // is replaced wholesale when it commits. It stays off once the
+            // run lands: an AI timeline's events are read-only, so dragging
+            // one to new dates is out too.
+            onAddEvent={mode === 'edit' && !isAiTimeline ? handleAddEvent : undefined}
+            onUpdateEvent={mode === 'edit' && !isAiTimeline ? handleUpdateEvent : undefined}
             onOpenDetails={(event) => setDetailPanelEvent(event)}
             scale={currentScale}
             verticalScale={currentVerticalScale}
@@ -1534,7 +1536,7 @@ export function App() {
           setDetailPanelEvent(updated);
         }}
         onEdit={
-          mode === 'edit'
+          mode === 'edit' && !isAiTimeline
             ? () => {
                 if (!detailPanelEvent) return;
                 setPendingEditEventId(detailPanelEvent.id);
@@ -1543,7 +1545,7 @@ export function App() {
             : undefined
         }
         onDelete={
-          mode === 'edit'
+          mode === 'edit' && !isAiTimeline
             ? () => {
                 if (!detailPanelEvent) return;
                 handleDeleteEvent(detailPanelEvent.id);
