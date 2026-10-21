@@ -65,8 +65,9 @@ interface EventTableEditorProps {
   /** Which page to open on. The dock legend's "Edit categories" asks for Categories. */
   initialView?: 'events' | 'categories'
   /**
-   * AI timelines come from a prompt: events and categories can be edited and
-   * deleted, but not added, and categories can't be deleted either.
+   * AI timelines come from a prompt and are read-only here: events can be
+   * viewed but not added, edited or deleted, and categories can be reordered,
+   * recoloured and hidden but not renamed, added or deleted.
    */
   aiGenerated?: boolean
 }
@@ -74,6 +75,7 @@ interface EventTableEditorProps {
 const AI_NO_ADD_EVENT = "Events can't be added to an AI-generated timeline"
 const AI_NO_ADD_CATEGORY = "Categories can't be added to an AI-generated timeline"
 const AI_NO_DELETE_CATEGORY = "Categories can't be deleted from an AI-generated timeline"
+const AI_NO_RENAME_CATEGORY = "Categories can't be renamed on an AI-generated timeline"
 
 /**
  * Explains a disabled button on hover. The title has to sit on a wrapper: the
@@ -209,6 +211,7 @@ function SortableCategoryRow({
   onDelete,
   canDelete,
   deleteDisabledReason,
+  labelReadOnly = false,
 }: {
   cat: CategoryConfig
   editingLabel: string
@@ -219,6 +222,7 @@ function SortableCategoryRow({
   onDelete: (catId: string) => void
   canDelete: boolean
   deleteDisabledReason?: string
+  labelReadOnly?: boolean
 }) {
   const {
     attributes,
@@ -260,6 +264,8 @@ function SortableCategoryRow({
             onChange={(e) => onLabelChange(cat.id, e.target.value)}
             onBlur={() => onLabelBlur(cat.id)}
             onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+            readOnly={labelReadOnly}
+            title={labelReadOnly ? AI_NO_RENAME_CATEGORY : undefined}
             className="w-full bg-transparent border-none outline-none font-['Aleo',serif] font-normal text-[24px] leading-[1.4] text-[#dadee5]"
           />
         </div>
@@ -436,6 +442,9 @@ export function EventTableEditor({
   aiGenerated = false,
 }: EventTableEditorProps) {
   const isEditing = mode === 'edit'
+  // The event rows are a reader in view mode and on AI timelines alike. Only
+  // the rows: an AI timeline still has its Categories page and its Save.
+  const eventsReadOnly = !isEditing || aiGenerated
   const [activePageTab, setActivePageTab] = useState<'events' | 'categories'>('events')
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [emptyRows, setEmptyRows] = useState<DraftEvent[]>([])
@@ -742,13 +751,13 @@ export function EventTableEditor({
                     className="flex items-center pl-[16px] pr-[10px] pb-2 gap-[22px] border-b border-[rgba(210,210,210,0.2)]"
                     style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 300, fontSize: '12px', lineHeight: '1.4', color: '#9b9ea3' }}
                   >
-                    <div className="w-[240px] shrink-0">Title {isEditing && <span className="text-destructive">*</span>}</div>
-                    <div className="w-[90px] shrink-0">Start Date {isEditing && <span className="text-destructive">*</span>}</div>
+                    <div className="w-[240px] shrink-0">Title {!eventsReadOnly && <span className="text-destructive">*</span>}</div>
+                    <div className="w-[90px] shrink-0">Start Date {!eventsReadOnly && <span className="text-destructive">*</span>}</div>
                     <div className="w-[90px] shrink-0">End Date</div>
-                    <div className="flex-1">Category {isEditing && <span className="text-destructive">*</span>}</div>
+                    <div className="flex-1">Category {!eventsReadOnly && <span className="text-destructive">*</span>}</div>
                     {/* Spacer for the delete column — must appear and disappear
                         with the cell below it or the columns misalign. */}
-                    {isEditing && <div className="w-[32px] shrink-0"></div>}
+                    {!eventsReadOnly && <div className="w-[32px] shrink-0"></div>}
                   </div>
 
                   {/* Scrollable Event Rows */}
@@ -769,7 +778,7 @@ export function EventTableEditor({
                               onChange={(e) => handleEventChange(event.id, { title: e.target.value })}
                               placeholder="Event title"
                               autoComplete="off"
-                              readOnly={!isEditing}
+                              readOnly={eventsReadOnly}
                               // Stays an <input> when read-only so the text is
                               // still selectable and the column widths do not
                               // shift; only the hover/focus fills go, since
@@ -780,11 +789,11 @@ export function EventTableEditor({
                                 placeholder:text-[#6b6e73]
                                 ${empty && !isFieldFilled(event, 'title')
                                   ? 'bg-[#151617] text-[#c9ced4]'
-                                  : isEditing
+                                  : !eventsReadOnly
                                     ? 'bg-transparent text-[#c9ced4] hover:bg-[#151617]'
                                     : 'bg-transparent text-[#c9ced4]'
                                 }
-                                ${isEditing ? 'focus:bg-[#151617]' : ''} transition-colors
+                                ${!eventsReadOnly ? 'focus:bg-[#151617]' : ''} transition-colors
                               `}
                             />
                           </div>
@@ -802,7 +811,7 @@ export function EventTableEditor({
                               placeholder="Pick a date"
                               isEmpty={empty}
                               isFilled={isFieldFilled(event, 'startDate')}
-                              readOnly={!isEditing}
+                              readOnly={eventsReadOnly}
                             />
                           </div>
 
@@ -815,13 +824,13 @@ export function EventTableEditor({
                               disabledBefore={parseDate(event.startDate)}
                               isEmpty={empty}
                               isFilled={isFieldFilled(event, 'endDate')}
-                              readOnly={!isEditing}
+                              readOnly={eventsReadOnly}
                             />
                           </div>
 
                           {/* Category */}
                           <div className="flex-1 min-w-0">
-                            {!isEditing ? (
+                            {eventsReadOnly ? (
                               <div className="px-[6px] py-[5px] rounded-[4px] font-['Avenir',sans-serif] font-normal text-[14px] leading-[20px] text-[#c9ced4] truncate">
                                 {draftCategories.find(c => c.id === event.category)?.label ?? '—'}
                               </div>
@@ -860,7 +869,7 @@ export function EventTableEditor({
                           </div>
 
                           {/* Delete */}
-                          {isEditing && (
+                          {!eventsReadOnly && (
                             <div className="w-[32px] shrink-0 flex justify-center">
                               <button
                                 onClick={() => empty
@@ -919,6 +928,7 @@ export function EventTableEditor({
                           onDelete={handleCategoryDelete}
                           canDelete={!aiGenerated && draftCategories.length > 1}
                           deleteDisabledReason={aiGenerated ? AI_NO_DELETE_CATEGORY : undefined}
+                          labelReadOnly={aiGenerated}
                         />
                       ))}
                     </SortableContext>
