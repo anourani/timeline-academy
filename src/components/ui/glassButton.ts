@@ -1,10 +1,14 @@
 /**
- * The glass button styles used by the full-size modals.
+ * The glass button styles used by the full-size modals and the events drawer.
  *
  * Lifted out of `EventTableEditor` when the Account Details modal adopted the
  * same shell, because two copies of a shadow-and-blur recipe drift the moment
  * either one is nudged — and these are the buttons a user sees side by side
  * across the two surfaces.
+ *
+ * The `modalRail*` / `modalSidebarTabClass` styles below are now used by
+ * `AccountDetailsModal` alone: the events editor became a bottom drawer with
+ * header tabs and dropped its rail.
  */
 
 /** Secondary action — Cancel, Close, Add. */
@@ -76,10 +80,9 @@ export function modalSidebarTabClass(isActive: boolean): string {
  * band across the top below it.
  *
  * It only stacks its groups — scrolling belongs to the groups themselves, so a
- * rail with two of them (the Events modal: pages, then category filters) gets
- * two independently scrolling strips on mobile rather than one flattened row.
- * Collapsing those into a single strip would imply they are the same kind of
- * choice.
+ * rail with two of them gets two independently scrolling strips on mobile
+ * rather than one flattened row. Collapsing those into a single strip would
+ * imply they are the same kind of choice.
  */
 export const modalRailClass = `
   flex flex-col min-w-0

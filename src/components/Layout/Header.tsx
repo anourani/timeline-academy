@@ -76,7 +76,7 @@ export function Header({
   legendCategories = categories,
   legendEvents = events,
 }: HeaderProps) {
-  // Which tab the events modal opens on: the dock's Events button opens the
+  // Which tab the events drawer opens on: the dock's Events button opens the
   // table, the legend's "Edit categories" opens the categories editor.
   const [eventsInitialView, setEventsInitialView] = useState<'events' | 'categories'>('events');
   const closePanel = () => onActivePanelChange(null);

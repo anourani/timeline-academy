@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 
 /**
- * Tailwind's `sm` breakpoint, in px. The modals' rails collapse to horizontal
- * tab strips below it — a 200px rail plus ~320px of content plus padding needs
- * roughly 570px, so this is where the vertical layout stops fitting.
+ * Tailwind's `sm` breakpoint, in px. The Account Details rail collapses to a
+ * horizontal tab strip below it — a 200px rail plus ~320px of content plus
+ * padding needs roughly 570px, so this is where the vertical layout stops
+ * fitting — and the events drawer switches to its mobile layout here too.
  *
  * Deliberately not `PANEL_RESIZE_BREAKPOINT` (768): that governs the side
  * panel's resize handles, which is a different question about a different
@@ -23,9 +24,10 @@ function isNarrowViewport(): boolean {
  *
  * Layout should use Tailwind's `sm:` prefix instead of this — CSS handles a
  * breakpoint without a render pass. This exists for the cases a media query
- * cannot reach, which in practice means props: `EventTableEditor` picks a
- * dnd-kit sorting strategy and a set of drag modifiers per orientation, and
- * those are JavaScript values, not classes.
+ * cannot reach, which in practice means props: `EventTableEditor` picks its
+ * dnd-kit sensors (a 5px drag on desktop, press-and-hold on mobile) and decides
+ * whether the event rows are editable at all (they are read-only below `sm`),
+ * and those are JavaScript values, not classes.
  */
 export function useIsNarrow(): boolean {
   const [narrow, setNarrow] = useState(isNarrowViewport)

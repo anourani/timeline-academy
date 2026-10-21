@@ -9,7 +9,7 @@ export interface DockLegendProps {
   onCategoriesChange: (categories: CategoryConfig[]) => void
   groupByCategory: boolean
   onGroupByCategoryChange: (value: boolean) => void
-  /** Opens the events modal on its Categories tab. Edit mode only. */
+  /** Opens the events drawer on its Categories tab. Edit mode only. */
   onEditCategories: () => void
   open: boolean
   onOpenChange: (open: boolean) => void

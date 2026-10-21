@@ -30,6 +30,7 @@
 17. [Add-Event Cursor](#add-event-cursor)
 18. [Event Hover Cursor](#event-hover-cursor)
 19. [Event Form Dialog](#event-form-dialog)
+19a. [Events Drawer](#events-drawer)
 20. [Scale / Zoom System](#scale--zoom-system)
 21. [Date-to-Grid Math](#date-to-grid-math)
 22. [Timeline Range Calculation](#timeline-range-calculation)
@@ -188,9 +189,9 @@ The switch itself lives in the **dock** (`FloatingToolbar/ModeTabs.tsx`), not th
 | Dock buttons | Add Event, Events, Settings. | Add Event and Settings collapse to zero width and fade out; Events stays. |
 | Mode tabs in the dock | Desktop only. | Desktop, plus the mobile footer — so a window narrowed while presenting can still get back. |
 | `EventDetailPanel` footer | Regenerate / Remove shown. | Hidden (`showFooter`). |
-| `EventTableEditor` | Full editor: Categories page, editable cells, row add/delete, category reorder, Cancel/Save. | Reader: Categories page absent, cells static, no delete column, no Add/Save, Cancel becomes **Close**. The rail's category *filter* stays — it is a reading affordance — but loses drag-to-reorder. |
+| `EventTableEditor` (events drawer) | Full editor: Categories tab, editable cells (desktop only — see [Events Drawer](#events-drawer)), row add/delete, category reorder, Cancel/Save. | Reader: Categories tab absent, cells static, no delete column, no Add/Save, Cancel becomes **Close**. The category filter chips and the sort stay — they are reading affordances — but the "Edit categories →" chip goes. |
 
-Switching to view mode closes the Settings panel and the Add Event dialog (`App.tsx`'s `onModeChange`); the Events modal is allowed to stay open, because it has a read-only form. Both closes are defensive — each of those surfaces renders a modal backdrop above the dock, so neither can actually be open at the moment the tabs are clicked.
+Switching to view mode closes the Settings panel and the Add Event dialog (`App.tsx`'s `onModeChange`); the events drawer is allowed to stay open, because it has a read-only form. Both closes are defensive — each of those surfaces renders a modal backdrop above the dock, so neither can actually be open at the moment the tabs are clicked.
 
 The dock's width is content-derived rather than a literal, so collapsing a button animates the pill and `translateX(-50%)` keeps it centred without a `width` transition of its own. `Collapsible` measures its child's `scrollWidth` for the open `max-width`: a hardcoded value would either clip the label or waste the start of the animation, and the labels are set in whatever sans the OS supplies since Avenir never loads.
 
@@ -610,6 +611,42 @@ Both are hidden in view mode. `Timeline` no longer takes an `onDeleteEvent` prop
 `handleSubmit` calls `onUpdateEvent` (when `editingEvent` is set) or `onAddEvent` (otherwise), closes the modal, queues a smooth `scrollToTarget(eventData.startDate)`, and (for adds) sets `pendingScrollEventId` so the new event's mount callback can `scrollIntoView`.
 
 `EventForm` handles its own state: title (max 55 chars), category (single-select pill grid of `visibleCategories`), and `startDate`/`endDate` (text input with calendar popover; end date is optional and falls back to start date on submit).
+
+---
+
+## Events Drawer
+
+`components/EventTableEditor/EventTableEditor.tsx`, opened from the dock's **Events** button (Events tab) or the dock legend's **Edit categories** (Categories tab, via the `initialView` prop `Header.tsx` sets). It edits a *draft* — `draftEvents` / `draftCategories`, copied from props on every open — and nothing reaches the timeline until **Save** hands both back through `onEventsChange` / `onCategoriesChange`. Esc, the overlay and Cancel all discard the draft without asking. Spec: `docs/2026-10-21-events-drawer-prd.md`.
+
+### Shell
+
+A Radix Dialog whose Content is a bottom drawer at every breakpoint: `fixed inset-x-0 bottom-0 h-[95dvh] w-screen rounded-t-[20px]` on `#171717`, so the top 5% of the timeline stays visible behind the `bg-black/80` overlay. It is a flex column — grabber → header (tabs + actions) → tab body — and the tab bodies scroll inside it, never the page. It slides in from the bottom (`slide-in-from-bottom`, 200ms). Under `prefers-reduced-motion` the slide distance is zeroed (`motion-reduce:data-[state=open]:slide-in-from-bottom-0`) so only the fade plays; the guard carries the same `data-[state=…]` selector as the utility it cancels, or it loses on specificity — see `docs/2026-09-19-mobile-bottom-drawers-plan.md` §8.
+
+**The grabber dismisses.** Dragging it down more than 80px (`SWIPE_DISMISS_PX`, the same as `PopupShell`) closes a clean drawer. A drawer with unsaved changes springs back and asks first (`ConfirmationModal`, "Discard changes?"). Only the swipe asks: Esc, overlay and Cancel are deliberate and keep their old no-questions behaviour.
+
+### Header
+
+The left rail is gone. **Events** and **Categories** are header tabs (`role="tablist"` / `role="tab"`, `aria-selected`, ←/→/Home/End move between them) with a mono count beside each — `14 events`, `5 of 14` while a filter is on, `4 of 4`. Focus opens on the active tab. Add Event (or Add Category), Cancel and Save sit on the right and replace the old footer. Below `sm`, Cancel is top-left and Save top-right above the tabs. View mode has only the Events tab and a single **Close**.
+
+### Events tab
+
+- **Filter chips** — All, then one per category in category order, each with its colour bar and a live count from `draftEvents`. Single-select. The last chip, "Edit categories →", switches tabs.
+- **Sorting is display-only.** `sort: { key: 'startDate' | 'endDate', dir }`, default Start Date ascending, ties broken by the other date and then title. It is applied inside the `sortedEvents` memo after the filter; `draftEvents` — and therefore what Save writes — keeps its stored order. YYYY-MM-DD with a four-digit year (`formatYMD`) compares correctly as a plain string. An event with no `endDate` sorts by its start. The choice is remembered for the tab in `sessionStorage` (`timeline_events_sort`).
+- **Row numbers** are the position in the sorted, filtered list (`index + 1`), padded to two digits, three past 99 events. They are never stored, and they renumber on every sort or filter change.
+- **Nothing jumps while you type.** Two rules:
+  - The row whose title has focus is sorted by the title it had when focus arrived (`frozenTitle`), and re-sorts on blur.
+  - Blank rows from **Add Event** live in `emptyRows`, rendered after the sorted list whatever the sort. A blank row joins `draftEvents` only on a *commit* — a date or category pick, or leaving the title — never on the keystroke that happened to make it valid. It keeps its id when it does, so its React key, and focus, survive the move. Save also folds in any valid row a blur never reached.
+- Events in a hidden category render at 40% opacity, still editable. An End Date equal to the Start Date is shown muted.
+
+**Below `sm` the event rows are read-only.** `eventsReadOnly = !isEditing || aiGenerated || isNarrow`. Phones get a list — number · colour bar · title, date range, category — with no inputs, no Add Event and no delete, plus two Start/End sort pills in place of the column headers. The Categories tab stays fully editable on phones, which is why Cancel/Save remain there.
+
+### Categories tab
+
+Drag handle · number · Aleo title input · five-swatch colour picker · Hide/Show and an icon-only delete. Rename rules are unchanged (not empty, not a case-insensitive duplicate). Recolouring or hiding updates the Events tab immediately, still inside the draft. Add Category disables at four with a tooltip saying why. Reordering is dnd-kit on the vertical axis: a 5px drag on the grip at `sm` and above; below it the whole card is the handle and the gesture is press-and-hold (250ms, `TouchSensor` plus a `MouseSensor` for a narrowed desktop window), because a swipe there has to scroll. `useIsNarrow` is what picks the sensors — a prop, not a class.
+
+### AI timelines
+
+Unchanged by the redesign: event rows read-only and Add Event disabled with its tooltip; categories can be reordered, recoloured and hidden but not renamed, added or deleted (`AI_NO_*` tooltips).
 
 ---
 

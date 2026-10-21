@@ -36,11 +36,12 @@ type SectionId = (typeof SECTIONS)[number]['id']
  * What the account is, in one place.
  *
  * Radix Dialog rather than the `Modal` wrapper, 20px radius on the same surface
- * as `EventTableEditor`, but laid out the way a settings dialog is: a rail that
- * runs the full height of the modal, flush to its edges and divided from the
- * content by a rule rather than a gap, with the heading and close control in
- * the content column. The tab styles live in `ui/glassButton.ts` so the two
- * modals' rails cannot drift apart.
+ * as the `EventTableEditor` drawer, but laid out the way a settings dialog is:
+ * a rail that runs the full height of the modal, flush to its edges and
+ * divided from the content by a rule rather than a gap, with the heading and
+ * close control in the content column. The events editor once shared this
+ * rail; it is now a bottom drawer with header tabs, so the rail styles in
+ * `ui/glassButton.ts` are this modal's alone.
  *
  * Every value here already existed somewhere. This adds no query, no table and
  * no hook; it exists because the facts were scattered across a footer, a usage
