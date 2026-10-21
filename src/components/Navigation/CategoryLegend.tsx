@@ -37,7 +37,7 @@ const DOCK_SIDE_OFFSET = 26
  * hide a category's events.
  *
  * Visibility is the existing `CategoryConfig.visible` flag — the same one the
- * events modal's Categories tab writes, and the one `Timeline.tsx` already
+ * events drawer's Categories tab writes, and the one `Timeline.tsx` already
  * filters on. So this is a second, *live* entry point into `updateCategories`
  * rather than new state: a toggle here persists exactly like a toggle there,
  * which means it arms the debounced autosave and re-sorts the side panel.
