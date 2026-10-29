@@ -1,17 +1,19 @@
 import React, { memo, useRef, useEffect, useState, useLayoutEffect } from 'react';
-import { TimelineEvent as ITimelineEvent } from '../../types/event';
+import type { EnrichableEvent } from '../../types/event';
 import { Month, TimelineScale } from '../../types/timeline';
 import { EVENT_ROW_HEIGHT, EVENT_MIN_WIDTH } from '../../constants/timeline';
 import { findMonthIndex, formatDateLong, parseDateParts } from '../../utils/dateUtils';
 
 interface TimelineEventProps {
-  event: ITimelineEvent & { stackIndex: number };
+  /** A real event, or a World Events entry — the component reads no category. */
+  event: EnrichableEvent & { stackIndex: number };
   months: Month[];
   categoryOffset: number;
   categoryColor?: string;
-  /** Left click / Enter / Space. No position argument: the click opens the
-   *  detail panel rather than a menu that needed anchoring. */
-  onEventClick?: (event: ITimelineEvent) => void;
+  /** Left click / Enter / Space, with the event's id. No position argument:
+   *  the click opens the detail panel rather than a menu that needed
+   *  anchoring. */
+  onEventClick?: (eventId: string) => void;
   scale?: TimelineScale;
   isDragging?: boolean;
   dragDeltaPixels?: number;
@@ -34,6 +36,12 @@ interface TimelineEventProps {
    * glitch rather than as the considered reflow it is after a drag.
    */
   suppressStackAnimation?: boolean;
+  /** Overrides the span tint, which is otherwise `categoryColor` at 45%. */
+  rangeFill?: string;
+  /** Overrides the title colour, which otherwise comes from the theme. */
+  titleColor?: string;
+  /** A small mono label after the title (the World Events lane's source). */
+  tag?: string;
 }
 
 const STACK_TRANSITION_MS = 220;
@@ -50,6 +58,9 @@ export const TimelineEvent = memo(function TimelineEvent({
   onMounted,
   revealOnMount = false,
   suppressStackAnimation = false,
+  rangeFill,
+  titleColor,
+  tag,
 }: TimelineEventProps) {
   const wasDraggingRef = useRef(false);
   const elementRef = useRef<HTMLDivElement | null>(null);
@@ -143,7 +154,7 @@ export const TimelineEvent = memo(function TimelineEvent({
       wasDraggingRef.current = false;
       return;
     }
-    onEventClick?.(event);
+    onEventClick?.(event.id);
   };
 
   const handleClick = () => {
@@ -187,7 +198,7 @@ export const TimelineEvent = memo(function TimelineEvent({
       data-reveal-fill={revealOnMount && !isSingleDay ? '' : undefined}
       className="flex items-center h-full w-full rounded"
       style={{
-        backgroundColor: isSingleDay ? 'transparent' : `${categoryColor}73`,
+        backgroundColor: isSingleDay ? 'transparent' : rangeFill ?? `${categoryColor}73`,
         padding: '2px 2px',
         // Single-day events have no tinted span, so there is nothing to wipe
         // open — clipping an empty box would just delay the bar behind it.
@@ -217,9 +228,14 @@ export const TimelineEvent = memo(function TimelineEvent({
       <div
         data-reveal-title={revealOnMount ? '' : undefined}
         className="pl-1 whitespace-nowrap body-lg overflow-visible"
-        style={reveal('timeline-event-title-in', 350, '--ease-enter', 120)}
+        style={{ color: titleColor, ...reveal('timeline-event-title-in', 350, '--ease-enter', 120) }}
       >
         {event.title}
+        {tag && (
+          <span className="label-xs-type1 ml-1.5 uppercase tracking-[0.04em] text-[#6D7073]">
+            {tag}
+          </span>
+        )}
       </div>
     </div>
   );

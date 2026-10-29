@@ -1,10 +1,7 @@
 import { useCallback, useMemo, useRef, type ReactNode } from 'react'
-import * as DialogPrimitive from '@radix-ui/react-dialog'
-import { Eye, EyeOff, X } from 'lucide-react'
-import { Dialog, DialogOverlay, DialogPortal, DialogTrigger } from '@/components/ui/dialog'
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
+import { Eye, EyeOff } from 'lucide-react'
+import { DockMenu, DOCK_SIDE_OFFSET } from '@/components/FloatingToolbar/DockMenu'
 import { buttonVariants } from '@/components/ui/buttonVariants'
-import { useIsMobile } from '@/hooks/useIsMobile'
 import { countEventsByCategory } from '@/utils/categoryCounts'
 import { cn } from '@/lib/utils'
 import type { CategoryConfig, TimelineEvent } from '@/types/event'
@@ -24,13 +21,13 @@ interface CategoryLegendProps {
     onOpenChange: (open: boolean) => void
     /** Held disabled while a generation streams, like the rest of the dock. */
     disabled?: boolean
+    /** Below `md` the footer shows icons only: the dots, without the word. */
+    iconOnly?: boolean
+    className?: string
   }
   /** Extra controls rendered below the category rows, on both surfaces. */
   children?: ReactNode
 }
-
-/** Popover gap above the dock: 17px clear of its edge, plus its 8px padding and 1px border. */
-const DOCK_SIDE_OFFSET = 26
 
 /**
  * Nav control that says which colour means which category, and lets the reader
@@ -43,10 +40,8 @@ const DOCK_SIDE_OFFSET = 26
  * which means it arms the debounced autosave and re-sorts the side panel.
  *
  * Two surfaces, split at `md`: an anchored popover on desktop, a full-screen
- * drawer rising from the bottom edge on a phone. That split has to happen in
- * JavaScript because a Popover cannot become the drawer — its position lives
- * as inline styles on Radix's own popper wrapper, which no `className` here
- * can reach, and a popover is a non-modal layer besides. See `useIsMobile`.
+ * drawer rising from the bottom edge on a phone. Both come from `DockMenu`,
+ * the shell the Design menu shares, so the two can't drift apart.
  *
  * Open/closed is left uncontrolled in both — Radix's `Popover.Trigger` and
  * `Dialog.Trigger` each supply `aria-haspopup="dialog"`, `aria-expanded` and
@@ -59,7 +54,6 @@ export function CategoryLegend({ categories, events, onCategoriesChange, dock, c
   const counts = useMemo(() => countEventsByCategory(events), [events])
   const visibleCount = useMemo(() => categories.filter(c => c.visible).length, [categories])
   const rowRefs = useRef<(HTMLButtonElement | null)[]>([])
-  const isMobile = useIsMobile()
 
   const totalLabel = `${events.length} ${events.length === 1 ? 'event' : 'events'}`
 
@@ -105,16 +99,18 @@ export function CategoryLegend({ categories, events, onCategoriesChange, dock, c
     <button
       type="button"
       aria-label="Category legend"
+      title={dock.iconOnly ? 'Legend' : undefined}
       data-active={dock.open}
       disabled={dock.disabled}
       tabIndex={dock.disabled ? -1 : undefined}
       className={cn(
         buttonVariants({ variant: 'glass', size: 'none' }),
         dock.disabled && 'opacity-50 pointer-events-none',
+        dock.className,
       )}
     >
       <CategoryDots categories={categories} />
-      Legend
+      {!dock.iconOnly && 'Legend'}
     </button>
   ) : (
     <button
@@ -198,116 +194,27 @@ export function CategoryLegend({ categories, events, onCategoriesChange, dock, c
     </div>
   )
 
-  // Crossing the breakpoint while open unmounts one root and mounts the other
-  // closed, so the legend simply closes. Radix releases the Dialog's scroll
-  // lock on unmount, so nothing is stranded.
-  if (isMobile) {
-    return (
-      <Dialog open={dock?.open} onOpenChange={dock?.onOpenChange}>
-        <DialogTrigger asChild>{trigger}</DialogTrigger>
-        <DialogPortal>
-          {/* Covered by the content once open, but it carries the fade and is
-              the click target while the drawer is still on its way up. */}
-          <DialogOverlay className="bg-black/50" />
-          <DialogPrimitive.Content
-            // Silences Radix's missing-description warning: the Title names
-            // the dialog and there is nothing to add below it.
-            aria-describedby={undefined}
-            onOpenAutoFocus={focusFirstRow}
-            // Inline for the same reason as the popover's — see below.
-            style={{ animationDuration: '300ms' }}
-            className={cn(
-              'fixed inset-0 z-50 flex flex-col overflow-hidden bg-[#171717] outline-none',
-              // `slide-*-bottom` is translateY(100%) ↔ 0, and on an `inset-0`
-              // box that is a full viewport height: the drawer rises from the
-              // bottom edge and leaves the same way.
-              'data-[state=open]:animate-in data-[state=closed]:animate-out ease-out',
-              'data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom',
-              // The `data-[state=…]` variants compile to a class *plus* an
-              // attribute selector, so a bare `motion-reduce:animate-none` —
-              // one class — loses to them on specificity and the slide plays
-              // regardless. A media query adds no specificity of its own, so
-              // the reduce guard has to carry the same attribute to win.
-              'motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none',
-            )}
-          >
-            <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-2 border-b border-[#404040] shrink-0">
-              <DialogPrimitive.Title className="header-xsmall text-[#c9ced4] m-0">
-                Categories
-              </DialogPrimitive.Title>
-              <div className="flex items-center gap-3">
-                <span className="font-['JetBrains_Mono',monospace] text-[11px] leading-none text-[#9B9EA3]">
-                  {totalLabel}
-                </span>
-                {/* A `fixed inset-0` drawer has no outside to tap and a phone
-                    has no Escape key, so the X is the only way back out. */}
-                <DialogPrimitive.Close
-                  aria-label="Close category legend"
-                  className="relative flex items-center justify-center p-1.5 rounded-lg border border-white/15 bg-white/10 backdrop-blur-[12px] text-[#c9ced4] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4),inset_0px_1px_0px_0px_rgba(255,255,255,0.1)] hover:bg-white/20 hover:text-[#dadee5] transition-colors outline-none focus-visible:ring-1 focus-visible:ring-white/40"
-                >
-                  <X size={16} strokeWidth={1.25} />
-                </DialogPrimitive.Close>
-              </div>
-            </div>
-            {/* Escape, focus trap, return-focus-to-trigger and the body scroll
-                lock all come from Dialog. Nothing here re-implements them. */}
-            <div className="flex-1 min-h-0 overflow-y-auto p-2">
-              {rows}
-              {children}
-            </div>
-          </DialogPrimitive.Content>
-        </DialogPortal>
-      </Dialog>
-    )
-  }
-
   return (
-    <Popover open={dock?.open} onOpenChange={dock?.onOpenChange}>
-      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-
-      <PopoverContent
-        unstyled
-        side={dock ? 'top' : 'bottom'}
-        align="end"
-        sideOffset={dock ? DOCK_SIDE_OFFSET : 8}
-        collisionPadding={16}
-        aria-label="Category legend"
-        onOpenAutoFocus={focusFirstRow}
-        // Inline, because an arbitrary duration utility is ambiguous to
-        // Tailwind here — the core transition scale and tailwindcss-animate's
-        // animation scale share the `duration-` namespace and both take a
-        // <time>, so no type hint can separate them. The
-        // `motion-reduce:animate-none` class still wins: it zeroes
-        // `animation-name`, which this does not touch.
-        style={{ animationDuration: '120ms' }}
-        className={cn(
-          'z-50 outline-none',
-          // Desktop only now — below `md` the drawer above replaces this
-          // entirely, so there is no narrow width to carry here.
-          'w-[264px]',
-          'rounded-[16px] border border-[#262626] p-2 backdrop-blur-[12px]',
-          'bg-[rgba(23,23,23,0.92)]',
-          'shadow-[0px_8px_32px_rgba(0,0,0,0.4)]',
-          'data-[state=open]:animate-in data-[state=closed]:animate-out',
-          'data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0',
-          'data-[side=bottom]:slide-in-from-top-1 data-[side=top]:slide-in-from-bottom-1',
-          // Same specificity story as the drawer's guard above.
-          'motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none',
-        )}
-      >
-        <div className="flex items-center justify-between px-[10px] pb-[8px] pt-[6px]">
-          <span className="label-s-type2 uppercase tracking-[0.04em] text-[#9B9EA3]">
-            Categories
-          </span>
-          <span className="font-['JetBrains_Mono',monospace] text-[11px] leading-none text-[#9B9EA3]">
-            {totalLabel}
-          </span>
-        </div>
-
-        {rows}
-        {children}
-      </PopoverContent>
-    </Popover>
+    <DockMenu
+      open={dock?.open}
+      onOpenChange={dock?.onOpenChange}
+      trigger={trigger}
+      title="Categories"
+      headerAside={
+        <span className="font-['JetBrains_Mono',monospace] text-[11px] leading-none text-[#9B9EA3]">
+          {totalLabel}
+        </span>
+      }
+      label="Category legend"
+      // Desktop only — below `md` the drawer replaces the popover entirely.
+      widthClass="w-[264px]"
+      side={dock ? 'top' : 'bottom'}
+      sideOffset={dock ? DOCK_SIDE_OFFSET : 8}
+      onOpenAutoFocus={focusFirstRow}
+    >
+      {rows}
+      {children}
+    </DockMenu>
   )
 }
 

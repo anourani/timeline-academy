@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { debounce } from '../utils/debounce';
-import type { DraftStore, LocalDraft } from '../utils/draftStorage';
+import { draftWorldEvents, type DraftStore, type LocalDraft } from '../utils/draftStorage';
 import {
   createEventsFingerprint,
   fingerprintsEqual,
@@ -38,6 +38,9 @@ export function useLocalDraft(store: DraftStore) {
       verticalScale: draft.verticalScale ?? 'medium',
       groupByCategory: draft.groupByCategory ?? false,
       categories: draft.categories,
+      // Normalised the same way every hydration branch reads them, so a draft
+      // saved before World Events existed opens clean.
+      worldEvents: draftWorldEvents(draft),
     }),
     events: eventsFpRef.current(draft.events),
   }), []);

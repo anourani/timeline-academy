@@ -183,6 +183,18 @@ export function getTimelineRange(
   return { months: generateMonthsRange(startYear, endYear) };
 }
 
+/**
+ * The axis's year span, without building the month grid. Same inputs, same
+ * answer as `getTimelineRange` — the World Events lane asks for exactly the
+ * years the canvas draws.
+ */
+export function getTimelineYearSpan(
+  events: DateSpan[],
+  rangeOverride?: TimelineYearRange
+): TimelineYearRange {
+  return calculateTimelineRange(events, rangeOverride);
+}
+
 // Date parsing and formatting utilities
 export function normalizeDate(dateStr: string): string | null {
   // Remove any surrounding whitespace

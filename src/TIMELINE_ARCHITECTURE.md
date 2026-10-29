@@ -24,6 +24,7 @@
 11. [Event Rendering](#event-rendering)
 12. [Event Stacking Algorithm](#event-stacking-algorithm)
 13. [Band Height Calculation](#band-height-calculation)
+13a. [World Events Lane](#world-events-lane)
 14. [Drag-and-Drop System](#drag-and-drop-system)
 15. [Wheel → Horizontal Scroll](#wheel--horizontal-scroll)
 16. [Scroll-to-Target](#scroll-to-target)
@@ -438,6 +439,30 @@ height   = stackedEvents.length === 0
 ```
 
 `layout.totalHeight` sums the band heights and is used to size the category-labels overlay in grouped mode.
+
+---
+
+## World Events Lane
+
+A read-only lane of context events drawn after every band, in either grouping mode. It is switched on from the dock's Design menu (`FloatingToolbar/DockDesign.tsx`), which picks its sources: Country, World events, Science & tech.
+
+**Data.** `useWorldEvents` (`hooks/useWorldEvents.ts`) fetches one list per enabled source through `services/worldEvents.ts`. The service runs browser-direct on a BYOK key, otherwise through the `world-events` Edge Function. The request covers the axis's own year span (`getTimelineYearSpan`), and results are cached in localStorage per (timeline, source, country, range) by `services/worldEventCache.ts`. Nothing fetches while a generation streams.
+
+**Kept apart from `events`.** The lane's events arrive on their own props (`worldEvents`, `worldEventsStatus`, `onOpenWorldEventDetails`). They never enter `events`, so they never reach `visibleEvents`, the month range, counts, legends, export or autosave. `Timeline` also drops any entry outside the drawn months, so **the lane never widens the axis**.
+
+**Layout.** The lane's events are stacked with the same `calculateEventStacks` pass as the bands. Its `extraTitlePx` argument reserves room for the source tag after each title. Height follows the grouped-band rule: `max((maxStack + 1) * rowHeight + CATEGORY_PADDING, CATEGORY_MIN_HEIGHT)`.
+
+**Styling:**
+- The band above the lane gets a dashed bottom border.
+- The lane's background is `rgba(255,255,255,0.015)`.
+- The WORLD EVENTS pill reuses the category-label styling in a neutral tint. It sits at `HEADER_HEIGHT + layout.totalHeight`.
+- Events use `TimelineEvent`'s `rangeFill`, `titleColor` and `tag` props in a neutral palette, with a source tag of `WORLD`, `SCI·TECH` or the country code.
+
+**States.**
+- `'loading'`: the `StreamingSkeleton` bars show, riding a sticky, viewport-wide strip so they stay in view at any scroll.
+- `'error'`: the lane is hidden, and the Design menu's subtitle explains and offers a retry.
+
+**Read-only.** No `onPointerDown`, so no drag. A click opens `EventDetailPanel` with `readOnly`, which hides Edit/Delete and Regenerate/Remove. Descriptions still generate on open. Ids start `we:`; the page routes the panel's write-back for those to `useWorldEvents.updateEvent`, never to the timeline's events.
 
 ---
 

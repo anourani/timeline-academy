@@ -7,6 +7,7 @@ import { TimelineCategoryLabels } from './TimelineCategoryLabels';
 import { TimelineEvent } from './TimelineEvent';
 import { EventHoverCursor, EventHoverCursorHandle } from './EventHoverCursor';
 import { TimelineEvent as ITimelineEvent, CategoryConfig } from '../../types/event';
+import type { WorldEvent, WorldEventSource, WorldEventsStatus } from '../../types/worldEvents';
 import { ScrollTarget, TimelineScale, TimelineVerticalScale } from '../../types/timeline';
 import { useRevealQueue } from '../../hooks/useRevealQueue';
 import { findMonthIndex, formatYMD, getTimelineRange, shiftEventDates } from '../../utils/dateUtils';
@@ -81,6 +82,31 @@ interface TimelineProps {
    * hover-to-add cursor, click-to-edit) are suppressed.
    */
   mode?: 'edit' | 'view';
+  /**
+   * The World Events lane: read-only context events drawn in their own lane
+   * below everything else. Kept apart from `events` on purpose, so they never
+   * reach counts, legends, export, autosave or the axis range.
+   */
+  worldEvents?: WorldEvent[];
+  /** 'loading' shows placeholder bars; 'idle' and 'error' hide the lane. */
+  worldEventsStatus?: WorldEventsStatus;
+  onOpenWorldEventDetails?: (event: WorldEvent) => void;
+}
+
+/** The lane's neutral palette — context, so it never competes with a category. */
+const WORLD_EVENT_BAR = '#6D7073';
+const WORLD_EVENT_FILL = 'rgba(155,158,163,0.12)';
+const WORLD_EVENT_TITLE = '#9B9EA3';
+const WORLD_EVENT_TAGS: Record<Exclude<WorldEventSource, 'country'>, string> = {
+  world: 'WORLD',
+  science: 'SCI·TECH',
+};
+/** Room the stacker reserves for the source tag: a 6px gap plus up to eight
+ *  10px JetBrains Mono capitals ("SCI·TECH"). */
+const WORLD_EVENT_TAG_PX = 60;
+
+function worldEventTag(event: WorldEvent): string {
+  return event.source === 'country' ? event.country ?? '' : WORLD_EVENT_TAGS[event.source];
 }
 
 interface CategoryBand {
@@ -114,6 +140,9 @@ export function Timeline({
   onEditRequestHandled,
   onVisibleMonthChange,
   mode = 'edit',
+  worldEvents,
+  worldEventsStatus = 'idle',
+  onOpenWorldEventDetails,
 }: TimelineProps) {
   const isEditing = mode === 'edit';
   // Filter visible categories and their events. Memoized because `months` and
@@ -408,6 +437,36 @@ export function Timeline({
     };
   }, [groupByCategory, visibleEvents, visibleCategories, months, scale.monthWidth, verticalScale.eventHeight, verticalScale.eventRowHeight]);
 
+  const showCategoryLabels = groupByCategory;
+  const rowHeight = groupByCategory ? verticalScale.eventHeight : verticalScale.eventRowHeight;
+
+  /**
+   * The World Events lane. Never shown mid-stream — the timeline it gives
+   * context to isn't settled yet — and hidden outright on error (the Design
+   * menu says what went wrong).
+   *
+   * Only events inside the axis the user's own content already set are
+   * drawn: the lane adds context to a span, it never widens it.
+   */
+  const worldLane = React.useMemo(() => {
+    const visible = !streaming && (worldEventsStatus === 'loading' || worldEventsStatus === 'ready');
+    if (!visible || months.length === 0) return null;
+    const first = months[0];
+    const last = months[months.length - 1];
+    const min = formatYMD(first.year, 0, 1);
+    const max = formatYMD(last.year, 11, 31);
+    const inRange = (worldEvents ?? []).filter(e => e.startDate >= min && e.endDate <= max);
+    const stacked = worldEventsStatus === 'ready'
+      ? calculateEventStacks(inRange, months, scale.monthWidth, WORLD_EVENT_TAG_PX)
+      : [];
+    const maxStack = Math.max(...stacked.map(e => e.stackIndex), 0);
+    const height = Math.max(
+      (maxStack + 1) * rowHeight + CATEGORY_PADDING,
+      CATEGORY_MIN_HEIGHT,
+    );
+    return { events: stacked, height, loading: worldEventsStatus === 'loading' };
+  }, [streaming, worldEventsStatus, worldEvents, months, scale.monthWidth, rowHeight]);
+
   const handleMonthClick = useCallback((monthIndex: number) => {
     if (!isEditing || !onAddEvent || justDraggedRef.current) return;
 
@@ -426,11 +485,20 @@ export function Timeline({
   // itself handles cached content vs. fresh generation. Edit and Delete now
   // live in the panel's header rather than on the click path.
   const handleEventClick = useCallback(
-    (event: ITimelineEvent) => {
+    (eventId: string) => {
       if (justDraggedRef.current) return;
-      onOpenDetails?.(event);
+      const event = events.find(e => e.id === eventId);
+      if (event) onOpenDetails?.(event);
     },
-    [justDraggedRef, onOpenDetails],
+    [events, justDraggedRef, onOpenDetails],
+  );
+
+  const handleWorldEventClick = useCallback(
+    (eventId: string) => {
+      const event = worldEvents?.find(e => e.id === eventId);
+      if (event) onOpenWorldEventDetails?.(event);
+    },
+    [worldEvents, onOpenWorldEventDetails],
   );
 
   // The detail panel's Edit action reaches the EventForm dialog through here —
@@ -565,9 +633,6 @@ export function Timeline({
     }
   }, [pendingScrollEventId]);
 
-  const showCategoryLabels = groupByCategory;
-  const rowHeight = groupByCategory ? verticalScale.eventHeight : verticalScale.eventRowHeight;
-
   return (
     <div className={isFullScreen ? 'h-[calc(100vh-6rem)] relative' : 'flex-1 min-h-0 flex flex-col relative'}>
       {showCategoryLabels && (
@@ -579,6 +644,28 @@ export function Timeline({
             categories={layout.bands.map(b => ({ id: b.id, height: b.height }))}
             customCategories={visibleCategories}
           />
+        </div>
+      )}
+
+      {/* The World Events lane's label: the category pill, in a neutral
+          tint. Shown whether or not the user's own events are grouped. */}
+      {worldLane && (
+        <div
+          className="absolute left-0 z-10 pointer-events-none"
+          style={{
+            top: HEADER_HEIGHT + layout.totalHeight,
+            height: worldLane.height,
+            transition: 'top 220ms ease, height 220ms ease',
+          }}
+        >
+          <div className="flex items-start pt-2 pl-6">
+            <div
+              className="rounded-[4px] p-2 backdrop-blur-[2px] leading-none"
+              style={{ backgroundColor: 'rgba(155,158,163,0.18)' }}
+            >
+              <span className="label-small-allcaps whitespace-nowrap">World Events</span>
+            </div>
+          </div>
         </div>
       )}
 
@@ -618,12 +705,18 @@ export function Timeline({
                 scrollContainerRef={scrollContainerRef}
                 intro={intro}
               />
-              {layout.bands.map((band) => (
+              {layout.bands.map((band, bandIndex) => (
                 <div
                   key={`band-${band.id}`}
                   className="relative shrink-0"
                   style={{
                     height: band.height,
+                    // The seam above the World Events lane: dashed, so it
+                    // reads as "below here is context" rather than one more
+                    // category. Drawn inside the band's height (border-box).
+                    borderBottom: worldLane && bandIndex === layout.bands.length - 1
+                      ? '1px dashed #262626'
+                      : undefined,
                     display: 'grid',
                     gridTemplateColumns: `repeat(${months.length * 4}, ${scale.quarterWidth}px)`,
                     ['--event-row-height' as string]: `${rowHeight}px`,
@@ -663,6 +756,59 @@ export function Timeline({
                   })}
                 </div>
               ))}
+
+              {worldLane && (
+                <div
+                  className="relative shrink-0"
+                  style={{
+                    height: worldLane.height,
+                    backgroundColor: 'rgba(255,255,255,0.015)',
+                    display: 'grid',
+                    gridTemplateColumns: `repeat(${months.length * 4}, ${scale.quarterWidth}px)`,
+                    ['--event-row-height' as string]: `${rowHeight}px`,
+                    gridAutoRows: 'var(--event-row-height)',
+                    gap: 0,
+                    transition: 'height 220ms ease, --event-row-height 220ms ease',
+                  }}
+                >
+                  <TimelineGrid
+                    months={months}
+                    height={worldLane.height}
+                    onMonthHover={setHoveredMonth}
+                    onMonthClick={handleMonthClick}
+                    scale={scale}
+                  />
+                  {worldLane.loading && (
+                    // The skeleton draws in viewport pixels, so it rides a
+                    // sticky, viewport-wide strip to stay in view however far
+                    // the canvas is scrolled.
+                    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                      <div className="sticky left-0 h-full w-screen">
+                        <StreamingSkeleton rowHeight={rowHeight} revealedThroughX={null} />
+                      </div>
+                    </div>
+                  )}
+                  {worldLane.events.map((event) => (
+                    // Read-only context: no drag handle, and a click opens the
+                    // detail panel in its read-only form. Each entry fades in
+                    // with the same reveal a streamed event plays.
+                    <TimelineEvent
+                      key={event.id}
+                      event={event}
+                      months={months}
+                      categoryOffset={layout.totalHeight}
+                      categoryColor={WORLD_EVENT_BAR}
+                      rangeFill={WORLD_EVENT_FILL}
+                      titleColor={WORLD_EVENT_TITLE}
+                      tag={worldEventTag(event)}
+                      onEventClick={onOpenWorldEventDetails ? handleWorldEventClick : undefined}
+                      scale={scale}
+                      rowHeight={rowHeight}
+                      revealOnMount
+                    />
+                  ))}
+                </div>
+              )}
 
               {/* Placeholder rows, in the same coordinate space as the
                   events that replace them. Absolute over the bands rather

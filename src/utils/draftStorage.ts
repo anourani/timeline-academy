@@ -3,6 +3,11 @@ import type { TimelineChapter } from '../types/timeline'
 import { DEFAULT_CATEGORIES } from '../constants/categories'
 import { DEFAULT_TIMELINE_TITLE } from '../constants/defaults'
 import { PLAN_LIMITS } from '../constants/plans'
+import {
+  normalizeWorldEventSettings,
+  type WorldEventSettings,
+  type WorldEventSource,
+} from '../types/worldEvents'
 
 export interface LocalDraft {
   id: string
@@ -20,7 +25,21 @@ export interface LocalDraft {
    * through `isDraftAiGenerated`, which falls back to the chapters heuristic.
    */
   isAiGenerated?: boolean
+  /**
+   * Optional: drafts written before World Events existed don't have them.
+   * Read them through `draftWorldEvents`, which fills in the defaults.
+   */
+  showWorldEvents?: boolean
+  worldEventSources?: WorldEventSource[]
+  worldEventCountry?: string
   savedAt: string
+}
+
+/** A draft's World Events settings, with defaults for drafts that predate them. */
+export function draftWorldEvents(
+  draft: Pick<LocalDraft, 'showWorldEvents' | 'worldEventSources' | 'worldEventCountry'>,
+): WorldEventSettings {
+  return normalizeWorldEventSettings(draft)
 }
 
 /**

@@ -60,6 +60,7 @@ Deno.serve(async (req: Request) => {
         `user:${user.id}`,
         `enrich:user:${user.id}`,
         `classify:user:${user.id}`,
+        `world:user:${user.id}`,
       ]);
     if (rateLimitError) {
       // Non-fatal: these rows also age out via the 24h retention cleanup.

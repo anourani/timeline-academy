@@ -5,7 +5,7 @@ import { readSseStream } from './llmShared'
 import { getActiveModel } from './userApiKey'
 import { fetchWikipediaImage } from './wikipediaImage'
 import type { ByokProvider, EnrichmentStreamHandlers } from '@/types/ai'
-import type { EventSource, TimelineEvent } from '../types/event'
+import type { EnrichableEvent, EventSource } from '../types/event'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string
@@ -35,7 +35,7 @@ export async function fetchEventImage(title: string): Promise<{
  * stored default.
  */
 export async function enrichEvent(
-  event: TimelineEvent,
+  event: EnrichableEvent,
   timelineTitle: string,
   handlers: EnrichmentStreamHandlers,
   signal?: AbortSignal,

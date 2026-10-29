@@ -11,7 +11,7 @@
 // The prompts are provider-neutral prose — no tool schemas, no provider-
 // specific structure — so both direct clients use them unchanged.
 
-import type { TimelineEvent } from '@/types/event'
+import type { EnrichableEvent } from '@/types/event'
 
 export interface CategoryDefinition {
   id: string
@@ -136,7 +136,7 @@ Return ONLY valid JSON: {"type": "<type>"}`
 export const ENRICH_SYSTEM_PROMPT = `You are writing a 1-2 paragraph description of a historical event for an educational timeline. Use the web_search tool to find authoritative sources before writing. Keep the description concise (max ~150 words for simple events, two short paragraphs for complex ones). Use a neutral encyclopedic tone. Do not include inline citations or footnotes — sources are listed separately. Do not invent facts that aren't in the search results.`
 
 export function buildEnrichUserPrompt(
-  event: TimelineEvent,
+  event: EnrichableEvent,
   timelineTitle: string,
 ): string {
   const lines: string[] = []
@@ -152,5 +152,63 @@ export function buildEnrichUserPrompt(
   lines.push(
     'Use the web_search tool to find sources, then write the description. Output only the description text — no headings, no source lists.',
   )
+  return lines.join('\n')
+}
+
+// ---------------------------------------------------------------------------
+// World Events — mirrors supabase/functions/world-events/index.ts
+// ---------------------------------------------------------------------------
+//
+// Context events for the lane under a timeline: what else was happening in a
+// country, the world, or science and technology across the timeline's span.
+// Like the enrich prompts, this pair is duplicated by hand in the edge
+// function rather than shared — keep the two identical.
+
+export type WorldEventsPromptSource = 'country' | 'world' | 'science'
+
+export const WORLD_EVENTS_SYSTEM_PROMPT = `You list well-documented historical events for an educational timeline's "World Events" lane, which shows what else was happening while the timeline's subject unfolded.
+
+HARD RULES:
+1. Only real, well-documented events. Never invent an event or a date. If you are unsure of a date, leave the event out.
+2. Every event must start and end within the requested year range.
+3. Titles: max 40 characters, specific and recognizable ("Fall of the Berlin Wall", not "Political change in Europe").
+4. DATE FORMAT — YYYY-MM-DD, AD years only. Year-only → January 1. A single-day event has endDate equal to startDate.
+5. Spread events across the whole range rather than clustering them. Prefer the most significant events first.
+6. JSON ONLY — no markdown, no code fences, no explanation. Reply with exactly one object:
+{"events":[{"title":"...","startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD"}]}`
+
+export interface WorldEventsPromptInput {
+  source: WorldEventsPromptSource
+  /** Display name of the country; only used when `source` is 'country'. */
+  countryName?: string
+  startYear: number
+  endYear: number
+  /** The timeline's subject — used for relevance ranking only. */
+  subject?: string
+  maxEvents: number
+}
+
+export function buildWorldEventsUserPrompt(input: WorldEventsPromptInput): string {
+  const lines: string[] = []
+  if (input.source === 'country') {
+    lines.push(
+      `List major events in the national history of ${input.countryName || 'the United States'}: politics, wars, laws, elections, disasters and social change.`,
+    )
+  } else if (input.source === 'world') {
+    lines.push(
+      'List major world events: wars, treaties, revolutions, pandemics and other global turning points.',
+    )
+  } else {
+    lines.push(
+      'List major science and technology milestones: inventions, discoveries, launches and breakthroughs.',
+    )
+  }
+  lines.push(`Year range: ${input.startYear} to ${input.endYear}.`)
+  lines.push(`Return at most ${input.maxEvents} events.`)
+  if (input.subject) {
+    lines.push(
+      `The timeline is about "${input.subject}". When choosing between events of similar importance, prefer ones a reader of that timeline would find relevant context — but do not include events about the subject itself.`,
+    )
+  }
   return lines.join('\n')
 }

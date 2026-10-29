@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { TimelineSettingsPanel } from '../Settings/TimelineSettingsPanel';
 import { EventTableEditor } from '../EventTableEditor/EventTableEditor';
 import { FloatingToolbar } from '../FloatingToolbar/FloatingToolbar';
+import type { WorldEventsControl } from '../FloatingToolbar/DockDesign';
 import { EventForm } from '../EventForm/EventForm';
 import { TimelineEvent, CategoryConfig } from '../../types/event';
 import {
@@ -29,8 +30,10 @@ interface HeaderProps {
   onVerticalScaleChange: (scale: 'small' | 'medium') => void;
   groupByCategory: boolean;
   onGroupByCategoryChange: (value: boolean) => void;
-  activePanel: 'events' | 'settings' | 'legend' | null;
-  onActivePanelChange: (panel: 'events' | 'settings' | 'legend' | null) => void;
+  /** The World Events lane's settings and fetch state, for the Design menu. */
+  worldEvents: WorldEventsControl;
+  activePanel: 'events' | 'settings' | 'legend' | 'design' | null;
+  onActivePanelChange: (panel: 'events' | 'settings' | 'legend' | 'design' | null) => void;
   showAddEventModal: boolean;
   onAddEventClick: () => void;
   onCloseAddEventModal: () => void;
@@ -62,6 +65,7 @@ export function Header({
   onVerticalScaleChange,
   groupByCategory,
   onGroupByCategoryChange,
+  worldEvents,
   activePanel,
   onActivePanelChange,
   showAddEventModal,
@@ -116,13 +120,21 @@ export function Header({
           categories: legendCategories,
           events: legendEvents,
           onCategoriesChange,
-          groupByCategory,
-          onGroupByCategoryChange,
           onEditCategories: openCategoriesEditor,
         }}
         // Radix reports closes (Escape, outside click) here; opening goes
         // through the same toggle as the other dock buttons.
         onLegendOpenChange={(open) => onActivePanelChange(open ? 'legend' : null)}
+        design={{
+          scale,
+          onScaleChange,
+          verticalScale,
+          onVerticalScaleChange,
+          groupByCategory,
+          onGroupByCategoryChange,
+          worldEvents,
+        }}
+        onDesignOpenChange={(open) => onActivePanelChange(open ? 'design' : null)}
       />
 
       <Dialog open={showAddEventModal} onOpenChange={(open) => { if (!open) onCloseAddEventModal(); }}>
@@ -146,13 +158,6 @@ export function Header({
         timelineTitle={title}
         onImportEvents={onImportEvents}
         categories={categories}
-        onCategoriesChange={onCategoriesChange}
-        scale={scale}
-        onScaleChange={onScaleChange}
-        verticalScale={verticalScale}
-        onVerticalScaleChange={onVerticalScaleChange}
-        groupByCategory={groupByCategory}
-        onGroupByCategoryChange={onGroupByCategoryChange}
         onDeleteTimeline={onDeleteTimeline}
       />
 
