@@ -166,16 +166,28 @@ export function buildEnrichUserPrompt(
 
 export type WorldEventsPromptSource = 'country' | 'world' | 'science'
 
-export const WORLD_EVENTS_SYSTEM_PROMPT = `You list well-documented historical events for an educational timeline's "World Events" lane, which shows what else was happening while the timeline's subject unfolded.
+export const WORLD_EVENTS_SYSTEM_PROMPT = `You choose context events for an educational timeline's "World Events" lane. The lane sits under one specific timeline and shows what else was happening that matters TO THAT TIMELINE. It is not a list of the period's most important history.
+
+WHAT MAKES THE CUT — an event qualifies only if one of these is true:
+A. It directly shaped or touched the timeline's subject: their life, work, field, industry, country, rivals or audience.
+B. It is an era-defining event that any reader would recognize as the backdrop of the period — a world war, a great depression, a pandemic, a revolution that remade the subject's country. B applies to world and country events only, never to science and technology.
+
+For science and technology, be strictest: include only developments in or next to the subject's own field, or ones the subject plausibly knew of, competed with, built on or was affected by.
+  BAD (Nikola Tesla timeline): "Insulin first used to treat diabetes" — important to the world, irrelevant to Tesla.
+  GOOD (Nikola Tesla timeline): "Edison opens Pearl Street Station" — his field, his rival.
+
+Fewer is better. Never pad a list to reach the maximum. Returning only one to three events, or none, is correct when that is all that qualifies.
 
 HARD RULES:
-1. Only real, well-documented events. Never invent an event or a date. If you are unsure of a date, leave the event out.
+1. Only real, well-documented events with a dedicated English Wikipedia article. Never invent an event or a date. If you are unsure of a date, leave the event out.
 2. Every event must start and end within the requested year range.
-3. Titles: max 40 characters, specific and recognizable ("Fall of the Berlin Wall", not "Political change in Europe").
-4. DATE FORMAT — YYYY-MM-DD, AD years only. Year-only → January 1. A single-day event has endDate equal to startDate.
-5. Spread events across the whole range rather than clustering them. Prefer the most significant events first.
-6. JSON ONLY — no markdown, no code fences, no explanation. Reply with exactly one object:
-{"events":[{"title":"...","startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD"}]}`
+3. Never include events about the subject itself — those belong in the timeline, not in this lane.
+4. Titles: max 40 characters, specific and recognizable ("Fall of the Berlin Wall", not "Political change in Europe").
+5. DATE FORMAT — YYYY-MM-DD, AD years only. Year-only → January 1. A single-day event has endDate equal to startDate.
+6. "wikipedia" is the exact title of the event's English Wikipedia article. Dates are checked against it, and an event whose article cannot be found is discarded.
+7. "why" is a short clause naming the connection to this timeline (rule A) or the era it defines (rule B).
+8. JSON ONLY — no markdown, no code fences, no explanation. Reply with exactly one object:
+{"events":[{"title":"...","startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","wikipedia":"...","why":"..."}]}`
 
 export interface WorldEventsPromptInput {
   source: WorldEventsPromptSource
@@ -183,8 +195,12 @@ export interface WorldEventsPromptInput {
   countryName?: string
   startYear: number
   endYear: number
-  /** The timeline's subject — used for relevance ranking only. */
+  /** The timeline's subject — what every pick is judged against. */
   subject?: string
+  /** The timeline's own description, when it has one. */
+  description?: string
+  /** A spread of the timeline's own events, as "YYYY · Title". */
+  highlights?: string[]
   maxEvents: number
 }
 
@@ -192,23 +208,25 @@ export function buildWorldEventsUserPrompt(input: WorldEventsPromptInput): strin
   const lines: string[] = []
   if (input.source === 'country') {
     lines.push(
-      `List major events in the national history of ${input.countryName || 'the United States'}: politics, wars, laws, elections, disasters and social change.`,
+      `Source: the national history of ${input.countryName || 'the United States'} — politics, wars, laws, elections, disasters and social change.`,
     )
   } else if (input.source === 'world') {
     lines.push(
-      'List major world events: wars, treaties, revolutions, pandemics and other global turning points.',
+      'Source: world events — wars, treaties, revolutions, pandemics and other global turning points.',
     )
   } else {
     lines.push(
-      'List major science and technology milestones: inventions, discoveries, launches and breakthroughs.',
+      'Source: science and technology — inventions, discoveries, launches and breakthroughs.',
     )
   }
   lines.push(`Year range: ${input.startYear} to ${input.endYear}.`)
-  lines.push(`Return at most ${input.maxEvents} events.`)
-  if (input.subject) {
-    lines.push(
-      `The timeline is about "${input.subject}". When choosing between events of similar importance, prefer ones a reader of that timeline would find relevant context — but do not include events about the subject itself.`,
-    )
+  lines.push(`Return at most ${input.maxEvents} events, and fewer if fewer qualify.`)
+  lines.push('')
+  lines.push(`The timeline is about: "${input.subject || 'an unnamed subject'}".`)
+  if (input.description) lines.push(`Its description: ${input.description}`)
+  if (input.highlights && input.highlights.length > 0) {
+    lines.push("Some of the timeline's own events, to show what it covers:")
+    for (const h of input.highlights) lines.push(`- ${h}`)
   }
   return lines.join('\n')
 }

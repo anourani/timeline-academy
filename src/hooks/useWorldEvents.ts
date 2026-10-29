@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fetchWorldEvents } from '@/services/worldEvents'
+import { fetchWorldEvents, type WorldEventsContext } from '@/services/worldEvents'
 import {
   getCachedWorldEvents,
   setCachedWorldEvents,
@@ -20,8 +20,11 @@ interface UseWorldEventsOptions {
   settings: WorldEventSettings
   /** The axis's year span. Null while there is nothing to draw yet. */
   range: TimelineYearRange | null
-  /** The timeline's subject — relevance ranking only, so never a refetch trigger. */
+  /** The timeline's subject, and what else it covers. Both decide what is
+   *  relevant, but neither is a refetch trigger: results are cached per
+   *  range and source, and a retitle or an edit shouldn't spend an AI call. */
   subject: string
+  context: WorldEventsContext
   /** True while a generation streams: the lane waits for the timeline to settle. */
   paused: boolean
   /** Signed in or holding a key. Without either there is nothing to call. */
@@ -50,6 +53,7 @@ export function useWorldEvents({
   settings,
   range,
   subject,
+  context,
   paused,
   aiAvailable,
 }: UseWorldEventsOptions): UseWorldEventsResult {
@@ -59,6 +63,8 @@ export function useWorldEvents({
 
   const subjectRef = useRef(subject)
   subjectRef.current = subject
+  const contextRef = useRef(context)
+  contextRef.current = context
 
   const active =
     settings.showWorldEvents && aiAvailable && !paused && !!timelineId && !!range
@@ -90,7 +96,10 @@ export function useWorldEvents({
         setResults((prev) => (prev[k] === cached ? prev : { ...prev, [k]: cached }))
         continue
       }
-      fetchWorldEvents({ ...req, subject: subjectRef.current }, controller.signal)
+      fetchWorldEvents(
+        { ...req, subject: subjectRef.current, context: contextRef.current },
+        controller.signal,
+      )
         .then((events) => {
           if (controller.signal.aborted) return
           setCachedWorldEvents(req, events)

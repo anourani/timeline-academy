@@ -15,6 +15,7 @@ import { computeDominantCategoryColor } from '../../utils/dominantCategory';
 import { getTimelineRange, getTimelineYearSpan } from '../../utils/dateUtils';
 import { useAccountTier } from '../../hooks/useAccountTier';
 import { useWorldEvents } from '../../hooks/useWorldEvents';
+import { buildWorldEventsContext } from '../../services/worldEvents';
 import {
   DEFAULT_WORLD_EVENT_SETTINGS,
   normalizeWorldEventSettings,
@@ -28,6 +29,7 @@ import {
 
 interface TimelineData {
   title: string;
+  description?: string;
   events: TimelineEvent[];
   categories: CategoryConfig[];
   chapters: TimelineChapter[];
@@ -125,6 +127,7 @@ export function TimelineViewer() {
 
         setTimeline({
           title: timelineData.title || 'Untitled Timeline',
+          description: timelineData.description || undefined,
           events: formattedEvents,
           categories: categories,
           // Present only once the chapters migration has been applied AND
@@ -173,11 +176,16 @@ export function TimelineViewer() {
     () => (viewerEvents.length > 0 ? getTimelineYearSpan(viewerEvents) : null),
     [viewerEvents],
   );
+  const worldEventsContext = useMemo(
+    () => buildWorldEventsContext(timeline?.description, viewerEvents),
+    [timeline, viewerEvents],
+  );
   const worldEventsLane = useWorldEvents({
     timelineId: timelineId ?? null,
     settings: timeline?.worldEvents ?? DEFAULT_WORLD_EVENT_SETTINGS,
     range: worldEventsSpan,
     subject: timeline?.title ?? '',
+    context: worldEventsContext,
     paused: false,
     aiAvailable: tier !== 'loading' && tier !== 'trial',
   });

@@ -3,6 +3,7 @@ import { fetchWorldEventsDirect } from './anthropicDirect'
 import { fetchWorldEventsOpenAIDirect } from './openaiDirect'
 import { stripCodeFence } from './llmShared'
 import { getActiveModel } from './userApiKey'
+import { verifyWorldEvents, type WorldEventCandidate } from './worldEventVerify'
 import { countryName } from '@/constants/countries'
 import type { WorldEventsPromptInput } from './llmPrompts'
 import type { WorldEvent, WorldEventSource } from '@/types/worldEvents'
@@ -16,22 +17,53 @@ export interface WorldEventsRequest {
   country: string
   startYear: number
   endYear: number
-  /** The timeline's subject, for relevance ranking only. */
+  /** The timeline's subject — every pick is judged against it. */
   subject?: string
+  /** What the timeline is about, beyond its title: see `buildWorldEventsContext`. */
+  context?: WorldEventsContext
+}
+
+export interface WorldEventsContext {
+  description?: string
+  /** A spread of the timeline's own events, as "YYYY · Title". */
+  highlights?: string[]
+}
+
+const MAX_HIGHLIGHTS = 20
+
+/**
+ * What the model needs to judge relevance: the timeline's description and up
+ * to twenty of its own events, evenly spaced through the timeline so a long
+ * one is represented end to end rather than by its first chapter.
+ */
+export function buildWorldEventsContext(
+  description: string | undefined,
+  events: Array<{ title: string; startDate: string }>,
+): WorldEventsContext {
+  const sorted = [...events].sort((a, b) => a.startDate.localeCompare(b.startDate))
+  const step = Math.max(1, sorted.length / MAX_HIGHLIGHTS)
+  const highlights: string[] = []
+  for (let i = 0; i < sorted.length && highlights.length < MAX_HIGHLIGHTS; i += step) {
+    const e = sorted[Math.floor(i)]
+    highlights.push(`${e.startDate.slice(0, 4)} · ${e.title}`.slice(0, 120))
+  }
+  return { description: description?.trim().slice(0, 300) || undefined, highlights }
 }
 
 /**
- * How many events one source may contribute: about five per decade of range,
- * so the lane stays readable at every span — never fewer than four, and
- * capped where a long range would otherwise drown the user's own events.
+ * The most events one source may contribute: about three per decade of range,
+ * never more than fifteen. A ceiling, not a target — the prompt tells the
+ * model to return fewer when fewer are relevant to this timeline.
  */
 export function maxEventsFor(startYear: number, endYear: number): number {
   const decades = Math.ceil((endYear - startYear + 1) / 10)
-  return Math.min(30, Math.max(4, decades * 5))
+  return Math.min(15, Math.max(3, decades * 3))
 }
 
 /**
- * Fetch one source's World Events for a year range.
+ * Fetch one source's World Events for a year range, with every date
+ * fact-checked against Wikipedia and Wikidata before it is returned (see
+ * worldEventVerify.ts).
  *
  * Routing matches event enrichment:
  *   - a BYOK key → the chosen model, browser-direct, on the user's key;
@@ -56,6 +88,8 @@ export async function fetchWorldEvents(
     startYear: req.startYear,
     endYear: req.endYear,
     subject: req.subject?.slice(0, 200),
+    description: req.context?.description,
+    highlights: req.context?.highlights,
     maxEvents,
   }
 
@@ -90,6 +124,8 @@ export async function fetchWorldEvents(
         startYear: req.startYear,
         endYear: req.endYear,
         subject: input.subject,
+        description: input.description,
+        highlights: input.highlights,
         maxEvents,
       }),
       signal,
@@ -107,28 +143,38 @@ export async function fetchWorldEvents(
     raw = json
   }
 
-  return parseWorldEvents(raw, req, maxEvents)
+  const candidates = parseWorldEvents(raw, req, maxEvents)
+  const verified = await verifyWorldEvents(candidates, signal)
+  return toWorldEvents(verified, req)
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
+function yearBounds(req: WorldEventsRequest): { min: string; max: string } {
+  return {
+    min: `${String(req.startYear).padStart(4, '0')}-01-01`,
+    max: `${String(req.endYear).padStart(4, '0')}-12-31`,
+  }
+}
 
 /**
  * Validate a reply line by line. Bad items are dropped rather than failing the
  * whole list — one malformed date shouldn't cost the user every other event —
  * but a reply with no `events` array at all is an error.
+ *
+ * These are only candidates: their dates are the model's until
+ * `verifyWorldEvents` has checked them.
  */
 export function parseWorldEvents(
   raw: unknown,
   req: WorldEventsRequest,
   maxEvents: number,
-): WorldEvent[] {
+): WorldEventCandidate[] {
   const list = (raw as { events?: unknown } | null)?.events
   if (!Array.isArray(list)) throw new Error('Unexpected world events response')
 
-  const min = `${String(req.startYear).padStart(4, '0')}-01-01`
-  const max = `${String(req.endYear).padStart(4, '0')}-12-31`
-  const seen = new Set<string>()
-  const out: WorldEvent[] = []
+  const { min, max } = yearBounds(req)
+  const out: WorldEventCandidate[] = []
 
   for (const item of list) {
     if (out.length >= maxEvents) break
@@ -139,19 +185,37 @@ export function parseWorldEvents(
     if (!title || !DATE_RE.test(startDate)) continue
     if (!DATE_RE.test(endDate)) endDate = startDate
     if (endDate < startDate) [startDate, endDate] = [endDate, startDate]
-    // Only what fits the timeline's existing span: the lane never widens the axis.
     if (startDate < min || endDate > max) continue
+    const wikipedia = typeof obj?.wikipedia === 'string' ? obj.wikipedia.trim().slice(0, 250) : ''
+    out.push({ title, startDate, endDate, ...(wikipedia ? { wikipedia } : {}) })
+  }
+  return out
+}
 
+/**
+ * Checked events into lane entries. The range is enforced again here because
+ * a corrected date can move an event out of it — and the lane never widens
+ * the axis.
+ */
+function toWorldEvents(
+  verified: Array<{ title: string; startDate: string; endDate: string }>,
+  req: WorldEventsRequest,
+): WorldEvent[] {
+  const { min, max } = yearBounds(req)
+  const seen = new Set<string>()
+  const out: WorldEvent[] = []
+  for (const v of verified) {
+    if (v.startDate < min || v.endDate > max) continue
     // The country is part of the id, so two countries' lists never share one.
     const scope = req.source === 'country' ? `country-${req.country}` : req.source
-    const id = `we:${scope}:${hash(`${title}|${startDate}`)}`
+    const id = `we:${scope}:${hash(`${v.title}|${v.startDate}`)}`
     if (seen.has(id)) continue
     seen.add(id)
     out.push({
       id,
-      title,
-      startDate,
-      endDate,
+      title: v.title,
+      startDate: v.startDate,
+      endDate: v.endDate,
       source: req.source,
       ...(req.source === 'country' ? { country: req.country } : {}),
     })

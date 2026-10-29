@@ -97,6 +97,9 @@ interface TimelineProps {
 const WORLD_EVENT_BAR = '#6D7073';
 const WORLD_EVENT_FILL = 'rgba(155,158,163,0.12)';
 const WORLD_EVENT_TITLE = '#9B9EA3';
+/** The lane's tint — carried on through the empty grid below it, so the
+ *  context area reads as one region down to the bottom of the canvas. */
+const WORLD_EVENT_LANE_BG = 'rgba(255,255,255,0.015)';
 const WORLD_EVENT_TAGS: Record<Exclude<WorldEventSource, 'country'>, string> = {
   world: 'WORLD',
   science: 'SCI·TECH',
@@ -762,7 +765,7 @@ export function Timeline({
                   className="relative shrink-0"
                   style={{
                     height: worldLane.height,
-                    backgroundColor: 'rgba(255,255,255,0.015)',
+                    backgroundColor: WORLD_EVENT_LANE_BG,
                     display: 'grid',
                     gridTemplateColumns: `repeat(${months.length * 4}, ${scale.quarterWidth}px)`,
                     ['--event-row-height' as string]: `${rowHeight}px`,
@@ -824,7 +827,10 @@ export function Timeline({
               {/* Filler: extends the body through remaining vertical space.
                   flex-1 lets it fill the scroll container when events are short,
                   and the whole grid scrolls vertically when they aren't. */}
-              <div className="relative flex-1 min-h-0">
+              <div
+                className="relative flex-1 min-h-0"
+                style={{ backgroundColor: worldLane ? WORLD_EVENT_LANE_BG : undefined }}
+              >
                 <TimelineGrid
                   months={months}
                   onMonthHover={setHoveredMonth}

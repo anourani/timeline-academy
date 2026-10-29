@@ -189,8 +189,15 @@ export const TimelineEvent = memo(function TimelineEvent({
   // The arrival, in four staggered legs. Inline because three of them need
   // per-event values (the glow colour, and whether there is a fill to wipe);
   // the keyframes themselves live in index.css.
-  const reveal = (name: string, ms: number, ease: string, delay: number) =>
-    revealOnMount ? { animation: `${name} ${ms}ms var(${ease}) ${delay}ms both` } : undefined;
+  //
+  // `fill` is `both` for the legs whose end frame is just their resting state,
+  // and `backwards` for the span's wipe: that one animates `clip-path`, and
+  // holding its last frame (`inset(0)`) would keep clipping the box — cutting
+  // off any title wider than the event's dates, and the World Events source
+  // tag after it. `backwards` still hides the span through its delay, then
+  // lets the clip go entirely once the wipe is done.
+  const reveal = (name: string, ms: number, ease: string, delay: number, fill: 'both' | 'backwards' = 'both') =>
+    revealOnMount ? { animation: `${name} ${ms}ms var(${ease}) ${delay}ms ${fill}` } : undefined;
 
   const eventContent = (
     <div
@@ -204,7 +211,7 @@ export const TimelineEvent = memo(function TimelineEvent({
         // open — clipping an empty box would just delay the bar behind it.
         ...(isSingleDay
           ? undefined
-          : reveal('timeline-event-fill-in', 550, '--ease-enter', 50)),
+          : reveal('timeline-event-fill-in', 550, '--ease-enter', 50, 'backwards')),
       }}
     >
       <div

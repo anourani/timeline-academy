@@ -10,7 +10,15 @@
 
 import type { WorldEvent, WorldEventSource } from '@/types/worldEvents'
 
-const PREFIX = 'timeline_world_events_'
+/** Every entry, any version — what eviction and sign-out sweep. */
+const BASE_PREFIX = 'timeline_world_events_'
+/**
+ * What reads and writes use. Bumped whenever the selection or the checking
+ * changes, so stricter answers replace older ones instead of being masked by
+ * them. Older versions are never read again and age out through eviction.
+ *   v2: relevance-first prompt, dates fact-checked against Wikipedia/Wikidata.
+ */
+const PREFIX = `${BASE_PREFIX}v2_`
 
 // Each entry is one source's list (≤ 30 events), so this bounds the cache to
 // a few hundred kilobytes.
@@ -40,7 +48,7 @@ function allCacheKeys(): string[] {
   try {
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i)
-      if (k && k.startsWith(PREFIX)) keys.push(k)
+      if (k && k.startsWith(BASE_PREFIX)) keys.push(k)
     }
   } catch {
     // ignore

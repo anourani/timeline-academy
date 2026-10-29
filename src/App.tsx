@@ -8,6 +8,7 @@ import { ensureSomeVisible } from './hooks/useCategories';
 import { useTimeline, markTimelineAiGenerated, saveWorldEventSettings, type TimelineData } from './hooks/useTimeline';
 import { DEFAULT_WORLD_EVENT_SETTINGS, isWorldEventId, type WorldEvent, type WorldEventSettings } from './types/worldEvents';
 import { useWorldEvents } from './hooks/useWorldEvents';
+import { buildWorldEventsContext } from './services/worldEvents';
 import { useAuth } from './hooks/useAuth';
 import { useAutosave } from './hooks/useAutosave';
 import { useSidePanel } from './hooks/useSidePanel';
@@ -281,11 +282,18 @@ export function App() {
     () => (events.length > 0 ? getTimelineYearSpan(events, rangeOverride ?? undefined) : null),
     [events, rangeOverride],
   );
+  // What the timeline covers, so the picks are judged against it rather than
+  // against history at large.
+  const worldEventsContext = useMemo(
+    () => buildWorldEventsContext(description, events),
+    [description, events],
+  );
   const worldEventsLane = useWorldEvents({
     timelineId: user ? loadedTimelineId : activeDraftId,
     settings: worldEvents,
     range: worldEventsSpan,
     subject: title,
+    context: worldEventsContext,
     paused: isStreaming,
     aiAvailable: worldEventsAiAvailable,
   });

@@ -446,7 +446,23 @@ height   = stackedEvents.length === 0
 
 A read-only lane of context events drawn after every band, in either grouping mode. It is switched on from the dock's Design menu (`FloatingToolbar/DockDesign.tsx`), which picks its sources: Country, World events, Science & tech.
 
-**Data.** `useWorldEvents` (`hooks/useWorldEvents.ts`) fetches one list per enabled source through `services/worldEvents.ts`. The service runs browser-direct on a BYOK key, otherwise through the `world-events` Edge Function. The request covers the axis's own year span (`getTimelineYearSpan`), and results are cached in localStorage per (timeline, source, country, range) by `services/worldEventCache.ts`. Nothing fetches while a generation streams.
+**Data.** `useWorldEvents` (`hooks/useWorldEvents.ts`) fetches one list per enabled source through `services/worldEvents.ts`. The service runs browser-direct on a BYOK key, otherwise through the `world-events` Edge Function.
+- The request covers the axis's own year span (`getTimelineYearSpan`).
+- Nothing fetches while a generation streams.
+- Results are cached in localStorage per (timeline, source, country, range) by `services/worldEventCache.ts`. The cache key is versioned, so changing the prompt or the check never serves stale picks.
+
+**Selection.** Picks are relevance-first. The request carries the timeline's title, description and up to 20 of its own events (`buildWorldEventsContext`). The prompt admits an event only if:
+- it touched the subject or their field, or
+- it is era-defining backdrop (world and country sources only).
+
+"Fewer is better" is explicit, and the per-source ceiling is 3 per decade, at most 15.
+
+**Fact-check.** `services/worldEventVerify.ts` checks every candidate's dates before it is shown:
+- The model names the event's Wikipedia article.
+- Wikidata dates (point in time, start/end, discovery, launch, inception…) replace the model's.
+- With no structured date, the event survives only if its year appears in the article's intro.
+- Anything unverifiable is dropped.
+- A failed lookup puts the lane in its error state rather than showing unchecked dates.
 
 **Kept apart from `events`.** The lane's events arrive on their own props (`worldEvents`, `worldEventsStatus`, `onOpenWorldEventDetails`). They never enter `events`, so they never reach `visibleEvents`, the month range, counts, legends, export or autosave. `Timeline` also drops any entry outside the drawn months, so **the lane never widens the axis**.
 
@@ -454,9 +470,10 @@ A read-only lane of context events drawn after every band, in either grouping mo
 
 **Styling:**
 - The band above the lane gets a dashed bottom border.
-- The lane's background is `rgba(255,255,255,0.015)`.
+- The lane's background is `rgba(255,255,255,0.015)`, continued through the filler grid below it, so the whole context area reads as one region to the bottom of the canvas.
 - The WORLD EVENTS pill reuses the category-label styling in a neutral tint. It sits at `HEADER_HEIGHT + layout.totalHeight`.
 - Events use `TimelineEvent`'s `rangeFill`, `titleColor` and `tag` props in a neutral palette, with a source tag of `WORLD`, `SCI·TECH` or the country code.
+- They always play the reveal. The span's `clip-path` wipe runs with fill-mode `backwards`, not `both`, so the clip is released when it ends. Holding its last frame would cut off any title, and its tag, that is wider than the event's dates.
 
 **States.**
 - `'loading'`: the `StreamingSkeleton` bars show, riding a sticky, viewport-wide strip so they stay in view at any scroll.
