@@ -99,7 +99,13 @@ const WORLD_EVENT_TITLE = '#9B9EA3';
  *  context area reads as one region down to the bottom of the canvas. */
 const WORLD_EVENT_LANE_BG = 'rgba(255,255,255,0.015)';
 /** How long the lane takes to rise into place when it appears. */
-const WORLD_LANE_RISE_MS = 600;
+const WORLD_LANE_RISE_MS = 400;
+/**
+ * Ease-in-out: a gentle start, quick through the middle, a soft landing in
+ * its slot. Same values as `--ease-swipe` in index.css — a Web Animation's
+ * `easing` can't read a CSS custom property, so they're spelled out here.
+ */
+const WORLD_LANE_RISE_EASING = 'cubic-bezier(0.76, 0, 0.24, 1)';
 /** Room the stacker reserves for the source tag: a 6px gap plus five 10px
  *  JetBrains Mono capitals ("WORLD"). */
 const WORLD_EVENT_TAG_PX = 44;
@@ -469,7 +475,7 @@ export function Timeline({
               { opacity: 1, offset: 0.25 },
               { transform: 'translateY(0)', opacity: 1 },
             ],
-            { duration: WORLD_LANE_RISE_MS, easing: 'cubic-bezier(0.33, 1, 0.68, 1)' },
+            { duration: WORLD_LANE_RISE_MS, easing: WORLD_LANE_RISE_EASING },
           ),
     );
     return () => animations.forEach((a) => a.cancel());

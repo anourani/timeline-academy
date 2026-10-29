@@ -429,7 +429,7 @@ A read-only lane of context events drawn below the event band. It is switched on
 - Events use `TimelineEvent`'s `rangeFill`, `titleColor` and `tag` props in a neutral palette, with a source tag of `WORLD` or the country code.
 - They always play the reveal. The span's `clip-path` wipe runs with fill-mode `backwards`, not `both`, so the clip is released when it ends. Holding its last frame would cut off any title, and its tag, that is wider than the event's dates.
 
-**Entrance.** Whenever the lane appears (switched on, or once a timeline settles), it rises from the bottom edge of the viewport as **one unit**: the lane with its dashed seam, its pill, and the tinted filler below it. All three play the identical animation from the identical offset: 600ms on the `--ease-enter` curve, with the fade finished in the first quarter.
+**Entrance.** Whenever the lane appears (switched on, or once a timeline settles), it rises from the bottom edge of the viewport as **one unit**: the lane with its dashed seam, its pill, and the tinted filler below it. All three play the identical animation from the identical offset: 400ms, ease-in-out (`--ease-swipe`, a gentle start and a soft landing), with the fade finished in the first quarter.
 - Anything left out of the unit reads as a separate step, such as a seam or tint already in place while the lane is still travelling. That is why the seam is the lane's own `border-top`, not a border on the band above.
 - It uses the Web Animations API from a layout effect, because the travel distance is measured from where the lane actually lands.
 - Reduced motion gets a 150ms fade instead.
