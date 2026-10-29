@@ -477,6 +477,11 @@ A read-only lane of context events drawn after every band, in either grouping mo
 - Events use `TimelineEvent`'s `rangeFill`, `titleColor` and `tag` props in a neutral palette, with a source tag of `WORLD` or the country code.
 - They always play the reveal. The span's `clip-path` wipe runs with fill-mode `backwards`, not `both`, so the clip is released when it ends. Holding its last frame would cut off any title, and its tag, that is wider than the event's dates.
 
+**Entrance.** Whenever the lane appears (switched on, or once a timeline settles), it and its pill rise into place from the bottom edge of the viewport over 600ms (`--ease-enter` curve), fading up as they go. Meanwhile the filler's tint fades in behind them.
+- It uses the Web Animations API from a layout effect, because the travel distance is measured from where the lane actually lands.
+- Reduced motion gets a 150ms fade instead.
+- Leaving is instant.
+
 **States.**
 - `'loading'`: the `StreamingSkeleton` bars show, riding a sticky, viewport-wide strip so they stay in view at any scroll.
 - `'error'`: the lane is hidden, and the Design menu's subtitle explains and offers a retry.
