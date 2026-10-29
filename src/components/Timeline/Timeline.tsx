@@ -431,8 +431,16 @@ export function Timeline({
   /**
    * The lane rises into place from the bottom edge of the screen whenever it
    * appears — switched on, or arriving once a timeline settles — rather than
-   * popping in. Its label lives outside the scrolling canvas, so both nodes
-   * play the same animation.
+   * popping in.
+   *
+   * It moves as ONE unit: the lane (which draws its own dashed seam along its
+   * top edge), its label (outside the scrolling canvas, so animated
+   * separately) and the tinted filler below it all play the identical
+   * animation from the identical offset. Anything left out reads as a
+   * separate step — a seam or a tint already in place while the lane is
+   * still on its way. The fade completes early in the travel, so the unit is
+   * fully visible the moment it comes into view rather than appearing to
+   * arrive late.
    *
    * Web Animations rather than a CSS keyframe, because the distance is the
    * gap between the lane's resting place and the bottom of the viewport,
@@ -442,12 +450,14 @@ export function Timeline({
    */
   const worldLaneRef = useRef<HTMLDivElement>(null);
   const worldLaneLabelRef = useRef<HTMLDivElement>(null);
+  const worldLaneFillerRef = useRef<HTMLDivElement>(null);
   const worldLaneShown = worldLane !== null;
   useLayoutEffect(() => {
     if (!worldLaneShown) return;
     const lane = worldLaneRef.current;
     if (!lane || typeof lane.animate !== 'function') return;
-    const nodes = [lane, worldLaneLabelRef.current].filter((n): n is HTMLDivElement => n !== null);
+    const nodes = [lane, worldLaneLabelRef.current, worldLaneFillerRef.current]
+      .filter((n): n is HTMLDivElement => n !== null);
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     const distance = Math.max(0, window.innerHeight - lane.getBoundingClientRect().top);
     const animations = nodes.map((node) =>
@@ -456,6 +466,7 @@ export function Timeline({
         : node.animate(
             [
               { transform: `translateY(${distance}px)`, opacity: 0 },
+              { opacity: 1, offset: 0.25 },
               { transform: 'translateY(0)', opacity: 1 },
             ],
             { duration: WORLD_LANE_RISE_MS, easing: 'cubic-bezier(0.33, 1, 0.68, 1)' },
@@ -695,10 +706,6 @@ export function Timeline({
                 className="relative shrink-0"
                 style={{
                   height: layout.height,
-                  // The seam above the World Events lane: dashed, so it
-                  // reads as "below here is context" rather than more of
-                  // the timeline. Drawn inside the band's height (border-box).
-                  borderBottom: worldLane ? '1px dashed #262626' : undefined,
                   display: 'grid',
                   gridTemplateColumns: `repeat(${months.length * 4}, ${scale.quarterWidth}px)`,
                   ['--event-row-height' as string]: `${rowHeight}px`,
@@ -744,6 +751,11 @@ export function Timeline({
                   style={{
                     height: worldLane.height,
                     backgroundColor: WORLD_EVENT_LANE_BG,
+                    // The seam: dashed, so it reads as "below here is
+                    // context" rather than more of the timeline. On the
+                    // lane's own top edge (inside its height, border-box) so
+                    // it travels with the lane instead of waiting for it.
+                    borderTop: '1px dashed #262626',
                     display: 'grid',
                     gridTemplateColumns: `repeat(${months.length * 4}, ${scale.quarterWidth}px)`,
                     ['--event-row-height' as string]: `${rowHeight}px`,
@@ -805,13 +817,11 @@ export function Timeline({
                   flex-1 lets it fill the scroll container when events are short,
                   and the whole grid scrolls vertically when they aren't. */}
               <div
+                ref={worldLaneFillerRef}
                 className="relative flex-1 min-h-0"
-                // The tint fades in as the lane rises above it, rather than
-                // the empty grid turning grey before the lane gets there.
-                style={{
-                  backgroundColor: worldLane ? WORLD_EVENT_LANE_BG : 'transparent',
-                  transition: `background-color ${WORLD_LANE_RISE_MS}ms var(--ease-enter)`,
-                }}
+                // Tinted while the lane shows, and rises with it as part of
+                // the same unit (see the lane's entrance above).
+                style={{ backgroundColor: worldLane ? WORLD_EVENT_LANE_BG : undefined }}
               >
                 <TimelineGrid
                   months={months}
