@@ -47,7 +47,6 @@ export interface DockDesignProps {
 const SOURCE_LABELS: Record<WorldEventSource, string> = {
   country: 'Country',
   world: 'World events',
-  science: 'Science & tech',
 }
 
 /**

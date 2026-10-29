@@ -444,7 +444,7 @@ height   = stackedEvents.length === 0
 
 ## World Events Lane
 
-A read-only lane of context events drawn after every band, in either grouping mode. It is switched on from the dock's Design menu (`FloatingToolbar/DockDesign.tsx`), which picks its sources: Country, World events, Science & tech.
+A read-only lane of context events drawn after every band, in either grouping mode. It is switched on from the dock's Design menu (`FloatingToolbar/DockDesign.tsx`), which picks its sources: Country and World events. World is limited to events of international scope, so a national event belongs to its country.
 
 **Data.** `useWorldEvents` (`hooks/useWorldEvents.ts`) fetches one list per enabled source through `services/worldEvents.ts`. The service runs browser-direct on a BYOK key, otherwise through the `world-events` Edge Function.
 - The request covers the axis's own year span (`getTimelineYearSpan`).
@@ -464,6 +464,8 @@ A read-only lane of context events drawn after every band, in either grouping mo
 - Anything unverifiable is dropped.
 - A failed lookup puts the lane in its error state rather than showing unchecked dates.
 
+**One entry per event.** The sources are fetched separately and often pick the same event, usually under different titles. `dedupeWorldEvents` keeps the first entry per Wikipedia article, falling back to title plus start date. Lists are merged in source order, so the country entry, with its more specific tag, wins.
+
 **Kept apart from `events`.** The lane's events arrive on their own props (`worldEvents`, `worldEventsStatus`, `onOpenWorldEventDetails`). They never enter `events`, so they never reach `visibleEvents`, the month range, counts, legends, export or autosave. `Timeline` also drops any entry outside the drawn months, so **the lane never widens the axis**.
 
 **Layout.** The lane's events are stacked with the same `calculateEventStacks` pass as the bands. Its `extraTitlePx` argument reserves room for the source tag after each title. Height follows the grouped-band rule: `max((maxStack + 1) * rowHeight + CATEGORY_PADDING, CATEGORY_MIN_HEIGHT)`.
@@ -472,7 +474,7 @@ A read-only lane of context events drawn after every band, in either grouping mo
 - The band above the lane gets a dashed bottom border.
 - The lane's background is `rgba(255,255,255,0.015)`, continued through the filler grid below it, so the whole context area reads as one region to the bottom of the canvas.
 - The WORLD EVENTS pill reuses the category-label styling in a neutral tint. It sits at `HEADER_HEIGHT + layout.totalHeight`.
-- Events use `TimelineEvent`'s `rangeFill`, `titleColor` and `tag` props in a neutral palette, with a source tag of `WORLD`, `SCI·TECH` or the country code.
+- Events use `TimelineEvent`'s `rangeFill`, `titleColor` and `tag` props in a neutral palette, with a source tag of `WORLD` or the country code.
 - They always play the reveal. The span's `clip-path` wipe runs with fill-mode `backwards`, not `both`, so the clip is released when it ends. Holding its last frame would cut off any title, and its tag, that is wider than the event's dates.
 
 **States.**

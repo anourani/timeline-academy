@@ -1,11 +1,10 @@
 // World Events: context events for the read-only lane under a timeline.
 //
-// Lists what else was happening — in one country's national history, in the
-// world at large, or in science and technology — across the timeline's year
-// range. Plain JSON in, plain JSON out (no streaming): the reply is a short,
+// Lists what else was happening — in one country's national history, or in
+// the world at large — across the timeline's year range. Plain JSON in, plain JSON out (no streaming): the reply is a short,
 // bounded list the client renders all at once.
 //
-// Request:  { source: 'country'|'world'|'science', country?: string,
+// Request:  { source: 'country'|'world', country?: string,
 //             startYear: number, endYear: number, subject?: string,
 //             description?: string, highlights?: string[], maxEvents?: number }
 // Response: { events: [{ title, startDate, endDate, wikipedia? }] }
@@ -19,9 +18,9 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeadersFor } from "../_shared/cors.ts";
 import { checkRateLimit, recordUsage } from "../_shared/rate-limiter.ts";
 
-type WorldEventsSource = "country" | "world" | "science";
+type WorldEventsSource = "country" | "world";
 
-const SOURCES: readonly WorldEventsSource[] = ["country", "world", "science"];
+const SOURCES: readonly WorldEventsSource[] = ["country", "world"];
 
 interface WorldEventsRequest {
   source?: unknown;
@@ -72,17 +71,17 @@ const GENERIC_ERROR = "Couldn't load world events.";
 // copies diff cleanly against each other.
 // ---------------------------------------------------------------------------
 
-type WorldEventsPromptSource = 'country' | 'world' | 'science'
+type WorldEventsPromptSource = 'country' | 'world'
 
 const WORLD_EVENTS_SYSTEM_PROMPT = `You choose context events for an educational timeline's "World Events" lane. The lane sits under one specific timeline and shows what else was happening that matters TO THAT TIMELINE. It is not a list of the period's most important history.
 
 WHAT MAKES THE CUT — an event qualifies only if one of these is true:
 A. It directly shaped or touched the timeline's subject: their life, work, field, industry, country, rivals or audience.
-B. It is an era-defining event that any reader would recognize as the backdrop of the period — a world war, a great depression, a pandemic, a revolution that remade the subject's country. B applies to world and country events only, never to science and technology.
+B. It is an era-defining event that any reader would recognize as the backdrop of the period — a world war, a great depression, a pandemic, a revolution that remade the subject's country.
 
-For science and technology, be strictest: include only developments in or next to the subject's own field, or ones the subject plausibly knew of, competed with, built on or was affected by.
-  BAD (Nikola Tesla timeline): "Insulin first used to treat diabetes" — important to the world, irrelevant to Tesla.
-  GOOD (Nikola Tesla timeline): "Edison opens Pearl Street Station" — his field, his rival.
+Importance to history is not enough on its own.
+  BAD (Nikola Tesla timeline): "Boxer Rebellion" — a major event of his lifetime, but it never touched him or his work.
+  GOOD (Nikola Tesla timeline): "Panic of 1893" — it dried up the financing his work depended on.
 
 Fewer is better. Never pad a list to reach the maximum. Returning only one to three events, or none, is correct when that is all that qualifies.
 
@@ -118,13 +117,9 @@ function buildWorldEventsUserPrompt(input: WorldEventsPromptInput): string {
     lines.push(
       `Source: the national history of ${input.countryName || 'the United States'} — politics, wars, laws, elections, disasters and social change.`,
     )
-  } else if (input.source === 'world') {
-    lines.push(
-      'Source: world events — wars, treaties, revolutions, pandemics and other global turning points.',
-    )
   } else {
     lines.push(
-      'Source: science and technology — inventions, discoveries, launches and breakthroughs.',
+      'Source: world events — wars, treaties, revolutions, pandemics and other turning points of international scope. Leave out events confined to a single country; those belong to that country\'s own history.',
     )
   }
   lines.push(`Year range: ${input.startYear} to ${input.endYear}.`)

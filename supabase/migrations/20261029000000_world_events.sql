@@ -3,12 +3,12 @@
 
   The World Events lane sits under a timeline and shows, read-only, what else
   was happening across the timeline's year range — in one country's national
-  history, in the world, or in science and technology. The events themselves
+  history, or in the world. The events themselves
   are fetched on demand (the `world-events` Edge Function, or browser-direct
   for BYOK) and never stored. Only the timeline's settings are:
 
     - `show_world_events`    — whether the lane is on (off by default)
-    - `world_event_sources`  — which of country / world / science to show
+    - `world_event_sources`  — which of country / world to show
     - `world_event_country`  — ISO 3166-1 alpha-2 code for the country source
 
   APPLY BY HAND in the Supabase SQL editor, like every migration here —
@@ -50,6 +50,17 @@ alter table public.timelines
 alter table public.timelines
   add column if not exists world_event_country text not null default 'US';
 
+-- An early draft of this file also allowed 'science' (Science & tech, since
+-- removed). If that draft was ever applied, strip the value before the
+-- stricter check goes on, falling back to the column default rather than
+-- leaving an empty list. A no-op otherwise.
+update public.timelines
+  set world_event_sources = coalesce(
+    nullif(array_remove(world_event_sources, 'science'), '{}'::text[]),
+    '{world}'::text[]
+  )
+  where 'science' = any(world_event_sources);
+
 -- Constraints are dropped and re-added so a re-run (or a corrected rule)
 -- always leaves exactly one current definition.
 alter table public.timelines
@@ -59,7 +70,7 @@ alter table public.timelines
   add constraint timelines_world_event_sources_check
   check (
     cardinality(world_event_sources) > 0
-    and world_event_sources <@ array['country', 'world', 'science']::text[]
+    and world_event_sources <@ array['country', 'world']::text[]
   );
 
 alter table public.timelines

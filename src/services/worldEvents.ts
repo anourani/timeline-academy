@@ -3,7 +3,11 @@ import { fetchWorldEventsDirect } from './anthropicDirect'
 import { fetchWorldEventsOpenAIDirect } from './openaiDirect'
 import { stripCodeFence } from './llmShared'
 import { getActiveModel } from './userApiKey'
-import { verifyWorldEvents, type WorldEventCandidate } from './worldEventVerify'
+import {
+  verifyWorldEvents,
+  type VerifiedWorldEvent,
+  type WorldEventCandidate,
+} from './worldEventVerify'
 import { countryName } from '@/constants/countries'
 import type { WorldEventsPromptInput } from './llmPrompts'
 import type { WorldEvent, WorldEventSource } from '@/types/worldEvents'
@@ -197,30 +201,48 @@ export function parseWorldEvents(
  * a corrected date can move an event out of it — and the lane never widens
  * the axis.
  */
-function toWorldEvents(
-  verified: Array<{ title: string; startDate: string; endDate: string }>,
-  req: WorldEventsRequest,
-): WorldEvent[] {
+function toWorldEvents(verified: VerifiedWorldEvent[], req: WorldEventsRequest): WorldEvent[] {
   const { min, max } = yearBounds(req)
-  const seen = new Set<string>()
   const out: WorldEvent[] = []
   for (const v of verified) {
     if (v.startDate < min || v.endDate > max) continue
     // The country is part of the id, so two countries' lists never share one.
     const scope = req.source === 'country' ? `country-${req.country}` : req.source
-    const id = `we:${scope}:${hash(`${v.title}|${v.startDate}`)}`
-    if (seen.has(id)) continue
-    seen.add(id)
     out.push({
-      id,
+      id: `we:${scope}:${hash(`${v.title}|${v.startDate}`)}`,
       title: v.title,
       startDate: v.startDate,
       endDate: v.endDate,
       source: req.source,
+      article: v.article,
       ...(req.source === 'country' ? { country: req.country } : {}),
     })
   }
-  return out
+  return dedupeWorldEvents(out)
+}
+
+/**
+ * One entry per real-world event, first one wins.
+ *
+ * Two sources often pick the same event — a national crisis is also world
+ * news — and the model titles it differently each time ("World's Columbian
+ * Exposition" / "… opens"). Every entry has been matched to a Wikipedia
+ * article by now, so the article is the identity; title and start date are
+ * the fallback for entries cached before articles were recorded. Callers pass
+ * lists in source order (country first), so the more specific tag survives.
+ */
+export function dedupeWorldEvents(events: WorldEvent[]): WorldEvent[] {
+  const seen = new Set<string>()
+  return events.filter((e) => {
+    const keys = [
+      `id:${e.id}`,
+      ...(e.article ? [`article:${e.article.title.toLowerCase()}`] : []),
+      `title:${e.title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()}|${e.startDate}`,
+    ]
+    if (keys.some((k) => seen.has(k))) return false
+    keys.forEach((k) => seen.add(k))
+    return true
+  })
 }
 
 /** A short stable hash, so an event keeps its id (and cached description) across refetches. */

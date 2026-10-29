@@ -4,9 +4,9 @@ import type { TimelineEvent } from '@/types/event'
  * Where a World Events entry comes from. Order matters: it is the order the
  * Design menu's chips render in and the order the lane merges sources.
  */
-export type WorldEventSource = 'country' | 'world' | 'science'
+export type WorldEventSource = 'country' | 'world'
 
-export const WORLD_EVENT_SOURCES: readonly WorldEventSource[] = ['country', 'world', 'science']
+export const WORLD_EVENT_SOURCES: readonly WorldEventSource[] = ['country', 'world']
 
 /** The per-timeline settings behind the World Events lane. */
 export interface WorldEventSettings {
@@ -34,6 +34,11 @@ export type WorldEvent = Omit<TimelineEvent, 'category'> & {
   source: WorldEventSource
   /** ISO alpha-2, on country-source entries only — it is their lane tag. */
   country?: string
+  /**
+   * The Wikipedia article the dates were checked against. Also how the lane
+   * spots the same event arriving from two sources under different titles.
+   */
+  article?: { title: string; url: string }
 }
 
 export type WorldEventsStatus = 'idle' | 'loading' | 'ready' | 'error'

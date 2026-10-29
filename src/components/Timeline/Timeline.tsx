@@ -7,7 +7,7 @@ import { TimelineCategoryLabels } from './TimelineCategoryLabels';
 import { TimelineEvent } from './TimelineEvent';
 import { EventHoverCursor, EventHoverCursorHandle } from './EventHoverCursor';
 import { TimelineEvent as ITimelineEvent, CategoryConfig } from '../../types/event';
-import type { WorldEvent, WorldEventSource, WorldEventsStatus } from '../../types/worldEvents';
+import type { WorldEvent, WorldEventsStatus } from '../../types/worldEvents';
 import { ScrollTarget, TimelineScale, TimelineVerticalScale } from '../../types/timeline';
 import { useRevealQueue } from '../../hooks/useRevealQueue';
 import { findMonthIndex, formatYMD, getTimelineRange, shiftEventDates } from '../../utils/dateUtils';
@@ -100,16 +100,12 @@ const WORLD_EVENT_TITLE = '#9B9EA3';
 /** The lane's tint — carried on through the empty grid below it, so the
  *  context area reads as one region down to the bottom of the canvas. */
 const WORLD_EVENT_LANE_BG = 'rgba(255,255,255,0.015)';
-const WORLD_EVENT_TAGS: Record<Exclude<WorldEventSource, 'country'>, string> = {
-  world: 'WORLD',
-  science: 'SCI·TECH',
-};
-/** Room the stacker reserves for the source tag: a 6px gap plus up to eight
- *  10px JetBrains Mono capitals ("SCI·TECH"). */
-const WORLD_EVENT_TAG_PX = 60;
+/** Room the stacker reserves for the source tag: a 6px gap plus five 10px
+ *  JetBrains Mono capitals ("WORLD"). */
+const WORLD_EVENT_TAG_PX = 44;
 
 function worldEventTag(event: WorldEvent): string {
-  return event.source === 'country' ? event.country ?? '' : WORLD_EVENT_TAGS[event.source];
+  return event.source === 'country' ? event.country ?? '' : 'WORLD';
 }
 
 interface CategoryBand {

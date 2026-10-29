@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fetchWorldEvents, type WorldEventsContext } from '@/services/worldEvents'
+import {
+  dedupeWorldEvents,
+  fetchWorldEvents,
+  type WorldEventsContext,
+} from '@/services/worldEvents'
 import {
   getCachedWorldEvents,
   setCachedWorldEvents,
@@ -122,7 +126,11 @@ export function useWorldEvents({
   }, [requests, retryNonce])
 
   const keys = useMemo(() => requests.map(keyString), [requests])
-  const events = useMemo(() => keys.flatMap((k) => results[k] ?? []), [keys, results])
+  // Sources are fetched apart and often agree; the lane shows each event once.
+  const events = useMemo(
+    () => dedupeWorldEvents(keys.flatMap((k) => results[k] ?? [])),
+    [keys, results],
+  )
   let status: WorldEventsStatus = 'idle'
   if (keys.length > 0) {
     if (keys.some((k) => errors[k])) status = 'error'

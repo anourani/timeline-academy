@@ -160,21 +160,21 @@ export function buildEnrichUserPrompt(
 // ---------------------------------------------------------------------------
 //
 // Context events for the lane under a timeline: what else was happening in a
-// country, the world, or science and technology across the timeline's span.
+// country or in the world across the timeline's span.
 // Like the enrich prompts, this pair is duplicated by hand in the edge
 // function rather than shared — keep the two identical.
 
-export type WorldEventsPromptSource = 'country' | 'world' | 'science'
+export type WorldEventsPromptSource = 'country' | 'world'
 
 export const WORLD_EVENTS_SYSTEM_PROMPT = `You choose context events for an educational timeline's "World Events" lane. The lane sits under one specific timeline and shows what else was happening that matters TO THAT TIMELINE. It is not a list of the period's most important history.
 
 WHAT MAKES THE CUT — an event qualifies only if one of these is true:
 A. It directly shaped or touched the timeline's subject: their life, work, field, industry, country, rivals or audience.
-B. It is an era-defining event that any reader would recognize as the backdrop of the period — a world war, a great depression, a pandemic, a revolution that remade the subject's country. B applies to world and country events only, never to science and technology.
+B. It is an era-defining event that any reader would recognize as the backdrop of the period — a world war, a great depression, a pandemic, a revolution that remade the subject's country.
 
-For science and technology, be strictest: include only developments in or next to the subject's own field, or ones the subject plausibly knew of, competed with, built on or was affected by.
-  BAD (Nikola Tesla timeline): "Insulin first used to treat diabetes" — important to the world, irrelevant to Tesla.
-  GOOD (Nikola Tesla timeline): "Edison opens Pearl Street Station" — his field, his rival.
+Importance to history is not enough on its own.
+  BAD (Nikola Tesla timeline): "Boxer Rebellion" — a major event of his lifetime, but it never touched him or his work.
+  GOOD (Nikola Tesla timeline): "Panic of 1893" — it dried up the financing his work depended on.
 
 Fewer is better. Never pad a list to reach the maximum. Returning only one to three events, or none, is correct when that is all that qualifies.
 
@@ -210,13 +210,9 @@ export function buildWorldEventsUserPrompt(input: WorldEventsPromptInput): strin
     lines.push(
       `Source: the national history of ${input.countryName || 'the United States'} — politics, wars, laws, elections, disasters and social change.`,
     )
-  } else if (input.source === 'world') {
-    lines.push(
-      'Source: world events — wars, treaties, revolutions, pandemics and other global turning points.',
-    )
   } else {
     lines.push(
-      'Source: science and technology — inventions, discoveries, launches and breakthroughs.',
+      'Source: world events — wars, treaties, revolutions, pandemics and other turning points of international scope. Leave out events confined to a single country; those belong to that country\'s own history.',
     )
   }
   lines.push(`Year range: ${input.startYear} to ${input.endYear}.`)

@@ -17,8 +17,10 @@ const BASE_PREFIX = 'timeline_world_events_'
  * changes, so stricter answers replace older ones instead of being masked by
  * them. Older versions are never read again and age out through eviction.
  *   v2: relevance-first prompt, dates fact-checked against Wikipedia/Wikidata.
+ *   v3: Science & tech removed, "world" limited to international events, and
+ *       each entry records its Wikipedia article (the cross-source dedupe key).
  */
-const PREFIX = `${BASE_PREFIX}v2_`
+const PREFIX = `${BASE_PREFIX}v3_`
 
 // Each entry is one source's list (≤ 30 events), so this bounds the cache to
 // a few hundred kilobytes.
