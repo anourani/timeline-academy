@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useEffect, useState } from 'react';
 import { User, AuthError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { clearAllCachedEvents } from '../services/viewerEventCache';
+import { clearAllWorldEvents } from '../services/worldEventCache';
 import { clearLocalKeys } from '../services/userApiKey';
 
 interface AuthContextType {
@@ -37,6 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Don't leave a browsing record of viewed shared timelines behind
       // after the account signs out.
       clearAllCachedEvents();
+      clearAllWorldEvents();
       // Same idea for the BYOK key: it belongs to the account, not to this
       // device. userApiKey.ts also clears it on SIGNED_OUT — this is the
       // fallback for the catch branch above, where the API call failed and

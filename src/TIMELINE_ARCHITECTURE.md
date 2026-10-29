@@ -13,31 +13,30 @@
 1. [Component Hierarchy](#component-hierarchy)
 2. [Data Model](#data-model)
 3. [Layout System](#layout-system)
-4. [Grouping Modes](#grouping-modes)
-5. [Edit / View Modes](#edit--view-modes)
-6. [Grid System](#grid-system)
-7. [Header (Year & Month Labels)](#header-year--month-labels)
-8. [Scroll Indicator](#scroll-indicator)
-8a. [Chapters Strip](#chapters-strip)
-9. [Vertical Lines](#vertical-lines)
-10. [Category Labels](#category-labels)
-11. [Event Rendering](#event-rendering)
-12. [Event Stacking Algorithm](#event-stacking-algorithm)
-13. [Band Height Calculation](#band-height-calculation)
-14. [Drag-and-Drop System](#drag-and-drop-system)
-15. [Wheel → Horizontal Scroll](#wheel--horizontal-scroll)
-16. [Scroll-to-Target](#scroll-to-target)
-17. [Add-Event Cursor](#add-event-cursor)
-18. [Event Hover Cursor](#event-hover-cursor)
-19. [Event Form Dialog](#event-form-dialog)
-19a. [Events Drawer](#events-drawer)
-20. [Scale / Zoom System](#scale--zoom-system)
-21. [Date-to-Grid Math](#date-to-grid-math)
-22. [Timeline Range Calculation](#timeline-range-calculation)
-23. [Data Flow & Persistence](#data-flow--persistence)
-24. [Key Constants](#key-constants)
-25. [Hook Reference](#hook-reference)
-26. [AI Generation Streaming](#ai-generation-streaming)
+4. [Edit / View Modes](#edit--view-modes)
+5. [Grid System](#grid-system)
+6. [Header (Year & Month Labels)](#header-year--month-labels)
+7. [Scroll Indicator](#scroll-indicator)
+7a. [Chapters Strip](#chapters-strip)
+8. [Vertical Lines](#vertical-lines)
+9. [Event Rendering](#event-rendering)
+10. [Event Stacking Algorithm](#event-stacking-algorithm)
+11. [Band Height Calculation](#band-height-calculation)
+11a. [World Events Lane](#world-events-lane)
+12. [Drag-and-Drop System](#drag-and-drop-system)
+13. [Wheel → Horizontal Scroll](#wheel--horizontal-scroll)
+14. [Scroll-to-Target](#scroll-to-target)
+15. [Add-Event Cursor](#add-event-cursor)
+16. [Event Hover Cursor](#event-hover-cursor)
+17. [Event Form Dialog](#event-form-dialog)
+17a. [Events Drawer](#events-drawer)
+18. [Scale / Zoom System](#scale--zoom-system)
+19. [Date-to-Grid Math](#date-to-grid-math)
+20. [Timeline Range Calculation](#timeline-range-calculation)
+21. [Data Flow & Persistence](#data-flow--persistence)
+22. [Key Constants](#key-constants)
+23. [Hook Reference](#hook-reference)
+24. [AI Generation Streaming](#ai-generation-streaming)
 
 ---
 
@@ -47,8 +46,8 @@
 
 ```
 Timeline
-├── TimelineCategoryLabels                ─ conditional: groupByCategory
-│                                           (overlay, absolute, top = HEADER_HEIGHT)
+├── World Events pill                     ─ conditional: the World Events lane is shown
+│                                           (overlay, absolute, top = HEADER_HEIGHT + layout.height)
 ├── inner column wrapper
 │   └── scroll container (overflow-auto, scrollbar-hide)
 │       └── timeline-grid wrapper
@@ -57,9 +56,10 @@ Timeline
 │           │   └── TimelineMonthLabels
 │           ├── body column
 │           │   ├── TimelineVerticalLines
-│           │   ├── layout.bands.map(band)               ─ 1 band by default; N bands when groupByCategory
+│           │   ├── event band                           ─ every visible event, stacked in one pass
 │           │   │   ├── TimelineGrid                     ─ interaction overlay sized to the band
 │           │   │   └── TimelineEvent[]                  ─ events placed into the band's CSS Grid
+│           │   ├── World Events lane                    ─ conditional; see §World Events Lane
 │           │   └── filler column
 │           │       └── TimelineGrid                     ─ fills remaining vertical space below events
 │           ├── Add-Event Cursor                         ─ conditional: hoveredMonth !== null
@@ -69,7 +69,7 @@ Timeline
 └── Dialog (shadcn) > EventForm            ─ conditional: showEventModal
 ```
 
-`TimelineCategoryLabels` and the `Dialog` are siblings of the scroll-container subtree, not children of it. The category-labels overlay is positioned absolutely to align with the bands while staying outside the horizontal scroll.
+The World Events pill and the `Dialog` are siblings of the scroll-container subtree, not children of it. The pill is positioned absolutely to align with its lane while staying outside the horizontal scroll.
 
 ---
 
@@ -152,22 +152,9 @@ Inside the root, the page is a vertical stack:
 1. Scroll container (`overflow-auto scrollbar-hide`).
    - Inside, the `timeline-grid` wrapper has `min-width: months.length * scale.monthWidth` and `min-height: 100%`.
    - First child is `TimelineHeader` (year + month labels, total 64px tall).
-   - Below that is the body column, which contains `TimelineVerticalLines`, the layout bands, and a `flex-1` filler.
+   - Below that is the body column, which contains `TimelineVerticalLines`, the event band, the World Events lane when shown, and a `flex-1` filler.
 
-When `groupByCategory` is true, a separate `TimelineCategoryLabels` overlay is rendered as the first child of the root, with `position: absolute; left: 0; z-10; pointer-events: none` and `top: HEADER_HEIGHT` (= 64px). Its height matches `layout.totalHeight`. The overlay sits outside the horizontal scroll container, so it stays pinned to the left edge as the user scrolls horizontally.
-
----
-
-## Grouping Modes
-
-Controlled by the `groupByCategory` prop on `Timeline.tsx`. State lives in `useGroupByCategory` and is persisted on the `timelines.group_by_category` column via `useAutosave`.
-
-| `groupByCategory` | Bands | Row height | Category labels |
-|---|---|---|---|
-| `false` (default) | One band containing every visible event, stacked together. | `EVENT_ROW_HEIGHT` (38px) | Hidden |
-| `true` | One band per visible category, in `visibleCategories` order. Each band runs its own stacking pass. | 36px per row | Rendered as the absolute overlay (see §3) |
-
-In grouped mode, each `TimelineEvent` receives `categoryOffset = band.offset` so the event renders at the correct vertical position within the overall body. In default mode, all events share `offset = 0`.
+Every visible event shares the one band; colour alone tells the categories apart. (A "Group events by category" mode, with a lane and pill label per category, was removed in October 2026.)
 
 ---
 
@@ -215,7 +202,7 @@ grid-auto-rows:       ${rowHeight}px;
 gap:                  0;
 ```
 
-Where `rowHeight` is 36px when `groupByCategory` is true, else `EVENT_ROW_HEIGHT` (38px). Events are placed into a band via `gridColumn: ${startColumn} / ${endColumn}` and `gridRow: ${stackIndex + 1}`.
+Where `rowHeight` is the vertical scale's `eventRowHeight` (38px small, 46px medium). Events are placed into a band via `gridColumn: ${startColumn} / ${endColumn}` and `gridRow: ${stackIndex + 1}`.
 
 ---
 
@@ -256,7 +243,7 @@ There is no longer a year-indicator row above the grid. `TimelineScrollIndicator
 
 `ChaptersStrip.tsx` renders a chapter of the timeline as one chip each — label, year span, event count — with the chip containing the viewport's left edge filled in the timeline's accent colour and carrying a 2px progress rule.
 
-It is **not** part of the `Timeline` subtree. In the editor it is absolutely positioned inside `<main>`'s `pt-[140px]` band (`inset-x-0 bottom-[24px]`), 24px above the timeline. That band was empty before, so the strip appearing or disappearing never moves the canvas — and `TimelineCategoryLabels`, which is positioned relative to `Timeline`'s own root at `HEADER_HEIGHT`, stays in sync. In `TimelineViewer` there is no such band, so the strip sits in normal flow above `Timeline` instead.
+It is **not** part of the `Timeline` subtree. In the editor it is absolutely positioned inside `<main>`'s `pt-[140px]` band (`inset-x-0 bottom-[24px]`), 24px above the timeline. That band was empty before, so the strip appearing or disappearing never moves the canvas. In `TimelineViewer` there is no such band, so the strip sits in normal flow above `Timeline` instead.
 
 Chapters themselves are `{ id, label, startDate, endDate }` on `timelines.chapters` (jsonb), generated by the AI pass. `src/utils/chapters.ts` holds the pure logic: `normalizeChapters` (validate, sort, assign ids), `findChapterAtMonth`, `findActiveChapter`, `chapterProgress`, `countEventsInChapter`. A timeline with no chapters renders nothing — except while a generation is streaming, when `placeholderCount` shows placeholder chips for chapters still in flight.
 
@@ -294,29 +281,6 @@ For each month index `i`, a `<span>` is placed at `left: i * scale.monthWidth` w
 Reveal animation (year-boundary lines only): month lines are full height from first paint and are given no ref, no `data-line-key` and no observer entry. An `IntersectionObserver` rooted on the scroll container marks each year-boundary line `data-revealed="true"` the first time it intersects the viewport; `.timeline-vertical-line-reveal:not([data-revealed="true"])` holds it at `height: 0` until then, and the `height` leg of the base rule's `transition` draws it downward. That transition leg is inert for month lines — their computed height stays the token `100%` and never changes. When `window.matchMedia('(prefers-reduced-motion: reduce)').matches`, every reveal-eligible line is revealed immediately and the observer is skipped.
 
 The observer effect re-runs only when the months range key (`first..last`) or the scroll container ref changes — scale changes are handled by CSS transitions, not a new observer.
-
----
-
-## Category Labels
-
-`TimelineCategoryLabels.tsx` renders the per-category pill labels that align with each band when `groupByCategory` is true.
-
-```tsx
-<div className="relative h-full">
-  {categories.map(cat => (
-    <div className="flex items-start pt-2 pl-6" style={{ height: `${cat.height}px` }}>
-      <div
-        className="rounded-[4px] p-2 backdrop-blur-[2px] leading-none"
-        style={{ backgroundColor: `${color}4D` }}
-      >
-        <span className="label-small-allcaps whitespace-nowrap">{label}</span>
-      </div>
-    </div>
-  ))}
-</div>
-```
-
-The `4D` suffix is the alpha byte (~30%) appended to the category color. The component receives a `categories: { id, height }[]` array (from `layout.bands`) plus the full `customCategories` list to look up label and color. It is rendered only when `groupByCategory` is true, inside the absolute overlay described in §3.
 
 ---
 
@@ -381,7 +345,7 @@ Drag transforms take priority over FLIP transforms — the dragged event is excl
 
 ### Inputs and outputs
 
-- **Input:** the events for one band, the month range, and the active `monthWidth`.
+- **Input:** the events for one band (or the World Events lane), the month range, and the active `monthWidth`.
 - **Output:** the same events with a `stackIndex: number` assigned (0-based row within the band).
 
 ### Algorithm
@@ -417,27 +381,65 @@ TRAILING_BUFFER_PX  = 24   // empty space reserved after each event so adjacent 
 
 ## Band Height Calculation
 
-Band heights are computed inline in `Timeline.tsx`'s `layout` `useMemo` (no separate hook).
-
-**`groupByCategory: true`** — one band per visible category:
+The band's height is computed inline in `Timeline.tsx`'s `layout` `useMemo` (no separate hook). Every visible event is stacked in a single pass:
 
 ```ts
-maxStack = max(stackedEvents.stackIndex, 0)
-height   = max((maxStack + 1) * 36 + CATEGORY_PADDING, CATEGORY_MIN_HEIGHT)
+maxStack = max(events.stackIndex, 0)
+height   = events.length === 0
+            ? rowHeight
+            : (maxStack + 1) * rowHeight + CATEGORY_PADDING
 ```
 
-Bands are stacked vertically; each band records its `offset` (sum of prior heights) so events know where their band starts.
+`layout.height` also positions the World Events pill, which sits directly below the band.
 
-**`groupByCategory: false`** — single band containing every visible event:
+---
 
-```ts
-maxStack = max(stackedEvents.stackIndex, 0)
-height   = stackedEvents.length === 0
-            ? EVENT_ROW_HEIGHT
-            : (maxStack + 1) * EVENT_ROW_HEIGHT + CATEGORY_PADDING
-```
+## World Events Lane
 
-`layout.totalHeight` sums the band heights and is used to size the category-labels overlay in grouped mode.
+A read-only lane of context events drawn below the event band. It is switched on from the dock's Design menu (`FloatingToolbar/DockDesign.tsx`), which picks its sources: Country and World events. World is limited to events of international scope, so a national event belongs to its country.
+
+**Data.** `useWorldEvents` (`hooks/useWorldEvents.ts`) fetches one list per enabled source through `services/worldEvents.ts`. The service runs browser-direct on a BYOK key, otherwise through the `world-events` Edge Function.
+- The request covers the axis's own year span (`getTimelineYearSpan`).
+- Nothing fetches while a generation streams.
+- Results are cached in localStorage per (timeline, source, country, range) by `services/worldEventCache.ts`. The cache key is versioned, so changing the prompt or the check never serves stale picks.
+
+**Selection.** Picks are relevance-first. The request carries the timeline's title, description and up to 20 of its own events (`buildWorldEventsContext`). The prompt admits an event only if:
+- it touched the subject or their field, or
+- it is era-defining backdrop (world and country sources only).
+
+"Fewer is better" is explicit, and the per-source ceiling is 3 per decade, at most 15.
+
+**Fact-check.** `services/worldEventVerify.ts` checks every candidate's dates before it is shown:
+- The model names the event's Wikipedia article.
+- Wikidata dates (point in time, start/end, discovery, launch, inception…) replace the model's.
+- With no structured date, the event survives only if its year appears in the article's intro.
+- Anything unverifiable is dropped.
+- A failed lookup puts the lane in its error state rather than showing unchecked dates.
+
+**One entry per event.** The sources are fetched separately and often pick the same event, usually under different titles. `dedupeWorldEvents` keeps the first entry per Wikipedia article, falling back to title plus start date. Lists are merged in source order, so the country entry, with its more specific tag, wins.
+
+**Kept apart from `events`.** The lane's events arrive on their own props (`worldEvents`, `worldEventsStatus`, `onOpenWorldEventDetails`). They never enter `events`, so they never reach `visibleEvents`, the month range, counts, legends, export or autosave. `Timeline` also drops any entry outside the drawn months, so **the lane never widens the axis**.
+
+**Layout.** The lane's events are stacked with the same `calculateEventStacks` pass as the bands. Its `extraTitlePx` argument reserves room for the source tag after each title. Height: `max((maxStack + 1) * rowHeight + CATEGORY_PADDING, LANE_MIN_HEIGHT)`, so the pill always fits.
+
+**Styling:**
+- The lane draws a dashed seam along its own top edge.
+- The lane's background is `rgba(255,255,255,0.015)`, continued through the filler grid below it, so the whole context area reads as one region to the bottom of the canvas.
+- The WORLD EVENTS pill (`label-small-allcaps`, `p-2`, `rounded-[4px]`, neutral tint) sits at `HEADER_HEIGHT + layout.height`.
+- Events use `TimelineEvent`'s `rangeFill`, `titleColor` and `tag` props in a neutral palette, with a source tag of `WORLD` or the country code.
+- They always play the reveal. The span's `clip-path` wipe runs with fill-mode `backwards`, not `both`, so the clip is released when it ends. Holding its last frame would cut off any title, and its tag, that is wider than the event's dates.
+
+**Entrance.** Whenever the lane appears (switched on, or once a timeline settles), it rises from the bottom edge of the viewport as **one unit**: the lane with its dashed seam, its pill, and the tinted filler below it. All three play the identical animation from the identical offset: 400ms, ease-in-out (`--ease-swipe`, a gentle start and a soft landing), with the fade finished in the first quarter.
+- Anything left out of the unit reads as a separate step, such as a seam or tint already in place while the lane is still travelling. That is why the seam is the lane's own `border-top`, not a border on the band above.
+- It uses the Web Animations API from a layout effect, because the travel distance is measured from where the lane actually lands.
+- Reduced motion gets a 150ms fade instead.
+- Leaving is instant.
+
+**States.**
+- `'loading'`: the `StreamingSkeleton` bars show, riding a sticky, viewport-wide strip so they stay in view at any scroll.
+- `'error'`: the lane is hidden, and the Design menu's subtitle explains and offers a retry.
+
+**Read-only.** No `onPointerDown`, so no drag. A click opens `EventDetailPanel` with `readOnly`, which hides Edit/Delete and Regenerate/Remove. Descriptions still generate on open. Ids start `we:`; the page routes the panel's write-back for those to `useWorldEvents.updateEvent`, never to the timeline's events.
 
 ---
 
@@ -862,8 +864,8 @@ it parks only for a run the editor is rendering.
 `useRevealQueue` releases one event every `RELEASE_MS` (200), dropping to
 `DRAIN_MS` (60) when more than `DRAIN_THRESHOLD` (6) are waiting. Providers
 send several lines per chunk, so without it events appear in clumps. It also
-caps how often `calculateEventStacks` re-runs — O(n·m) in month scans, once
-per category when grouped — so the release interval, not the provider's
+caps how often `calculateEventStacks` re-runs — O(n·m) in month scans — so
+the release interval, not the provider's
 chunking, bounds that cost.
 
 ### Animation timeline
@@ -994,7 +996,7 @@ useTimelineState
   ├── useTimelineTitle      ─ title, description
   ├── useCategories         ─ category configs (defaults to DEFAULT_CATEGORIES)
   ├── useTimelineScale      ─ scale toggle ('large' | 'medium' | 'small') and the current TimelineScale object
-  └── useGroupByCategory    ─ boolean toggle
+  └── useWorldEventSettings ─ the World Events lane's settings
 ```
 
 Other timeline-page hooks live alongside but are not composed by `useTimelineState`:
@@ -1013,7 +1015,7 @@ useEventDrag          ─ drag interaction state machine (consumed by Timeline.t
 editor. It is the **only** id the app acts on — autosave, Share and Delete all key
 off it — and it is written in exactly one place, `applyLoadedTimeline(data)`, which
 sets it alongside every content setter (`setTitle`, `setDescription`, `setEvents`,
-categories, both scales, `groupByCategory`) in a single synchronous block. React 18
+categories, both scales, the World Events settings) in a single synchronous block. React 18
 commits that batch together, so no render can observe one timeline's id beside
 another timeline's data.
 
@@ -1035,10 +1037,10 @@ editor content outside `applyLoadedTimeline` reopens the bug.
 
 ### Save flow
 
-1. User makes a change (event edit, drag, rename, scale toggle, group toggle, etc.).
+1. User makes a change (event edit, drag, rename, scale toggle, etc.).
 2. `useAutosave.handleChange(data)` fingerprints the payload and **returns immediately if nothing changed** (see below). Otherwise it sets `saveStatus = 'saving'`, marks `hasUnsavedChanges`, and starts a 2000 ms debounce. `App.tsx` only calls it when `loadedTimelineId` is non-null, so a save can never target a timeline the editor hasn't loaded.
 3. After the debounce fires, `save(data)`:
-   - `UPDATE` the `timelines` row (title, description, scale, group_by_category, updated_at).
+   - `UPDATE` the `timelines` row (title, description, categories, chapters, both scales, updated_at). The unused `group_by_category` column is no longer written.
    - `saveTimelineEvents(timelineId, events)` performs a diff-based sync: classifies each event as INSERT / UPDATE / DELETE relative to the server, then executes UPDATE → INSERT → DELETE. INSERT precedes DELETE deliberately: these are separate HTTP calls, not one transaction, so a mismatched client array fails the INSERT on a duplicate primary key *before* anything has been deleted.
 4. On success: `saveStatus = 'saved'`, `lastSavedTime = now`, `hasUnsavedChanges = false`.
 5. On failure: `saveStatus = 'error'`. A `window.online` listener retries `save(timelineData)` when the browser comes back online.
@@ -1309,10 +1311,10 @@ list deliberately omits, implying a saved timeline that does not exist.
 | Constant | Value | Description |
 |---|---|---|
 | `HEADER_HEIGHT` | `64` | Year labels (32) + month labels (32) |
-| `EVENT_ROW_HEIGHT` | `38` | 36px event row + 2px vertical gap (used in default mode) |
+| `EVENT_ROW_HEIGHT` | `38` | 36px event row + 2px vertical gap |
 | `EVENT_MIN_WIDTH` | `120` | Minimum width for event title visibility |
-| `CATEGORY_PADDING` | `8` | Vertical padding within a band |
-| `CATEGORY_MIN_HEIGHT` | `80` | Minimum height of an empty band |
+| `CATEGORY_PADDING` | `8` | Vertical padding below a band's last row |
+| `LANE_MIN_HEIGHT` | `80` | Minimum height of the World Events lane |
 
 **`src/constants/scales.ts`**
 
@@ -1356,14 +1358,13 @@ Hooks consumed (directly or via composition) by the timeline page.
 
 | Hook | File | Purpose |
 |---|---|---|
-| `useTimelineState` | `hooks/useTimelineState.ts` | Composes events, title, categories, scale, and groupByCategory into a single state hook |
+| `useTimelineState` | `hooks/useTimelineState.ts` | Composes events, title, categories, scales, and the World Events settings into a single state hook |
 | `useTimeline` | `hooks/useTimeline.ts` | Loads / creates timeline records in Supabase; enforces plan limits before creation. Stateless by design — returns ids rather than holding a "current timeline" pointer |
 | `useEvents` | `hooks/useEvents.ts` | Local event CRUD (add, update, batch-add with dedup, clear) |
 | `useAutosave` | `hooks/useAutosave.ts` | Debounced persistence (2000 ms), fingerprint dirty-check + `markClean`, flush/cancel controls, beforeunload guard, online retry |
 | `useTimelineScale` | `hooks/useTimelineScale.ts` | Scale toggle (`large` / `medium` / `small`) + current `TimelineScale` |
 | `useTimelineTitle` | `hooks/useTimelineTitle.ts` | Title and description state |
 | `useCategories` | `hooks/useCategories.ts` | Category config state with `DEFAULT_CATEGORIES` fallback |
-| `useGroupByCategory` | `hooks/useGroupByCategory.ts` | `groupByCategory` boolean toggle |
 | `useTimelineScroll` | `hooks/useTimelineScroll.ts` | Tracks `scrollLeft`, container/content widths, and `visibleRange` (in quarter-columns) |
 | `useEventDrag` | `hooks/useEventDrag.ts` | Pointer-driven drag state machine; defines `DRAG_THRESHOLD = 5` |
 | `useLocalDraft` | `hooks/useLocalDraft.ts` | Draft CRUD against an injected `DraftStore` (trial or byok-anon), 500 ms debounced save |

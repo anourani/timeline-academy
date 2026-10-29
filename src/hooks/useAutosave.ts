@@ -23,7 +23,6 @@ interface TimelineData {
   chapters: TimelineChapter[];
   scale: 'large' | 'medium' | 'small';
   verticalScale: 'small' | 'medium';
-  groupByCategory: boolean;
 }
 
 /**
@@ -61,7 +60,6 @@ export function useAutosave(timelineData: TimelineData) {
       description: data.description,
       scale: data.scale,
       verticalScale: data.verticalScale,
-      groupByCategory: data.groupByCategory,
       categories: data.categories,
       chapters: data.chapters,
     }),
@@ -105,7 +103,6 @@ export function useAutosave(timelineData: TimelineData) {
           chapters: data.chapters,
           scale: data.scale,
           vertical_scale: data.verticalScale,
-          group_by_category: data.groupByCategory,
           updated_at: new Date().toISOString()
         })
         .eq('id', data.id)

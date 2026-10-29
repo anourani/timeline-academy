@@ -6,6 +6,12 @@ import { useAuth } from './useAuth';
 import { DEFAULT_TIMELINE_TITLE } from '../constants/defaults';
 import { notifyUsageChanged } from '../utils/usageChanged';
 import { toEventRow } from '../utils/saveEvents';
+import { notifyTimelineSaved } from '../utils/timelineSaved';
+import {
+  DEFAULT_WORLD_EVENT_SETTINGS,
+  normalizeWorldEventSettings,
+  type WorldEventSettings,
+} from '../types/worldEvents';
 import {
   LimitReachedError,
   getCurrentLimits,
@@ -50,9 +56,10 @@ export interface TimelineData {
   chapters?: TimelineChapter[];
   scale?: 'large' | 'medium' | 'small';
   verticalScale?: 'small' | 'medium';
-  groupByCategory?: boolean;
   /** Came from an AI generation. Gates the dock's Legend and the add controls. */
   isAiGenerated?: boolean;
+  /** The World Events lane's settings (Design menu). */
+  worldEvents?: WorldEventSettings;
 }
 
 /**
@@ -71,6 +78,44 @@ export async function markTimelineAiGenerated(id: string): Promise<void> {
     .update({ is_ai_generated: true })
     .eq('id', id);
   if (error) console.warn('Could not record the timeline as AI-generated:', error.message);
+}
+
+/**
+ * Persist a timeline's World Events settings. Best effort, never throws.
+ *
+ * Its own write for the same reason as `markTimelineAiGenerated`: the three
+ * columns arrive in a hand-applied migration, and naming a missing column on
+ * autosave's update would break every save until it is applied. Failing here
+ * costs only the settings — the lane still works for the session, it just
+ * forgets on reload.
+ *
+ * It is still an edit, so it moves `updated_at` like any other, and tells the
+ * side panel so the tile re-sorts the way autosave's writes do.
+ */
+export async function saveWorldEventSettings(id: string, settings: WorldEventSettings): Promise<void> {
+  const { data, error } = await supabase
+    .from('timelines')
+    .update({
+      show_world_events: settings.showWorldEvents,
+      world_event_sources: settings.worldEventSources,
+      world_event_country: settings.worldEventCountry,
+    })
+    .eq('id', id)
+    .select('updated_at')
+    .maybeSingle();
+  if (error) {
+    console.warn('Could not save the World Events settings:', error.message);
+    return;
+  }
+  if (data?.updated_at) notifyTimelineSaved({ id, updatedAt: data.updated_at });
+}
+
+function isDefaultWorldEvents(settings: WorldEventSettings | undefined): boolean {
+  if (!settings) return true;
+  const d = DEFAULT_WORLD_EVENT_SETTINGS;
+  return settings.showWorldEvents === d.showWorldEvents &&
+    settings.worldEventCountry === d.worldEventCountry &&
+    settings.worldEventSources.join(',') === d.worldEventSources.join(',');
 }
 
 /** Everything `createTimelineFrom` writes: a timeline minus the id it mints. */
@@ -135,7 +180,6 @@ export function useTimeline() {
           user_id: user.id,
           scale: 'small',
           vertical_scale: 'medium',
-          group_by_category: false,
         })
         .select('id')
         .single();
@@ -153,7 +197,7 @@ export function useTimeline() {
         categories: undefined, // Will use default categories
         scale: 'small',
         verticalScale: 'medium',
-        groupByCategory: false
+        worldEvents: { ...DEFAULT_WORLD_EVENT_SETTINGS },
       };
     }
 
@@ -208,11 +252,17 @@ export function useTimeline() {
         : undefined,
       scale: timeline.scale || 'large',
       verticalScale: timeline.vertical_scale || 'medium',
-      groupByCategory: timeline.group_by_category ?? false,
       // Absent until the column's migration is applied; only an AI generation
       // produces chapters, so they stand in for the flag until then.
       isAiGenerated: timeline.is_ai_generated ??
-        (Array.isArray(timeline.chapters) && timeline.chapters.length > 0)
+        (Array.isArray(timeline.chapters) && timeline.chapters.length > 0),
+      // Absent (undefined) until the World Events migration is applied, which
+      // normalises to the defaults.
+      worldEvents: normalizeWorldEventSettings({
+        showWorldEvents: timeline.show_world_events,
+        worldEventSources: timeline.world_event_sources,
+        worldEventCountry: timeline.world_event_country,
+      }),
     };
   }, [user]);
 
@@ -242,7 +292,6 @@ export function useTimeline() {
         description: source.description || null,
         scale: source.scale ?? 'small',
         vertical_scale: source.verticalScale ?? 'medium',
-        group_by_category: source.groupByCategory ?? false,
         // Empty normalises to null, the inverse of loadTimeline's rule.
         categories: source.categories && source.categories.length > 0 ? source.categories : null,
         chapters: source.chapters && source.chapters.length > 0 ? source.chapters : null,
@@ -267,6 +316,10 @@ export function useTimeline() {
     }
 
     if (source.isAiGenerated) await markTimelineAiGenerated(timeline.id);
+    // Same side-write pattern; skipped when there is nothing to carry over.
+    if (source.worldEvents && !isDefaultWorldEvents(source.worldEvents)) {
+      await saveWorldEventSettings(timeline.id, source.worldEvents);
+    }
 
     // After both writes, so one recount covers the new timeline and its events.
     notifyUsageChanged();

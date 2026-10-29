@@ -4,8 +4,8 @@ import { useCategories } from './useCategories'
 import { useChapters } from './useChapters'
 import { useTimelineScale } from './useTimelineScale'
 import { useTimelineVerticalScale } from './useTimelineVerticalScale'
-import { useGroupByCategory } from './useGroupByCategory'
 import { useAiGenerated } from './useAiGenerated'
+import { useWorldEventSettings } from './useWorldEventSettings'
 
 export function useTimelineState() {
   const { events, addEvent, addEvents, clearEvents, setEvents, updateEvent } = useEvents()
@@ -14,12 +14,12 @@ export function useTimelineState() {
   const { chapters, updateChapters, resetChapters } = useChapters()
   const { scale, currentScale, handleScaleChange } = useTimelineScale()
   const { verticalScale, currentVerticalScale, handleVerticalScaleChange } = useTimelineVerticalScale()
-  const { groupByCategory, handleGroupByCategoryChange } = useGroupByCategory()
   const { isAiGenerated, handleAiGeneratedChange } = useAiGenerated()
+  const { worldEvents, handleWorldEventsChange } = useWorldEventSettings()
 
   return {
     // State
-    events, title, description, categories, chapters, scale, currentScale, verticalScale, currentVerticalScale, groupByCategory, isAiGenerated,
+    events, title, description, categories, chapters, scale, currentScale, verticalScale, currentVerticalScale, isAiGenerated, worldEvents,
     // Event actions
     addEvent, addEvents, clearEvents, setEvents, updateEvent,
     // Title actions
@@ -31,8 +31,8 @@ export function useTimelineState() {
     // Scale actions
     handleScaleChange,
     handleVerticalScaleChange,
-    // Layout actions
-    handleGroupByCategoryChange,
+    // World Events lane
+    handleWorldEventsChange,
     // Provenance
     handleAiGeneratedChange,
   }

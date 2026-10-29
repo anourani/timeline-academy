@@ -17,6 +17,13 @@ export interface TimelineEvent {
   sources?: EventSource[] | null;
 }
 
+/**
+ * What event enrichment and the detail panel need: an event without its
+ * category. Real events and World Events entries (which belong to no
+ * category) both fit.
+ */
+export type EnrichableEvent = Omit<TimelineEvent, 'category'>;
+
 export type TimelineCategory = 'category_1' | 'category_2' | 'category_3' | 'category_4';
 
 export interface CategoryConfig {

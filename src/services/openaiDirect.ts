@@ -20,9 +20,12 @@ import {
   getStreamSystemPrompt,
   getUserPrompt,
   buildEnrichUserPrompt,
+  buildWorldEventsUserPrompt,
   CLASSIFICATION_PROMPT,
   ENRICH_SYSTEM_PROMPT,
+  WORLD_EVENTS_SYSTEM_PROMPT,
   type CategoryDefinition,
+  type WorldEventsPromptInput,
 } from './llmPrompts'
 import {
   createNdjsonLineReader,
@@ -34,7 +37,7 @@ import type {
   EnrichmentStreamHandlers,
   TimelineStreamHandlers,
 } from '@/types/ai'
-import type { EventSource, TimelineEvent } from '@/types/event'
+import type { EnrichableEvent, EventSource } from '@/types/event'
 
 const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions'
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses'
@@ -94,7 +97,7 @@ function harvestCompletedCitations(
 }
 
 export async function enrichEventOpenAIDirect(
-  event: TimelineEvent,
+  event: EnrichableEvent,
   timelineTitle: string,
   handlers: EnrichmentStreamHandlers,
   model: ModelDef,
@@ -354,4 +357,45 @@ export async function classifySubjectOpenAIDirect(
   }
 
   return validTypes.has(parsed.type) ? parsed.type : 'topic'
+}
+
+// ---------------------------------------------------------------------------
+// World Events (non-streaming)
+// ---------------------------------------------------------------------------
+
+/**
+ * The raw text of a World Events reply; see the Anthropic twin. The system
+ * prompt carries the literal word "JSON", which `response_format: json_object`
+ * requires somewhere in the messages.
+ */
+export async function fetchWorldEventsOpenAIDirect(
+  input: WorldEventsPromptInput,
+  model: ModelDef,
+  apiKey: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const res = await fetch(OPENAI_CHAT_URL, {
+    method: 'POST',
+    headers: headers(apiKey),
+    signal,
+    body: JSON.stringify({
+      model: model.id,
+      messages: [
+        { role: 'system', content: WORLD_EVENTS_SYSTEM_PROMPT },
+        { role: 'user', content: buildWorldEventsUserPrompt(input) },
+      ],
+      ...model.params.context,
+    }),
+  })
+
+  if (!res.ok) {
+    throw new Error(
+      await readApiError(res, 'OpenAI API error', model.id, 'openai'),
+    )
+  }
+
+  const json = await res.json()
+  const text = json.choices?.[0]?.message?.content
+  if (!text) throw new Error('Empty response from OpenAI')
+  return text as string
 }

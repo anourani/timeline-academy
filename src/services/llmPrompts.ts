@@ -11,7 +11,7 @@
 // The prompts are provider-neutral prose — no tool schemas, no provider-
 // specific structure — so both direct clients use them unchanged.
 
-import type { TimelineEvent } from '@/types/event'
+import type { EnrichableEvent } from '@/types/event'
 
 export interface CategoryDefinition {
   id: string
@@ -136,7 +136,7 @@ Return ONLY valid JSON: {"type": "<type>"}`
 export const ENRICH_SYSTEM_PROMPT = `You are writing a 1-2 paragraph description of a historical event for an educational timeline. Use the web_search tool to find authoritative sources before writing. Keep the description concise (max ~150 words for simple events, two short paragraphs for complex ones). Use a neutral encyclopedic tone. Do not include inline citations or footnotes — sources are listed separately. Do not invent facts that aren't in the search results.`
 
 export function buildEnrichUserPrompt(
-  event: TimelineEvent,
+  event: EnrichableEvent,
   timelineTitle: string,
 ): string {
   const lines: string[] = []
@@ -152,5 +152,77 @@ export function buildEnrichUserPrompt(
   lines.push(
     'Use the web_search tool to find sources, then write the description. Output only the description text — no headings, no source lists.',
   )
+  return lines.join('\n')
+}
+
+// ---------------------------------------------------------------------------
+// World Events — mirrors supabase/functions/world-events/index.ts
+// ---------------------------------------------------------------------------
+//
+// Context events for the lane under a timeline: what else was happening in a
+// country or in the world across the timeline's span.
+// Like the enrich prompts, this pair is duplicated by hand in the edge
+// function rather than shared — keep the two identical.
+
+export type WorldEventsPromptSource = 'country' | 'world'
+
+export const WORLD_EVENTS_SYSTEM_PROMPT = `You choose context events for an educational timeline's "World Events" lane. The lane sits under one specific timeline and shows what else was happening that matters TO THAT TIMELINE. It is not a list of the period's most important history.
+
+WHAT MAKES THE CUT — an event qualifies only if one of these is true:
+A. It directly shaped or touched the timeline's subject: their life, work, field, industry, country, rivals or audience.
+B. It is an era-defining event that any reader would recognize as the backdrop of the period — a world war, a great depression, a pandemic, a revolution that remade the subject's country.
+
+Importance to history is not enough on its own.
+  BAD (Nikola Tesla timeline): "Boxer Rebellion" — a major event of his lifetime, but it never touched him or his work.
+  GOOD (Nikola Tesla timeline): "Panic of 1893" — it dried up the financing his work depended on.
+
+Fewer is better. Never pad a list to reach the maximum. Returning only one to three events, or none, is correct when that is all that qualifies.
+
+HARD RULES:
+1. Only real, well-documented events with a dedicated English Wikipedia article. Never invent an event or a date. If you are unsure of a date, leave the event out.
+2. Every event must start and end within the requested year range.
+3. Never include events about the subject itself — those belong in the timeline, not in this lane.
+4. Titles: max 40 characters, specific and recognizable ("Fall of the Berlin Wall", not "Political change in Europe").
+5. DATE FORMAT — YYYY-MM-DD, AD years only. Year-only → January 1. A single-day event has endDate equal to startDate.
+6. "wikipedia" is the exact title of the event's English Wikipedia article. Dates are checked against it, and an event whose article cannot be found is discarded.
+7. "why" is a short clause naming the connection to this timeline (rule A) or the era it defines (rule B).
+8. JSON ONLY — no markdown, no code fences, no explanation. Reply with exactly one object:
+{"events":[{"title":"...","startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","wikipedia":"...","why":"..."}]}`
+
+export interface WorldEventsPromptInput {
+  source: WorldEventsPromptSource
+  /** Display name of the country; only used when `source` is 'country'. */
+  countryName?: string
+  startYear: number
+  endYear: number
+  /** The timeline's subject — what every pick is judged against. */
+  subject?: string
+  /** The timeline's own description, when it has one. */
+  description?: string
+  /** A spread of the timeline's own events, as "YYYY · Title". */
+  highlights?: string[]
+  maxEvents: number
+}
+
+export function buildWorldEventsUserPrompt(input: WorldEventsPromptInput): string {
+  const lines: string[] = []
+  if (input.source === 'country') {
+    lines.push(
+      `Source: the national history of ${input.countryName || 'the United States'} — politics, wars, laws, elections, disasters and social change.`,
+    )
+  } else {
+    lines.push(
+      'Source: world events — wars, treaties, revolutions, pandemics and other turning points of international scope. Leave out events confined to a single country; those belong to that country\'s own history.',
+    )
+  }
+  lines.push(`Year range: ${input.startYear} to ${input.endYear}.`)
+  lines.push(`Return at most ${input.maxEvents} events, and fewer if fewer qualify.`)
+  lines.push('')
+  lines.push(`The timeline is about: "${input.subject || 'an unnamed subject'}".`)
+  if (input.description) lines.push(`Its description: ${input.description}`)
+  if (input.highlights && input.highlights.length > 0) {
+    lines.push("Some of the timeline's own events, to show what it covers:")
+    for (const h of input.highlights) lines.push(`- ${h}`)
+  }
   return lines.join('\n')
 }

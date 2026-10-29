@@ -12,18 +12,25 @@ import {
   enrichEvent,
   fetchEventImage,
 } from '@/services/eventEnrichment'
-import type { EventSource, TimelineEvent } from '@/types/event'
+import type { EnrichableEvent, EventSource } from '@/types/event'
 import type { ByokProvider } from '@/types/ai'
 import { PROVIDER_META } from '@/constants/byokProviders'
 import { getKey } from '@/services/userApiKey'
 
-interface EventDetailPanelProps {
+interface EventDetailPanelProps<E extends EnrichableEvent> {
   open: boolean
-  event: TimelineEvent | null
+  event: E | null
   timelineTitle: string
   mode: 'edit' | 'view'
   onClose: () => void
-  onEventChange: (updated: TimelineEvent) => void
+  /** Called with the same event, enriched (or cleared). */
+  onEventChange: (updated: E) => void
+  /**
+   * A World Events entry: context, not the user's content. Nothing in the
+   * panel may change it — no Edit or Delete, and no Regenerate or Remove
+   * footer — but its description still generates on open, like any event's.
+   */
+  readOnly?: boolean
   /** Edit-mode authoring actions. Since clicking an event opens this panel
    *  rather than an actions menu, the panel header is where Edit and Delete
    *  live. Omitted in view mode. */
@@ -54,16 +61,16 @@ const SCROLL_KEYS = new Set([
 /** Ragged on purpose — three equal bars read as a table, not as a list. */
 const SOURCE_SKELETON_WIDTHS = ['72%', '54%', '63%']
 
-function formatDateRange(event: TimelineEvent): string {
+function formatDateRange(event: EnrichableEvent): string {
   if (event.startDate === event.endDate) return formatDateLong(event.startDate)
   return `${formatDateLong(event.startDate)} → ${formatDateLong(event.endDate)}`
 }
 
-function hasGeneratedContent(event: TimelineEvent | null): boolean {
+function hasGeneratedContent(event: EnrichableEvent | null): boolean {
   return Boolean(event?.description)
 }
 
-export function EventDetailPanel({
+export function EventDetailPanel<E extends EnrichableEvent>({
   open,
   event,
   timelineTitle,
@@ -72,7 +79,8 @@ export function EventDetailPanel({
   onEventChange,
   onEdit,
   onDelete,
-}: EventDetailPanelProps) {
+  readOnly = false,
+}: EventDetailPanelProps<E>) {
   const [state, setState] = useState<PanelState>('idle')
   const [streamedDescription, setStreamedDescription] = useState('')
   const [imageUrl, setImageUrl] = useState<string | null>(null)
@@ -271,7 +279,7 @@ export function EventDetailPanel({
   }, [open])
 
   function runGeneration(
-    currentEvent: TimelineEvent,
+    currentEvent: E,
     preserveImage: boolean,
     providerOverride?: ByokProvider,
   ) {
@@ -389,10 +397,10 @@ export function EventDetailPanel({
 
   if (typeof document === 'undefined') return null
 
-  const showFooter = mode === 'edit' && open && !!event
+  const showFooter = mode === 'edit' && open && !!event && !readOnly
   // Edit and Delete used to live in the click-path actions menu. That menu is
   // gone — a click opens this panel — so the header carries them instead.
-  const showAuthoringActions = mode === 'edit' && !!event && !!onEdit && !!onDelete
+  const showAuthoringActions = mode === 'edit' && !!event && !!onEdit && !!onDelete && !readOnly
   const description = state === 'loaded' ? event?.description ?? streamedDescription : streamedDescription
   const displayImageUrl = state === 'loaded' ? event?.imageUrl ?? imageUrl : imageUrl
   const displayAttribution = state === 'loaded' ? event?.imageAttribution ?? imageAttribution : imageAttribution

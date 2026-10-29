@@ -1,12 +1,12 @@
-import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useCallback, useEffect, useLayoutEffect, useMemo } from 'react';
 import { TimelineHeader } from './TimelineHeader';
 import { StreamingSkeleton } from './StreamingSkeleton';
 import { TimelineGrid } from './TimelineGrid';
 import { TimelineVerticalLines } from './TimelineVerticalLines';
-import { TimelineCategoryLabels } from './TimelineCategoryLabels';
 import { TimelineEvent } from './TimelineEvent';
 import { EventHoverCursor, EventHoverCursorHandle } from './EventHoverCursor';
 import { TimelineEvent as ITimelineEvent, CategoryConfig } from '../../types/event';
+import type { WorldEvent, WorldEventsStatus } from '../../types/worldEvents';
 import { ScrollTarget, TimelineScale, TimelineVerticalScale } from '../../types/timeline';
 import { useRevealQueue } from '../../hooks/useRevealQueue';
 import { findMonthIndex, formatYMD, getTimelineRange, shiftEventDates } from '../../utils/dateUtils';
@@ -14,7 +14,7 @@ import type { TimelineYearRange } from '../../utils/dateUtils';
 import { calculateEventStacks, StackedEvent } from '../../utils/eventStacking';
 import { useTimelineScroll } from '../../hooks/useTimelineScroll';
 import { useEventDrag } from '../../hooks/useEventDrag';
-import { CATEGORY_PADDING, CATEGORY_MIN_HEIGHT, HEADER_HEIGHT, SCROLL_LEAD_IN_MONTHS, WHEEL_SUPPRESS_MS } from '../../constants/timeline';
+import { CATEGORY_PADDING, LANE_MIN_HEIGHT, HEADER_HEIGHT, SCROLL_LEAD_IN_MONTHS, WHEEL_SUPPRESS_MS } from '../../constants/timeline';
 import { EventForm } from '../EventForm/EventForm';
 import {
   Dialog,
@@ -34,7 +34,6 @@ interface TimelineProps {
   onOpenDetails?: (event: ITimelineEvent) => void;
   scale: TimelineScale;
   verticalScale: TimelineVerticalScale;
-  groupByCategory?: boolean;
   /**
    * Fixes the axis span instead of deriving it from `events`.
    *
@@ -81,18 +80,43 @@ interface TimelineProps {
    * hover-to-add cursor, click-to-edit) are suppressed.
    */
   mode?: 'edit' | 'view';
+  /**
+   * The World Events lane: read-only context events drawn in their own lane
+   * below everything else. Kept apart from `events` on purpose, so they never
+   * reach counts, legends, export, autosave or the axis range.
+   */
+  worldEvents?: WorldEvent[];
+  /** 'loading' shows placeholder bars; 'idle' and 'error' hide the lane. */
+  worldEventsStatus?: WorldEventsStatus;
+  onOpenWorldEventDetails?: (event: WorldEvent) => void;
 }
 
-interface CategoryBand {
-  id: string;
-  height: number;
-  offset: number;
-  events: StackedEvent[];
+/** The lane's neutral palette — context, so it never competes with a category. */
+const WORLD_EVENT_BAR = '#6D7073';
+const WORLD_EVENT_FILL = 'rgba(155,158,163,0.12)';
+const WORLD_EVENT_TITLE = '#9B9EA3';
+/** The lane's tint — carried on through the empty grid below it, so the
+ *  context area reads as one region down to the bottom of the canvas. */
+const WORLD_EVENT_LANE_BG = 'rgba(255,255,255,0.015)';
+/** How long the lane takes to rise into place when it appears. */
+const WORLD_LANE_RISE_MS = 400;
+/**
+ * Ease-in-out: a gentle start, quick through the middle, a soft landing in
+ * its slot. Same values as `--ease-swipe` in index.css — a Web Animation's
+ * `easing` can't read a CSS custom property, so they're spelled out here.
+ */
+const WORLD_LANE_RISE_EASING = 'cubic-bezier(0.76, 0, 0.24, 1)';
+/** Room the stacker reserves for the source tag: a 6px gap plus five 10px
+ *  JetBrains Mono capitals ("WORLD"). */
+const WORLD_EVENT_TAG_PX = 44;
+
+function worldEventTag(event: WorldEvent): string {
+  return event.source === 'country' ? event.country ?? '' : 'WORLD';
 }
 
 interface LayoutData {
-  bands: CategoryBand[];
-  totalHeight: number;
+  events: StackedEvent[];
+  height: number;
 }
 
 export function Timeline({
@@ -104,7 +128,6 @@ export function Timeline({
   onOpenDetails,
   scale,
   verticalScale,
-  groupByCategory = false,
   rangeOverride,
   intro = false,
   streaming = false,
@@ -114,6 +137,9 @@ export function Timeline({
   onEditRequestHandled,
   onVisibleMonthChange,
   mode = 'edit',
+  worldEvents,
+  worldEventsStatus = 'idle',
+  onOpenWorldEventDetails,
 }: TimelineProps) {
   const isEditing = mode === 'edit';
   // Filter visible categories and their events. Memoized because `months` and
@@ -368,45 +394,92 @@ export function Timeline({
     return monthIndex * scale.monthWidth - scrollLeft;
   }, [streaming, visibleEvents, months, scale.monthWidth]);
 
+  const rowHeight = verticalScale.eventRowHeight;
+
+  // Every visible event shares one band, stacked in a single pass; colour is
+  // what tells the categories apart.
   const layout = React.useMemo<LayoutData>(() => {
-    if (groupByCategory) {
-      let currentOffset = 0;
-      const bands: CategoryBand[] = visibleCategories.map(category => {
-        const categoryEvents = visibleEvents.filter(event => event.category === category.id);
-        const stackedEvents = calculateEventStacks(categoryEvents, months, scale.monthWidth);
-        const maxStack = Math.max(...stackedEvents.map(event => event.stackIndex), 0);
+    const events = calculateEventStacks(visibleEvents, months, scale.monthWidth);
+    const maxStack = Math.max(...events.map(event => event.stackIndex), 0);
+    const height = events.length === 0
+      ? rowHeight
+      : (maxStack + 1) * rowHeight + CATEGORY_PADDING;
+    return { events, height };
+  }, [visibleEvents, months, scale.monthWidth, rowHeight]);
 
-        const height = (maxStack + 1) * verticalScale.eventHeight + CATEGORY_PADDING;
+  /**
+   * The World Events lane. Never shown mid-stream — the timeline it gives
+   * context to isn't settled yet — and hidden outright on error (the Design
+   * menu says what went wrong).
+   *
+   * Only events inside the axis the user's own content already set are
+   * drawn: the lane adds context to a span, it never widens it.
+   */
+  const worldLane = React.useMemo(() => {
+    const visible = !streaming && (worldEventsStatus === 'loading' || worldEventsStatus === 'ready');
+    if (!visible || months.length === 0) return null;
+    const first = months[0];
+    const last = months[months.length - 1];
+    const min = formatYMD(first.year, 0, 1);
+    const max = formatYMD(last.year, 11, 31);
+    const inRange = (worldEvents ?? []).filter(e => e.startDate >= min && e.endDate <= max);
+    const stacked = worldEventsStatus === 'ready'
+      ? calculateEventStacks(inRange, months, scale.monthWidth, WORLD_EVENT_TAG_PX)
+      : [];
+    const maxStack = Math.max(...stacked.map(e => e.stackIndex), 0);
+    const height = Math.max(
+      (maxStack + 1) * rowHeight + CATEGORY_PADDING,
+      LANE_MIN_HEIGHT,
+    );
+    return { events: stacked, height, loading: worldEventsStatus === 'loading' };
+  }, [streaming, worldEventsStatus, worldEvents, months, scale.monthWidth, rowHeight]);
 
-        const band: CategoryBand = {
-          id: category.id,
-          height: Math.max(height, CATEGORY_MIN_HEIGHT),
-          offset: currentOffset,
-          events: stackedEvents,
-        };
-
-        currentOffset += band.height;
-        return band;
-      });
-
-      return {
-        bands,
-        totalHeight: currentOffset || CATEGORY_MIN_HEIGHT,
-      };
-    }
-
-    // Default: single global stacking pass.
-    const stackedEvents = calculateEventStacks(visibleEvents, months, scale.monthWidth);
-    const maxStack = Math.max(...stackedEvents.map(event => event.stackIndex), 0);
-    const height = stackedEvents.length === 0
-      ? verticalScale.eventRowHeight
-      : (maxStack + 1) * verticalScale.eventRowHeight + CATEGORY_PADDING;
-
-    return {
-      bands: [{ id: 'all', height, offset: 0, events: stackedEvents }],
-      totalHeight: height,
-    };
-  }, [groupByCategory, visibleEvents, visibleCategories, months, scale.monthWidth, verticalScale.eventHeight, verticalScale.eventRowHeight]);
+  /**
+   * The lane rises into place from the bottom edge of the screen whenever it
+   * appears — switched on, or arriving once a timeline settles — rather than
+   * popping in.
+   *
+   * It moves as ONE unit: the lane (which draws its own dashed seam along its
+   * top edge), its label (outside the scrolling canvas, so animated
+   * separately) and the tinted filler below it all play the identical
+   * animation from the identical offset. Anything left out reads as a
+   * separate step — a seam or a tint already in place while the lane is
+   * still on its way. The fade completes early in the travel, so the unit is
+   * fully visible the moment it comes into view rather than appearing to
+   * arrive late.
+   *
+   * Web Animations rather than a CSS keyframe, because the distance is the
+   * gap between the lane's resting place and the bottom of the viewport,
+   * which is only known once the lane is laid out. A layout effect measures
+   * and starts it before the first paint, so the lane is never seen resting
+   * in place first. Reduced motion gets a short fade instead of the travel.
+   */
+  const worldLaneRef = useRef<HTMLDivElement>(null);
+  const worldLaneLabelRef = useRef<HTMLDivElement>(null);
+  const worldLaneFillerRef = useRef<HTMLDivElement>(null);
+  const worldLaneShown = worldLane !== null;
+  useLayoutEffect(() => {
+    if (!worldLaneShown) return;
+    const lane = worldLaneRef.current;
+    if (!lane || typeof lane.animate !== 'function') return;
+    const nodes = [lane, worldLaneLabelRef.current, worldLaneFillerRef.current]
+      .filter((n): n is HTMLDivElement => n !== null);
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const distance = Math.max(0, window.innerHeight - lane.getBoundingClientRect().top);
+    const animations = nodes.map((node) =>
+      reduce
+        ? node.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 150, easing: 'linear' })
+        : node.animate(
+            [
+              { transform: `translateY(${distance}px)`, opacity: 0 },
+              { opacity: 1, offset: 0.25 },
+              { transform: 'translateY(0)', opacity: 1 },
+            ],
+            { duration: WORLD_LANE_RISE_MS, easing: WORLD_LANE_RISE_EASING },
+          ),
+    );
+    return () => animations.forEach((a) => a.cancel());
+  }, [worldLaneShown]);
 
   const handleMonthClick = useCallback((monthIndex: number) => {
     if (!isEditing || !onAddEvent || justDraggedRef.current) return;
@@ -426,11 +499,20 @@ export function Timeline({
   // itself handles cached content vs. fresh generation. Edit and Delete now
   // live in the panel's header rather than on the click path.
   const handleEventClick = useCallback(
-    (event: ITimelineEvent) => {
+    (eventId: string) => {
       if (justDraggedRef.current) return;
-      onOpenDetails?.(event);
+      const event = events.find(e => e.id === eventId);
+      if (event) onOpenDetails?.(event);
     },
-    [justDraggedRef, onOpenDetails],
+    [events, justDraggedRef, onOpenDetails],
+  );
+
+  const handleWorldEventClick = useCallback(
+    (eventId: string) => {
+      const event = worldEvents?.find(e => e.id === eventId);
+      if (event) onOpenWorldEventDetails?.(event);
+    },
+    [worldEvents, onOpenWorldEventDetails],
   );
 
   // The detail panel's Edit action reaches the EventForm dialog through here —
@@ -565,20 +647,28 @@ export function Timeline({
     }
   }, [pendingScrollEventId]);
 
-  const showCategoryLabels = groupByCategory;
-  const rowHeight = groupByCategory ? verticalScale.eventHeight : verticalScale.eventRowHeight;
-
   return (
     <div className={isFullScreen ? 'h-[calc(100vh-6rem)] relative' : 'flex-1 min-h-0 flex flex-col relative'}>
-      {showCategoryLabels && (
+      {/* The World Events lane's label: a pill in a neutral tint, sitting
+          against the lane's top-left corner. */}
+      {worldLane && (
         <div
+          ref={worldLaneLabelRef}
           className="absolute left-0 z-10 pointer-events-none"
-          style={{ top: HEADER_HEIGHT, height: layout.totalHeight, transition: 'height 220ms ease' }}
+          style={{
+            top: HEADER_HEIGHT + layout.height,
+            height: worldLane.height,
+            transition: 'top 220ms ease, height 220ms ease',
+          }}
         >
-          <TimelineCategoryLabels
-            categories={layout.bands.map(b => ({ id: b.id, height: b.height }))}
-            customCategories={visibleCategories}
-          />
+          <div className="flex items-start pt-2 pl-6">
+            <div
+              className="rounded-[4px] p-2 backdrop-blur-[2px] leading-none"
+              style={{ backgroundColor: 'rgba(155,158,163,0.18)' }}
+            >
+              <span className="label-small-allcaps whitespace-nowrap">World Events</span>
+            </div>
+          </div>
         </div>
       )}
 
@@ -618,12 +708,60 @@ export function Timeline({
                 scrollContainerRef={scrollContainerRef}
                 intro={intro}
               />
-              {layout.bands.map((band) => (
+              <div
+                className="relative shrink-0"
+                style={{
+                  height: layout.height,
+                  display: 'grid',
+                  gridTemplateColumns: `repeat(${months.length * 4}, ${scale.quarterWidth}px)`,
+                  ['--event-row-height' as string]: `${rowHeight}px`,
+                  gridAutoRows: 'var(--event-row-height)',
+                  gap: 0,
+                  transition: 'height 220ms ease, --event-row-height 220ms ease',
+                }}
+              >
+                <TimelineGrid
+                  months={months}
+                  height={layout.height}
+                  onMonthHover={setHoveredMonth}
+                  onMonthClick={handleMonthClick}
+                  scale={scale}
+                />
+                {layout.events.map((event) => {
+                  // Same in both modes now — a click always opens details.
+                  const canHandleClick = !!onOpenDetails;
+                  return (
+                    <TimelineEvent
+                      key={event.id}
+                      event={event}
+                      months={months}
+                      categoryColor={visibleCategories.find(c => c.id === event.category)?.color}
+                      onEventClick={canHandleClick ? handleEventClick : undefined}
+                      scale={scale}
+                      isDragging={dragState.isDragging && dragState.draggedEventId === event.id}
+                      dragDeltaPixels={dragState.draggedEventId === event.id ? dragState.deltaPixels : 0}
+                      onPointerDown={isEditing && onUpdateEvent ? handlePointerDown : undefined}
+                      rowHeight={rowHeight}
+                      onMounted={handleEventMounted}
+                      revealOnMount={streaming}
+                      suppressStackAnimation={streaming}
+                    />
+                  );
+                })}
+              </div>
+
+              {worldLane && (
                 <div
-                  key={`band-${band.id}`}
+                  ref={worldLaneRef}
                   className="relative shrink-0"
                   style={{
-                    height: band.height,
+                    height: worldLane.height,
+                    backgroundColor: WORLD_EVENT_LANE_BG,
+                    // The seam: dashed, so it reads as "below here is
+                    // context" rather than more of the timeline. On the
+                    // lane's own top edge (inside its height, border-box) so
+                    // it travels with the lane instead of waiting for it.
+                    borderTop: '1px dashed #262626',
                     display: 'grid',
                     gridTemplateColumns: `repeat(${months.length * 4}, ${scale.quarterWidth}px)`,
                     ['--event-row-height' as string]: `${rowHeight}px`,
@@ -634,35 +772,41 @@ export function Timeline({
                 >
                   <TimelineGrid
                     months={months}
-                    height={band.height}
+                    height={worldLane.height}
                     onMonthHover={setHoveredMonth}
                     onMonthClick={handleMonthClick}
                     scale={scale}
                   />
-                  {band.events.map((event) => {
-                    // Same in both modes now — a click always opens details.
-                    const canHandleClick = !!onOpenDetails;
-                    return (
-                      <TimelineEvent
-                        key={event.id}
-                        event={event}
-                        months={months}
-                        categoryOffset={band.offset}
-                        categoryColor={visibleCategories.find(c => c.id === event.category)?.color}
-                        onEventClick={canHandleClick ? handleEventClick : undefined}
-                        scale={scale}
-                        isDragging={dragState.isDragging && dragState.draggedEventId === event.id}
-                        dragDeltaPixels={dragState.draggedEventId === event.id ? dragState.deltaPixels : 0}
-                        onPointerDown={isEditing && onUpdateEvent ? handlePointerDown : undefined}
-                        rowHeight={rowHeight}
-                        onMounted={handleEventMounted}
-                        revealOnMount={streaming}
-                        suppressStackAnimation={streaming}
-                      />
-                    );
-                  })}
+                  {worldLane.loading && (
+                    // The skeleton draws in viewport pixels, so it rides a
+                    // sticky, viewport-wide strip to stay in view however far
+                    // the canvas is scrolled.
+                    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                      <div className="sticky left-0 h-full w-screen">
+                        <StreamingSkeleton rowHeight={rowHeight} revealedThroughX={null} />
+                      </div>
+                    </div>
+                  )}
+                  {worldLane.events.map((event) => (
+                    // Read-only context: no drag handle, and a click opens the
+                    // detail panel in its read-only form. Each entry fades in
+                    // with the same reveal a streamed event plays.
+                    <TimelineEvent
+                      key={event.id}
+                      event={event}
+                      months={months}
+                      categoryColor={WORLD_EVENT_BAR}
+                      rangeFill={WORLD_EVENT_FILL}
+                      titleColor={WORLD_EVENT_TITLE}
+                      tag={worldEventTag(event)}
+                      onEventClick={onOpenWorldEventDetails ? handleWorldEventClick : undefined}
+                      scale={scale}
+                      rowHeight={rowHeight}
+                      revealOnMount
+                    />
+                  ))}
                 </div>
-              ))}
+              )}
 
               {/* Placeholder rows, in the same coordinate space as the
                   events that replace them. Absolute over the bands rather
@@ -678,7 +822,13 @@ export function Timeline({
               {/* Filler: extends the body through remaining vertical space.
                   flex-1 lets it fill the scroll container when events are short,
                   and the whole grid scrolls vertically when they aren't. */}
-              <div className="relative flex-1 min-h-0">
+              <div
+                ref={worldLaneFillerRef}
+                className="relative flex-1 min-h-0"
+                // Tinted while the lane shows, and rises with it as part of
+                // the same unit (see the lane's entrance above).
+                style={{ backgroundColor: worldLane ? WORLD_EVENT_LANE_BG : undefined }}
+              >
                 <TimelineGrid
                   months={months}
                   onMonthHover={setHoveredMonth}

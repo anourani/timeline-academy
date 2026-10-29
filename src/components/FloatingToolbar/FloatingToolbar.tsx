@@ -3,6 +3,7 @@ import { Plus, CalendarFold, Bolt } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ModeTabs } from '@/components/FloatingToolbar/ModeTabs'
 import { DockLegend, type DockLegendProps } from '@/components/FloatingToolbar/DockLegend'
+import { DockDesign, type DockDesignProps } from '@/components/FloatingToolbar/DockDesign'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useSidePanel } from '@/hooks/useSidePanel'
 import { useWindowResizing } from '@/hooks/useWindowResizing'
@@ -11,7 +12,7 @@ interface FloatingToolbarProps {
   onAddEventClick: () => void
   onEventsClick: () => void
   onSettingsClick: () => void
-  activePanel: 'events' | 'settings' | 'legend' | null
+  activePanel: 'events' | 'settings' | 'legend' | 'design' | null
   mode?: 'edit' | 'view'
   onModeChange?: (mode: 'edit' | 'view') => void
   /**
@@ -23,11 +24,14 @@ interface FloatingToolbarProps {
   streaming?: boolean
   /**
    * AI timelines are built from a prompt, so the dock drops Add Event and
-   * carries the category legend instead (after Settings, in both modes).
+   * carries the category legend instead (after Design, in both modes).
    */
   aiGenerated?: boolean
-  legend?: Omit<DockLegendProps, 'open' | 'onOpenChange' | 'mode' | 'disabled'>
+  legend?: Omit<DockLegendProps, 'open' | 'onOpenChange' | 'mode' | 'disabled' | 'iconOnly' | 'triggerClassName'>
   onLegendOpenChange?: (open: boolean) => void
+  /** The Design menu's settings. Shown on every timeline, in both modes. */
+  design?: Omit<DockDesignProps, 'open' | 'onOpenChange' | 'disabled' | 'iconOnly' | 'triggerClassName'>
+  onDesignOpenChange?: (open: boolean) => void
 }
 
 const INTRO_RISE_MS = 550
@@ -46,6 +50,8 @@ export function FloatingToolbar({
   aiGenerated = false,
   legend,
   onLegendOpenChange,
+  design,
+  onDesignOpenChange,
 }: FloatingToolbarProps) {
   // The pill is centered on the viewport, then shifted by half the side
   // panel's width to recenter over the visible timeline area. The width is
@@ -62,10 +68,17 @@ export function FloatingToolbar({
 
   const isEditing = mode === 'edit'
 
-  // Both trees below are always mounted and split by CSS, so the legend may
-  // only render into the visible one — two controlled popovers sharing one
-  // open flag would open twice. `useIsMobile` is the exact complement of `md`.
+  // Both trees below are always mounted and split by CSS, so the legend and
+  // the Design menu may only render into the visible one — two controlled
+  // popovers sharing one open flag would open twice. `useIsMobile` is the
+  // exact complement of `md`, which is also where the footer drops its
+  // button labels: four labelled buttons don't fit a 390px screen.
   const isMobile = useIsMobile()
+  // In present mode the phone footer also carries the Edit/Present switch,
+  // and on an AI timeline that is three buttons plus the switch — wider than
+  // a 360px screen at the dock's usual 80px minimum. Narrower there only;
+  // still well clear of a 44px touch target.
+  const compactClass = isMobile && !isEditing ? 'min-w-[60px]' : ''
   const legendControl = aiGenerated && legend && onLegendOpenChange ? (
     <DockLegend
       {...legend}
@@ -73,6 +86,18 @@ export function FloatingToolbar({
       onOpenChange={onLegendOpenChange}
       mode={mode}
       disabled={streaming}
+      iconOnly={isMobile}
+      triggerClassName={compactClass}
+    />
+  ) : null
+  const designControl = design && onDesignOpenChange ? (
+    <DockDesign
+      {...design}
+      open={activePanel === 'design'}
+      onOpenChange={onDesignOpenChange}
+      disabled={streaming}
+      iconOnly={isMobile}
+      triggerClassName={compactClass}
     />
   ) : null
 
@@ -94,6 +119,60 @@ export function FloatingToolbar({
     ? `transform ${INTRO_RISE_MS}ms var(--ease-pop) ${INTRO_RISE_DELAY_MS}ms`
     : undefined
 
+  /** The dock's buttons, in order, for one of the two trees. */
+  const renderButtons = (surface: 'desktop' | 'mobile') => {
+    const iconOnly = surface === 'mobile'
+    return (
+      <>
+        {!aiGenerated && (
+          <Collapsible open={isEditing}>
+            <Button
+              variant="glass" size="none"
+              className={lockedClass}
+              onClick={onAddEventClick}
+              disabled={streaming}
+              tabIndex={isEditing && !streaming ? 0 : -1}
+              aria-label="Add Event"
+              title={iconOnly ? 'Add Event' : undefined}
+            >
+              <Plus size={20} />
+              {!iconOnly && 'Add Event'}
+            </Button>
+          </Collapsible>
+        )}
+        <Button
+          variant="glass" size="none"
+          className={`${lockedClass} ${iconOnly ? compactClass : ''}`}
+          data-active={activePanel === 'events'}
+          onClick={onEventsClick}
+          disabled={streaming}
+          aria-label="Events"
+          title={iconOnly ? 'Events' : undefined}
+        >
+          <CalendarFold size={20} />
+          {!iconOnly && 'Events'}
+        </Button>
+        {(surface === 'mobile') === isMobile && designControl}
+        {(surface === 'mobile') === isMobile && legendControl}
+        <Collapsible open={isEditing}>
+          <Button
+            variant="glass" size="none"
+            className={lockedClass}
+            data-active={activePanel === 'settings'}
+            onClick={onSettingsClick}
+            disabled={streaming}
+            tabIndex={isEditing && !streaming ? 0 : -1}
+            aria-label="Settings"
+            title={iconOnly ? 'Settings' : undefined}
+          >
+            <Bolt size={20} />
+            {!iconOnly && 'Settings'}
+          </Button>
+        </Collapsible>
+      </>
+    )
+  }
+
   return (
     <>
       {/* Desktop: floating pill, centered over the visible timeline area.
@@ -105,7 +184,11 @@ export function FloatingToolbar({
           could survive. With width auto it re-lays out from its content every
           frame, and `translateX(-50%)` resolves against its own border box — so
           collapsing a child animates the pill's width *and* keeps it centred,
-          with no width transition of its own. */}
+          with no width transition of its own.
+
+          Order: Events, Design, Legend, then Settings last before the
+          Edit/Present switch — the menus that change what you see sit
+          together, and the one that manages the timeline itself sits apart. */}
       <div
         className={`
           hidden md:flex
@@ -122,91 +205,18 @@ export function FloatingToolbar({
           transition: introTransition,
         }}
       >
-        {!aiGenerated && (
-          <Collapsible open={isEditing}>
-            <Button
-              variant="glass" size="none"
-              className={lockedClass}
-              onClick={onAddEventClick}
-              disabled={streaming}
-              tabIndex={isEditing && !streaming ? 0 : -1}
-            >
-              <Plus size={20} />
-              Add Event
-            </Button>
-          </Collapsible>
-        )}
-        <Button
-          variant="glass" size="none"
-          className={lockedClass}
-          data-active={activePanel === 'events'}
-          onClick={onEventsClick}
-          disabled={streaming}
-        >
-          <CalendarFold size={20} />
-          Events
-        </Button>
-        <Collapsible open={isEditing}>
-          <Button
-            variant="glass" size="none"
-            className={lockedClass}
-            data-active={activePanel === 'settings'}
-            onClick={onSettingsClick}
-            disabled={streaming}
-            tabIndex={isEditing && !streaming ? 0 : -1}
-          >
-            <Bolt size={20} />
-            Settings
-          </Button>
-        </Collapsible>
-        {!isMobile && legendControl}
+        {renderButtons('desktop')}
         {onModeChange && <ModeTabs mode={mode} onChange={onModeChange} />}
       </div>
 
-      {/* Mobile: full-width sticky footer. The tabs are deliberately absent in
-          edit mode — Present is a desktop affordance (see GlobalNav's right
-          cluster) and four controls do not fit a phone. They do appear in view
-          mode, so a desktop window narrowed while presenting always has a way
-          back rather than stranding the reader in a mode it cannot leave. */}
+      {/* Mobile: full-width sticky footer, icons only — the buttons carry
+          their names in `aria-label` and `title` instead. The tabs are
+          deliberately absent in edit mode — Present is a desktop affordance
+          (see GlobalNav's right cluster). They do appear in view mode, so a
+          desktop window narrowed while presenting always has a way back rather
+          than stranding the reader in a mode it cannot leave. */}
       <div className="fixed bottom-0 left-0 right-0 z-30 w-full flex md:hidden justify-center items-center gap-2 px-4 pt-2 pb-6 bg-black border-t border-[#3d3e40]">
-        {!aiGenerated && (
-          <Collapsible open={isEditing}>
-            <Button
-              variant="glass" size="none"
-              className={lockedClass}
-              onClick={onAddEventClick}
-              disabled={streaming}
-              tabIndex={isEditing && !streaming ? 0 : -1}
-            >
-              <Plus size={20} />
-              Add Event
-            </Button>
-          </Collapsible>
-        )}
-        <Button
-          variant="glass" size="none"
-          className={lockedClass}
-          data-active={activePanel === 'events'}
-          onClick={onEventsClick}
-          disabled={streaming}
-        >
-          <CalendarFold size={20} />
-          Events
-        </Button>
-        <Collapsible open={isEditing}>
-          <Button
-            variant="glass" size="none"
-            className={lockedClass}
-            data-active={activePanel === 'settings'}
-            onClick={onSettingsClick}
-            disabled={streaming}
-            tabIndex={isEditing && !streaming ? 0 : -1}
-          >
-            <Bolt size={20} />
-            Settings
-          </Button>
-        </Collapsible>
-        {isMobile && legendControl}
+        {renderButtons('mobile')}
         {!isEditing && onModeChange && <ModeTabs mode={mode} onChange={onModeChange} />}
       </div>
     </>

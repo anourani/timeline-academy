@@ -12,9 +12,12 @@ import {
   getStreamSystemPrompt,
   getUserPrompt,
   buildEnrichUserPrompt,
+  buildWorldEventsUserPrompt,
   CLASSIFICATION_PROMPT,
   ENRICH_SYSTEM_PROMPT,
+  WORLD_EVENTS_SYSTEM_PROMPT,
   type CategoryDefinition,
+  type WorldEventsPromptInput,
 } from './llmPrompts'
 import {
   createNdjsonLineReader,
@@ -27,7 +30,7 @@ import type {
   EnrichmentStreamHandlers,
   TimelineStreamHandlers,
 } from '@/types/ai'
-import type { EventSource, TimelineEvent } from '@/types/event'
+import type { EnrichableEvent, EventSource } from '@/types/event'
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 
@@ -93,7 +96,7 @@ function readMessageText(json: Record<string, unknown>): string {
 // ---------------------------------------------------------------------------
 
 export async function enrichEventDirect(
-  event: TimelineEvent,
+  event: EnrichableEvent,
   timelineTitle: string,
   handlers: EnrichmentStreamHandlers,
   model: ModelDef,
@@ -369,4 +372,39 @@ export async function classifySubjectDirect(
   }
 
   return validTypes.has(parsed.type) ? parsed.type : 'topic'
+}
+
+// ---------------------------------------------------------------------------
+// World Events (non-streaming)
+// ---------------------------------------------------------------------------
+
+/**
+ * The raw text of a World Events reply. Parsing and validation live in
+ * services/worldEvents.ts, shared with the OpenAI twin and the server path.
+ */
+export async function fetchWorldEventsDirect(
+  input: WorldEventsPromptInput,
+  model: ModelDef,
+  apiKey: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const res = await fetch(ANTHROPIC_URL, {
+    method: 'POST',
+    headers: headers(apiKey),
+    signal,
+    body: JSON.stringify({
+      model: model.id,
+      system: WORLD_EVENTS_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: buildWorldEventsUserPrompt(input) }],
+      ...model.params.context,
+    }),
+  })
+
+  if (!res.ok) {
+    throw new Error(
+      await readApiError(res, 'Anthropic API error', model.id, 'anthropic'),
+    )
+  }
+
+  return readMessageText(await res.json())
 }

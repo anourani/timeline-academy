@@ -29,6 +29,9 @@ src/
 │   ├── EventTableEditor/  # The events drawer: Events table (sort, filter, row
 │   │                 #   numbers) + Categories tab. 95dvh bottom drawer at every
 │   │                 #   breakpoint; event rows are read-only below `sm`
+│   ├── FloatingToolbar/  # The dock: Events · Design · Legend · Settings · mode
+│   │                 #   tabs (icon-only below `md`). DockMenu is the popover/
+│   │                 #   drawer shell the Design menu and the Legend share
 │   ├── Legal/        # /privacy and /terms pages
 │   ├── Onboarding/   # First-visit welcome modal → tour, + "Getting started" checklist on /
 │   │                 #   (trial guests only; anchors are data-onboarding="…")
@@ -43,6 +46,7 @@ src/
 │                     #   aiTimeline, anthropicDirect + openaiDirect (BYOK),
 │                     #   llmShared (provider-neutral), eventEnrichment,
 │                     #   llmPrompts, userApiKey, viewerEventCache,
+│                     #   worldEvents + worldEventCache (the World Events lane),
 │                     #   wikipediaSearch, wikipediaImage
 ├── utils/            # Helpers (excelSheet/excelExport, dateUtils,
 │                     #   eventStacking, draftStorage, saveEvents, etc.)
@@ -57,7 +61,7 @@ supabase/
 ├── config.toml       # Per-function settings (verify_jwt) + project_id
 ├── functions/        # Edge Functions: generate-timeline, enrich-event,
 │                     #   byok-keys, set-byok-flag, delete-account,
-│                     #   and _shared/
+│                     #   world-events, and _shared/
 └── migrations/       # Database migrations (applied BY HAND — see below)
 .github/workflows/
 └── deploy-functions.yml   # Deploys all edge functions on merge to main
@@ -152,7 +156,8 @@ That sentence is the whole model. Everything below is how it is enforced.
 - **Categories live in `timelines.categories`** for signed-in users and on the `LocalDraft` for everyone else. The `timeline_categories` table is vestigial — nothing has ever written it. Both save paths fingerprint categories, and both must: a field a store persists but the fingerprint omits never arms a write, while a field the fingerprint includes but `markClean` isn't given makes every load write itself back and reorder the side panel.
 - **AI timelines are flagged by `timelines.is_ai_generated`** (and `LocalDraft.isAiGenerated`). The flag makes the timeline's events read-only — no adding, editing, deleting or dragging them, in the events drawer, the detail panel or on the canvas — lets categories be reordered, recoloured and hidden but not renamed, added or deleted, and moves the category legend from the top nav into the dock. The column is written **only** by `markTimelineAiGenerated`, a separate best-effort update — never on the insert or autosave's update, so an unapplied migration costs the flag, not every save. Until it is applied, and for drafts saved before it, "has chapters" stands in (`isDraftAiGenerated`, `loadTimeline`).
 - **Plan limits** live in `src/constants/plans.ts` and must stay in sync with `get_plan_limits` in SQL. The `byok_enabled` flag lives in `app_metadata` (service-role writable only) — never move it back to `user_metadata`, which users can edit themselves.
-- **Rate limits**: 5 generations/day, 30 event enrichments/day, 30 classifications/day, per signed-in user. Enrichment is higher because descriptions auto-generate when an event is opened.
+- **Rate limits**: 5 generations/day, 30 event enrichments/day, 30 classifications/day, 30 World Events fetches/day, per signed-in user. Enrichment is higher because descriptions auto-generate when an event is opened. A World Events fetch is one source over one year range; results are cached per (timeline, source, country, range) in localStorage, so toggling chips back on costs nothing. Every new rate-limit key prefix must also be added to `delete-account`.
+- **World Events** (the Design menu's "Show world events") is a read-only lane of context events under the user's own, fetched from AI on demand and **never stored server-side** — only the three settings are (`show_world_events`, `world_event_sources`, `world_event_country`, migration `20261029000000_world_events.sql`, applied by hand like every migration). They are written by `saveWorldEventSettings`, a separate best-effort update, never by autosave's update, for the same reason as `is_ai_generated`; drafts carry them on `LocalDraft`. Selection is relevance-first: the prompt judges every pick against this timeline (its title, description and a spread of its own events), and only world wars-scale backdrop gets in on importance alone. **Every date is fact-checked before it is shown** (`services/worldEventVerify.ts`): the model names each event's Wikipedia article, Wikidata's dates replace the model's, an event with no structured date survives only if its year is in the article's intro, and anything unverifiable is dropped. Sources are Country and World only (Science & tech was removed), and the merged lane shows each Wikipedia article once (`dedupeWorldEvents`). That check is browser-direct, which is why `connect-src` lists `www.wikidata.org`. Changing the prompt or the check means bumping the cache version in `worldEventCache.ts`, and the prompt is mirrored by hand in the edge function. The lane's events live in their own array (`useWorldEvents`), never in `events`, so they stay out of counts, legends, export, autosave and the axis — the lane never widens the range. Their ids start `we:`, which is how the detail panel's write-back routes them to the lane's cache instead of the timeline. Shared pages show the owner's lane only to a viewer with AI access, because the viewer's key or account pays for the fetch.
 - **No analytics, tracking, or third-party scripts.** This is deliberate and is the product's strongest privacy property. Keep it that way.
 
 ## Known issues

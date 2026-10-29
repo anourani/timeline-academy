@@ -12,7 +12,16 @@ import type { ScrollTarget, TimelineChapter } from '../../types/timeline';
 import { ChaptersStrip } from '../Timeline/ChaptersStrip';
 import { normalizeChapters } from '../../utils/chapters';
 import { computeDominantCategoryColor } from '../../utils/dominantCategory';
-import { getTimelineRange } from '../../utils/dateUtils';
+import { getTimelineRange, getTimelineYearSpan } from '../../utils/dateUtils';
+import { useAccountTier } from '../../hooks/useAccountTier';
+import { useWorldEvents } from '../../hooks/useWorldEvents';
+import { buildWorldEventsContext } from '../../services/worldEvents';
+import {
+  DEFAULT_WORLD_EVENT_SETTINGS,
+  normalizeWorldEventSettings,
+  type WorldEvent,
+  type WorldEventSettings,
+} from '../../types/worldEvents';
 import {
   getCachedEvent,
   setCachedEvent,
@@ -20,12 +29,14 @@ import {
 
 interface TimelineData {
   title: string;
+  description?: string;
   events: TimelineEvent[];
   categories: CategoryConfig[];
   chapters: TimelineChapter[];
   scale: 'large' | 'medium' | 'small';
   verticalScale: 'small' | 'medium';
-  groupByCategory: boolean;
+  /** The owner's World Events settings. Read-only here — viewers can't change them. */
+  worldEvents: WorldEventSettings;
 }
 
 export function TimelineViewer() {
@@ -33,7 +44,9 @@ export function TimelineViewer() {
   const [timeline, setTimeline] = useState<TimelineData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [detailPanelEvent, setDetailPanelEvent] = useState<TimelineEvent | null>(null);
+  // A real event, or a World Events entry (read-only context; `we:` id).
+  const [detailPanelEvent, setDetailPanelEvent] = useState<TimelineEvent | WorldEvent | null>(null);
+  const tier = useAccountTier();
   const [currentMonthIndex, setCurrentMonthIndex] = useState(0);
   const [pendingScrollTarget, setPendingScrollTarget] = useState<ScrollTarget | null>(null);
 
@@ -113,6 +126,7 @@ export function TimelineViewer() {
 
         setTimeline({
           title: timelineData.title || 'Untitled Timeline',
+          description: timelineData.description || undefined,
           events: formattedEvents,
           categories: categories,
           // Present only once the chapters migration has been applied AND
@@ -121,7 +135,13 @@ export function TimelineViewer() {
           chapters: normalizeChapters(timelineData.chapters),
           scale: timelineData.scale || 'large',
           verticalScale: timelineData.vertical_scale ?? 'medium',
-          groupByCategory: timelineData.group_by_category ?? false
+          // Same story as chapters: absent until the World Events migration
+          // recreates `get_public_timeline`, which reads as "off".
+          worldEvents: normalizeWorldEventSettings({
+            showWorldEvents: timelineData.show_world_events,
+            worldEventSources: timelineData.world_event_sources,
+            worldEventCountry: timelineData.world_event_country,
+          }),
         });
       } catch (err) {
         console.error('Error loading timeline:', err);
@@ -146,6 +166,27 @@ export function TimelineViewer() {
   const handleVisibleMonthChange = useCallback((monthIndex: number) => {
     setCurrentMonthIndex(monthIndex);
   }, []);
+
+  // The owner's World Events lane, fetched by the viewer — with the viewer's
+  // own key or account, so it shows only to a viewer who has AI access. The
+  // owner's results aren't stored anywhere a viewer could read them.
+  const worldEventsSpan = useMemo(
+    () => (viewerEvents.length > 0 ? getTimelineYearSpan(viewerEvents) : null),
+    [viewerEvents],
+  );
+  const worldEventsContext = useMemo(
+    () => buildWorldEventsContext(timeline?.description, viewerEvents),
+    [timeline, viewerEvents],
+  );
+  const worldEventsLane = useWorldEvents({
+    timelineId: timelineId ?? null,
+    settings: timeline?.worldEvents ?? DEFAULT_WORLD_EVENT_SETTINGS,
+    range: worldEventsSpan,
+    subject: timeline?.title ?? '',
+    context: worldEventsContext,
+    paused: false,
+    aiAvailable: tier !== 'loading' && tier !== 'trial',
+  });
 
   if (loading) {
     return (
@@ -205,12 +246,14 @@ export function TimelineViewer() {
           categories={timeline.categories}
           scale={SCALES[timeline.scale]}
           verticalScale={VERTICAL_SCALES[timeline.verticalScale]}
-          groupByCategory={timeline.groupByCategory}
           mode="view"
           onOpenDetails={(event) => setDetailPanelEvent(event)}
           onVisibleMonthChange={handleVisibleMonthChange}
           pendingScrollTarget={pendingScrollTarget}
           onScrollComplete={() => setPendingScrollTarget(null)}
+          worldEvents={worldEventsLane.events}
+          worldEventsStatus={worldEventsLane.status}
+          onOpenWorldEventDetails={(event) => setDetailPanelEvent(event)}
         />
       </main>
 
@@ -219,8 +262,15 @@ export function TimelineViewer() {
         event={detailPanelEvent}
         timelineTitle={timeline.title}
         mode="view"
+        readOnly={detailPanelEvent !== null && 'source' in detailPanelEvent}
         onClose={() => setDetailPanelEvent(null)}
         onEventChange={(updated) => {
+          // World Events entries keep their enrichment in the lane's cache.
+          if ('source' in updated) {
+            worldEventsLane.updateEvent(updated);
+            setDetailPanelEvent(updated);
+            return;
+          }
           // Public viewers don't own the timeline row, so generations
           // they trigger get persisted to their own browser's localStorage
           // instead of the DB. Owner content from the DB will still take

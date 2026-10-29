@@ -5,7 +5,6 @@ import { TimelineEvent, CategoryConfig } from '../../types/event';
 import type { AddEventsResult } from '../../hooks/useEvents';
 import { exportEventsToExcel } from '../../utils/excelExport';
 import { ConfirmationModal } from '../Modal/ConfirmationModal';
-import { SegmentedControl, type SegmentedOption } from '../ui/SegmentedControl';
 import { ApiKeySection } from './ApiKeySection';
 import { SidePanelActionButton } from '../SidePanel/SidePanelActionButton';
 import { PanelResizeHandle } from '../ui/PanelResizeHandle';
@@ -18,37 +17,13 @@ import {
   toDateString,
 } from '../../utils/excelSheet';
 
-type TimelineScale = 'large' | 'medium' | 'small';
-type VerticalScale = 'small' | 'medium';
-
-// Single glyphs, because the row is a label and a control side by side and the
-// words crowded it. `name` carries the word through to the tooltip and the
-// accessible name, so nothing is lost — see `SegmentedControl`.
-const SCALE_OPTIONS: SegmentedOption<TimelineScale>[] = [
-  { value: 'small', label: 'S', name: 'Small' },
-  { value: 'medium', label: 'M', name: 'Medium' },
-  { value: 'large', label: 'L', name: 'Large' },
-];
-
-const VERTICAL_SCALE_OPTIONS: SegmentedOption<VerticalScale>[] = [
-  { value: 'small', label: 'S', name: 'Small' },
-  { value: 'medium', label: 'M', name: 'Medium' },
-];
-
 interface TimelineSettingsPanelProps {
   isOpen: boolean;
   onClose: () => void;
   events: TimelineEvent[];
   timelineTitle: string;
   onImportEvents: (events: Omit<TimelineEvent, 'id'>[]) => AddEventsResult;
-  scale: TimelineScale;
-  onScaleChange: (scale: TimelineScale) => void;
-  verticalScale: VerticalScale;
-  onVerticalScaleChange: (scale: VerticalScale) => void;
-  groupByCategory: boolean;
-  onGroupByCategoryChange: (value: boolean) => void;
   categories: CategoryConfig[];
-  onCategoriesChange?: (categories: CategoryConfig[]) => void;
   onDeleteTimeline: () => Promise<void> | void;
 }
 
@@ -58,12 +33,6 @@ export function TimelineSettingsPanel({
   events,
   timelineTitle,
   onImportEvents,
-  scale,
-  onScaleChange,
-  verticalScale,
-  onVerticalScaleChange,
-  groupByCategory,
-  onGroupByCategoryChange,
   categories,
   onDeleteTimeline,
 }: TimelineSettingsPanelProps) {
@@ -78,8 +47,8 @@ export function TimelineSettingsPanel({
   const skipTransition = isResizing || isWindowResizing;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Settings is the widest panel by default — its scale selectors and BYOK key
-  // rows were cramped at the 314px card the other panels use.
+  // Settings is the widest panel by default — its BYOK key rows were cramped
+  // at the 314px card the other panels use.
   const { width, setWidth, resetWidth } = usePanelWidth(
     'settings_panel_width',
     SETTINGS_PANEL_DEFAULT_WIDTH
@@ -215,60 +184,6 @@ export function TimelineSettingsPanel({
               {/* Body */}
               <div className="flex-1 min-h-0 overflow-y-auto">
                 <div className="flex flex-col px-5 pt-6 pb-2 gap-8 min-h-full">
-                  {/* Visual Settings */}
-                  <div className="flex flex-col gap-2.5">
-                    <span className="label-m-type2 text-[#9B9EA3]">Visual Settings</span>
-                    <div className="h-px bg-[#262626] w-full" />
-
-                    {/* `min-h-12` rather than the old fixed `h-10`: a segment
-                        is 40px of hit area, and the track's padding and border
-                        put the control at 50. A floor rather than a height so
-                        the row follows the control instead of clipping it. */}
-                    <div className="flex flex-row items-center justify-between gap-3 min-h-12">
-                      <span className="label-m-type2 text-[#9B9EA3]">Scale</span>
-                      <SegmentedControl
-                        label="Scale"
-                        options={SCALE_OPTIONS}
-                        value={scale}
-                        onChange={onScaleChange}
-                      />
-                    </div>
-
-                    <div className="h-px bg-[#262626] w-full" />
-
-                    {/* Event height row */}
-                    <div className="flex flex-row items-center justify-between gap-3 min-h-12">
-                      <span className="label-m-type2 text-[#9B9EA3]">Row height</span>
-                      <SegmentedControl
-                        label="Row height"
-                        options={VERTICAL_SCALE_OPTIONS}
-                        value={verticalScale}
-                        onChange={onVerticalScaleChange}
-                      />
-                    </div>
-
-                    <div className="h-px bg-[#262626] w-full" />
-
-                    {/* Group-by-category row */}
-                    <div className="flex flex-row items-center justify-between h-6 gap-2">
-                      <span className="body-m text-[#9B9EA3]">Group events by category</span>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={groupByCategory}
-                        onClick={() => onGroupByCategoryChange(!groupByCategory)}
-                        className={`relative inline-flex shrink-0 w-11 h-6 rounded-[50px] transition-colors ${
-                          groupByCategory ? 'bg-[#259E23]' : 'bg-[rgba(37,158,35,0.3)]'
-                        }`}
-                      >
-                        <span
-                          className="absolute top-1/2 left-0 w-5 h-5 -translate-y-1/2 rounded-full bg-[#F5F5F5] transition-transform"
-                          style={{ transform: `translate(${groupByCategory ? 22 : 2}px, -50%)` }}
-                        />
-                      </button>
-                    </div>
-                  </div>
-
                   {/* AI Settings (BYOK) */}
                   <ApiKeySection />
 

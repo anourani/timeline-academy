@@ -36,3 +36,6 @@ verify_jwt = false
 
 [functions.byok-keys]
 verify_jwt = false
+
+[functions.world-events]
+verify_jwt = false

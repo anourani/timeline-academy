@@ -42,6 +42,7 @@ export type CallKind =
   | 'generate'
   | 'generateStream'
   | 'enrich'
+  | 'context'
 
 export interface ModelDef {
   /** API model string; also the value persisted in `timeline_byok_model`. */
@@ -212,6 +213,11 @@ export const MODELS: ModelDef[] = [
         thinking: { type: 'disabled' },
         stream: true,
       },
+      context: {
+        // World Events: a short fixed-schema list, same reasoning as `generate`.
+        max_tokens: 4096,
+        thinking: { type: 'disabled' },
+      },
       enrich: {
         // Thinking deliberately left on: with it off, Sonnet 5 reaches for
         // tools noticeably less often, and this call is only worth making if
@@ -249,6 +255,11 @@ export const MODELS: ModelDef[] = [
         output_config: { effort: 'low' },
         stream: true,
       },
+      context: {
+        // `thinking` absent for the same reasons as `generate`.
+        max_tokens: THINKING_CEILING,
+        output_config: { effort: 'low' },
+      },
       enrich: {
         // Effort left at the API default here, unlike generate: this call
         // depends on the model deciding to search, and that is the one place
@@ -282,6 +293,11 @@ export const MODELS: ModelDef[] = [
         output_config: { effort: 'low' },
         stream: true,
       },
+      context: {
+        // `thinking` absent for the same reasons as `generate`.
+        max_tokens: THINKING_CEILING,
+        output_config: { effort: 'low' },
+      },
       enrich: {
         max_tokens: THINKING_CEILING,
         ...ANTHROPIC_WEB_SEARCH,
@@ -304,6 +320,10 @@ export const MODELS: ModelDef[] = [
         max_tokens: 8192,
       },
       generateStream: { ...OPENAI_NDJSON_GENERATE },
+      context: {
+        response_format: { type: 'json_object' },
+        max_tokens: 4096,
+      },
       enrich: {
         max_output_tokens: 4096,
         ...OPENAI_WEB_SEARCH,
@@ -330,6 +350,10 @@ export const MODELS: ModelDef[] = [
         max_tokens: 8192,
       },
       generateStream: { ...OPENAI_NDJSON_GENERATE },
+      context: {
+        response_format: { type: 'json_object' },
+        max_tokens: 4096,
+      },
       enrich: {
         max_output_tokens: 4096,
         ...OPENAI_WEB_SEARCH,
@@ -360,6 +384,10 @@ export const MODELS: ModelDef[] = [
         max_tokens: 8192,
       },
       generateStream: { ...OPENAI_NDJSON_GENERATE },
+      context: {
+        response_format: { type: 'json_object' },
+        max_tokens: 4096,
+      },
       enrich: {
         max_output_tokens: 4096,
         ...OPENAI_WEB_SEARCH,

@@ -1,5 +1,6 @@
 import type { TimelineEvent, CategoryConfig } from '../types/event';
 import type { TimelineChapter } from '../types/timeline';
+import type { WorldEventSettings } from '../types/worldEvents';
 
 /**
  * Fingerprints for deciding whether a timeline actually changed.
@@ -33,11 +34,16 @@ interface MetaInput {
   description: string;
   scale: string;
   verticalScale: string;
-  groupByCategory: boolean;
   /** Guest drafts persist categories; signed-in timelines do not. */
   categories?: CategoryConfig[];
   /** Both stores persist chapters, so both must fingerprint them. */
   chapters?: TimelineChapter[];
+  /**
+   * Guest drafts persist the World Events settings in the draft itself.
+   * Signed-in timelines write them with their own side update
+   * (`saveWorldEventSettings`), so that path leaves this out.
+   */
+  worldEvents?: WorldEventSettings;
 }
 
 /**
@@ -60,12 +66,14 @@ export function metaFingerprint(input: MetaInput): string {
     input.description,
     input.scale,
     input.verticalScale,
-    input.groupByCategory,
     input.categories
       ? input.categories.map(c => [c.id, c.label, c.color, c.visible])
       : null,
     input.chapters
       ? input.chapters.map(c => [c.id, c.label, c.startDate, c.endDate])
+      : null,
+    input.worldEvents
+      ? [input.worldEvents.showWorldEvents, input.worldEvents.worldEventSources, input.worldEvents.worldEventCountry]
       : null,
   ]);
 }

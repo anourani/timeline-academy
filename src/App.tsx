@@ -5,7 +5,10 @@ import { GlobalNav } from '@/components/Navigation/GlobalNav';
 import { Timeline } from './components/Timeline/Timeline';
 import { useTimelineState } from './hooks/useTimelineState';
 import { ensureSomeVisible } from './hooks/useCategories';
-import { useTimeline, markTimelineAiGenerated, type TimelineData } from './hooks/useTimeline';
+import { useTimeline, markTimelineAiGenerated, saveWorldEventSettings, type TimelineData } from './hooks/useTimeline';
+import { DEFAULT_WORLD_EVENT_SETTINGS, isWorldEventId, type WorldEvent, type WorldEventSettings } from './types/worldEvents';
+import { useWorldEvents } from './hooks/useWorldEvents';
+import { buildWorldEventsContext } from './services/worldEvents';
 import { useAuth } from './hooks/useAuth';
 import { useAutosave } from './hooks/useAutosave';
 import { useSidePanel } from './hooks/useSidePanel';
@@ -20,7 +23,7 @@ import { useLocalDraft } from './hooks/useLocalDraft';
 import { useEventUsage } from './hooks/useEventUsage';
 import type { AddEventsResult } from './hooks/useEvents';
 import { useAccountTier, type AccountTier } from './hooks/useAccountTier';
-import { byokAnonDraftStore, trialDraftStore, isDraftAiGenerated } from './utils/draftStorage';
+import { byokAnonDraftStore, trialDraftStore, isDraftAiGenerated, draftWorldEvents } from './utils/draftStorage';
 import { TimelineEvent, CategoryConfig } from './types/event';
 import type { ScrollTarget } from './types/timeline';
 import { LimitReachedError, limitReachedMessage } from './lib/limits';
@@ -29,7 +32,7 @@ import { DEFAULT_TIMELINE_TITLE } from './constants/defaults';
 import { DEFAULT_CATEGORIES } from './constants/categories';
 import { ChaptersStrip } from './components/Timeline/ChaptersStrip';
 import { normalizeChapters } from './utils/chapters';
-import { getTimelineRange } from './utils/dateUtils';
+import { getTimelineRange, getTimelineYearSpan } from './utils/dateUtils';
 import { useGeneration } from './hooks/useGeneration';
 import { CurtainIntro } from './components/Timeline/CurtainIntro';
 import { MAX_DRAFTS } from './utils/draftStorage';
@@ -56,7 +59,7 @@ export function App() {
     chapters, updateChapters, resetChapters,
     scale, currentScale, handleScaleChange,
     verticalScale, currentVerticalScale, handleVerticalScaleChange,
-    groupByCategory, handleGroupByCategoryChange,
+    worldEvents, handleWorldEventsChange,
     isAiGenerated, handleAiGeneratedChange,
   } = useTimelineState();
   const { user, authReady } = useAuth();
@@ -89,10 +92,11 @@ export function App() {
   const routerNavigate = useNavigate();
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [activePanel, setActivePanel] = useState<'events' | 'settings' | 'legend' | null>(null);
+  const [activePanel, setActivePanel] = useState<'events' | 'settings' | 'legend' | 'design' | null>(null);
   const [showAddEventModal, setShowAddEventModal] = useState(false);
   const [mode, setMode] = useState<'edit' | 'view'>('edit');
-  const [detailPanelEvent, setDetailPanelEvent] = useState<TimelineEvent | null>(null);
+  // A real event, or a World Events entry (read-only context; `we:` id).
+  const [detailPanelEvent, setDetailPanelEvent] = useState<TimelineEvent | WorldEvent | null>(null);
   // Set by the detail panel's Edit action, consumed by Timeline — which owns
   // the EventForm dialog but sits outside the panel's subtree.
   const [pendingEditEventId, setPendingEditEventId] = useState<string | null>(null);
@@ -165,7 +169,6 @@ export function App() {
     chapters,
     scale: currentScale.value,
     verticalScale: currentVerticalScale.value,
-    groupByCategory,
   };
 
   const { saveStatus, lastSavedTime, handleChange, markClean, flushPendingSave, cancelPendingSave } = useAutosave(timelineData);
@@ -268,6 +271,31 @@ export function App() {
     [streamEvents, rangeOverride],
   );
 
+  // The World Events lane. Fetched for the span the axis draws, once the
+  // timeline has settled (never mid-stream), and only for a visitor with AI
+  // access — signed in, or holding a key. The id is whichever store the
+  // editor is bound to, so results are cached per timeline or per draft.
+  const worldEventsAiAvailable = tier !== 'loading' && tier !== 'trial';
+  const worldEventsSpan = useMemo(
+    () => (events.length > 0 ? getTimelineYearSpan(events, rangeOverride ?? undefined) : null),
+    [events, rangeOverride],
+  );
+  // What the timeline covers, so the picks are judged against it rather than
+  // against history at large.
+  const worldEventsContext = useMemo(
+    () => buildWorldEventsContext(description, events),
+    [description, events],
+  );
+  const worldEventsLane = useWorldEvents({
+    timelineId: user ? loadedTimelineId : activeDraftId,
+    settings: worldEvents,
+    range: worldEventsSpan,
+    subject: title,
+    context: worldEventsContext,
+    paused: isStreaming,
+    aiAvailable: worldEventsAiAvailable,
+  });
+
   // Stable identity: Timeline fires this from an effect keyed on the callback,
   // so an inline arrow would re-run it on every render of the editor.
   const handleVisibleMonthChange = useCallback((monthIndex: number) => {
@@ -291,10 +319,46 @@ export function App() {
         chapters,
         scale: currentScale.value,
         verticalScale: currentVerticalScale.value,
-        groupByCategory,
       });
     }
-  }, [loadedTimelineId, title, description, events, categories, chapters, currentScale.value, currentVerticalScale.value, groupByCategory, handleChange]);
+  }, [loadedTimelineId, title, description, events, categories, chapters, currentScale.value, currentVerticalScale.value, handleChange]);
+
+  // Persist the World Events settings for a signed-in timeline. Not part of
+  // autosave: the columns arrive in a hand-applied migration, and naming a
+  // missing one on autosave's update would fail every save (see
+  // `saveWorldEventSettings`). The baseline is recorded by
+  // `applyLoadedTimeline`, so loading a timeline never writes it back.
+  //
+  // A pending write keeps the id it was armed with, so switching timelines
+  // inside the debounce still saves the outgoing one's settings to the right
+  // row; unmounting flushes it.
+  const worldEventsBaselineRef = useRef<{ id: string; fp: string } | null>(null);
+  const pendingWorldEventsRef = useRef<{ id: string; settings: WorldEventSettings } | null>(null);
+  const worldEventsTimerRef = useRef<number | null>(null);
+  const flushWorldEventSettings = useCallback(() => {
+    if (worldEventsTimerRef.current !== null) {
+      window.clearTimeout(worldEventsTimerRef.current);
+      worldEventsTimerRef.current = null;
+    }
+    const pending = pendingWorldEventsRef.current;
+    pendingWorldEventsRef.current = null;
+    if (pending) void saveWorldEventSettings(pending.id, pending.settings);
+  }, []);
+  useEffect(() => {
+    if (!user || !loadedTimelineId) return;
+    const fp = JSON.stringify(worldEvents);
+    const baseline = worldEventsBaselineRef.current;
+    if (baseline && baseline.id === loadedTimelineId && baseline.fp === fp) return;
+    // A different timeline's settings are still pending: commit them first.
+    if (pendingWorldEventsRef.current && pendingWorldEventsRef.current.id !== loadedTimelineId) {
+      flushWorldEventSettings();
+    }
+    worldEventsBaselineRef.current = { id: loadedTimelineId, fp };
+    pendingWorldEventsRef.current = { id: loadedTimelineId, settings: worldEvents };
+    if (worldEventsTimerRef.current !== null) window.clearTimeout(worldEventsTimerRef.current);
+    worldEventsTimerRef.current = window.setTimeout(flushWorldEventSettings, 400);
+  }, [user, loadedTimelineId, worldEvents, flushWorldEventSettings]);
+  useEffect(() => flushWorldEventSettings, [flushWorldEventSettings]);
 
   // Hydrate from localStorage draft if logged out.
   //
@@ -449,9 +513,7 @@ export function App() {
         handleAiGeneratedChange(false);
         handleScaleChange(newDraft.scale);
         handleVerticalScaleChange(newDraft.verticalScale ?? 'medium');
-        // Reset grouping too, or the previous draft's setting leaks into this
-        // brand-new one — the sibling branches below already do this.
-        handleGroupByCategoryChange(newDraft.groupByCategory ?? false);
+        handleWorldEventsChange(draftWorldEvents(newDraft));
       } else if (routeState?.aiStreaming) {
         // Arriving from AI mode with a subject, not a timeline.
         //
@@ -492,7 +554,7 @@ export function App() {
           handleAiGeneratedChange(isDraftAiGenerated(draft));
           handleScaleChange(draft.scale);
           handleVerticalScaleChange(draft.verticalScale ?? 'medium');
-          handleGroupByCategoryChange(draft.groupByCategory ?? false);
+          handleWorldEventsChange(draftWorldEvents(draft));
         } else {
           routerNavigate('/', { replace: true });
           setDraftHydrated(true);
@@ -513,7 +575,7 @@ export function App() {
           handleAiGeneratedChange(isDraftAiGenerated(mostRecent));
           handleScaleChange(mostRecent.scale);
           handleVerticalScaleChange(mostRecent.verticalScale ?? 'medium');
-          handleGroupByCategoryChange(mostRecent.groupByCategory ?? false);
+          handleWorldEventsChange(draftWorldEvents(mostRecent));
         } else {
           routerNavigate('/', { replace: true });
           setDraftHydrated(true);
@@ -525,7 +587,7 @@ export function App() {
       // Clear the route state so refreshing doesn't re-trigger
       routerNavigate('/editor', { replace: true, state: {} });
     }
-  }, [authReady, storageReconciled, tier, user, draftHydrated, beginStreaming, resetGeneration, createDraft, getDraftCount, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange, handleAiGeneratedChange, loadAllDrafts, loadDraft, location.state, location.key, routerNavigate, setDescription, setEvents, setTitle, updateCategories, updateChapters]);
+  }, [authReady, storageReconciled, tier, user, draftHydrated, beginStreaming, resetGeneration, createDraft, getDraftCount, handleScaleChange, handleVerticalScaleChange, handleWorldEventsChange, handleAiGeneratedChange, loadAllDrafts, loadDraft, location.state, location.key, routerNavigate, setDescription, setEvents, setTitle, updateCategories, updateChapters]);
 
   // Guest drafts save on a 500 ms debounce, so a rename followed immediately by
   // closing the tab or navigating away would be lost — the draft path has no
@@ -584,12 +646,12 @@ export function App() {
         chapters,
         scale: currentScale.value,
         verticalScale: currentVerticalScale.value,
-        groupByCategory,
         isAiGenerated,
+        ...worldEvents,
         savedAt: new Date().toISOString()
       });
     }
-  }, [user, storageReconciled, draftHydrated, activeDraftId, title, description, events, categories, chapters, currentScale.value, currentVerticalScale.value, groupByCategory, isAiGenerated, saveDraft]);
+  }, [user, storageReconciled, draftHydrated, activeDraftId, title, description, events, categories, chapters, currentScale.value, currentVerticalScale.value, isAiGenerated, worldEvents, saveDraft]);
 
   /**
    * Move any work that is sitting in a store below the visitor's current tier
@@ -666,7 +728,7 @@ export function App() {
           continue;
         }
         try {
-          await createTimelineFrom(draft);
+          await createTimelineFrom({ ...draft, worldEvents: draftWorldEvents(draft) });
           // Only after the write is confirmed, and only this one. The previous
           // version cleared *everything* after a failure, so hitting the plan
           // cap mid-migration deleted every draft that hadn't been saved yet.
@@ -741,7 +803,6 @@ export function App() {
     const description = data.description || '';
     const scale = data.scale || 'medium';
     const verticalScale = data.verticalScale ?? 'small';
-    const groupByCategory = data.groupByCategory ?? false;
     // Resolved here rather than left to `updateCategories`' own fallback, so
     // the baseline below records what will actually be in state. Autosave
     // persists categories now, which means an unresolved `undefined` here
@@ -766,7 +827,6 @@ export function App() {
       chapters,
       scale,
       verticalScale,
-      groupByCategory,
     });
 
     setTitle(data.title);
@@ -777,9 +837,14 @@ export function App() {
     handleAiGeneratedChange(data.isAiGenerated ?? false);
     handleScaleChange(scale);
     handleVerticalScaleChange(verticalScale);
-    handleGroupByCategoryChange(groupByCategory);
+    // Saved by its own side write, not autosave, so its baseline is recorded
+    // here too — before the id moves, so the save effect below never mistakes
+    // a load for an edit.
+    const loadedWorldEvents = data.worldEvents ?? DEFAULT_WORLD_EVENT_SETTINGS;
+    worldEventsBaselineRef.current = { id: data.id, fp: JSON.stringify(loadedWorldEvents) };
+    handleWorldEventsChange(loadedWorldEvents);
     setLoadedTimelineId(data.id);
-  }, [markClean, setTitle, setDescription, setEvents, updateCategories, updateChapters, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange, handleAiGeneratedChange]);
+  }, [markClean, setTitle, setDescription, setEvents, updateCategories, updateChapters, handleScaleChange, handleVerticalScaleChange, handleWorldEventsChange, handleAiGeneratedChange]);
 
   /** Resolves to the id the editor is now bound to, or null if the load failed. */
   const switchTimeline = useCallback(async (newTimelineId: string): Promise<string | null> => {
@@ -963,7 +1028,7 @@ export function App() {
         setActiveDraftId(newDraft.id);
         handleScaleChange(newDraft.scale);
         handleVerticalScaleChange(newDraft.verticalScale ?? 'medium');
-        handleGroupByCategoryChange(newDraft.groupByCategory ?? false);
+        handleWorldEventsChange(draftWorldEvents(newDraft));
       }
 
       setTitle(meta?.title || subject);
@@ -980,7 +1045,7 @@ export function App() {
     })();
   }, [
     generation, authReady, storageReconciled, user, markResolved, switchTimeline, createDraft,
-    handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange,
+    handleScaleChange, handleVerticalScaleChange, handleWorldEventsChange,
     setTitle, setDescription, setEvents, updateCategories, updateChapters, handleAiGeneratedChange,
   ]);
 
@@ -1164,7 +1229,7 @@ export function App() {
     handleAiGeneratedChange(isDraftAiGenerated(draft));
     handleScaleChange(draft.scale);
     handleVerticalScaleChange(draft.verticalScale ?? 'medium');
-    handleGroupByCategoryChange(draft.groupByCategory ?? false);
+    handleWorldEventsChange(draftWorldEvents(draft));
   };
 
   /**
@@ -1405,8 +1470,13 @@ export function App() {
         onScaleChange={handleScaleChange}
         verticalScale={verticalScale}
         onVerticalScaleChange={handleVerticalScaleChange}
-        groupByCategory={groupByCategory}
-        onGroupByCategoryChange={handleGroupByCategoryChange}
+        worldEvents={{
+          settings: worldEvents,
+          onChange: handleWorldEventsChange,
+          status: worldEventsLane.status,
+          onRetry: worldEventsLane.retry,
+          aiAvailable: worldEventsAiAvailable,
+        }}
         activePanel={activePanel}
         onActivePanelChange={setActivePanel}
         showAddEventModal={showAddEventModal}
@@ -1497,13 +1567,15 @@ export function App() {
             onOpenDetails={(event) => setDetailPanelEvent(event)}
             scale={currentScale}
             verticalScale={currentVerticalScale}
-            groupByCategory={groupByCategory}
             pendingScrollTarget={pendingScrollTarget}
             onScrollComplete={() => setPendingScrollTarget(null)}
             pendingEditEventId={pendingEditEventId}
             onEditRequestHandled={() => setPendingEditEventId(null)}
             onVisibleMonthChange={handleVisibleMonthChange}
             mode={mode}
+            worldEvents={worldEventsLane.events}
+            worldEventsStatus={worldEventsLane.status}
+            onOpenWorldEventDetails={(event) => setDetailPanelEvent(event)}
           />
         </main>
       )}
@@ -1531,12 +1603,16 @@ export function App() {
         timelineTitle={title}
         mode={mode}
         onClose={() => setDetailPanelEvent(null)}
+        readOnly={detailPanelEvent !== null && isWorldEventId(detailPanelEvent.id)}
         onEventChange={(updated) => {
-          handleUpdateEvent(updated);
+          // A World Events entry is never one of the timeline's events; its
+          // enrichment is kept in the lane's own cache instead.
+          if ('source' in updated) worldEventsLane.updateEvent(updated);
+          else handleUpdateEvent(updated);
           setDetailPanelEvent(updated);
         }}
         onEdit={
-          mode === 'edit' && !isAiTimeline
+          mode === 'edit' && !isAiTimeline && !isWorldEventId(detailPanelEvent?.id)
             ? () => {
                 if (!detailPanelEvent) return;
                 setPendingEditEventId(detailPanelEvent.id);
@@ -1545,7 +1621,7 @@ export function App() {
             : undefined
         }
         onDelete={
-          mode === 'edit' && !isAiTimeline
+          mode === 'edit' && !isAiTimeline && !isWorldEventId(detailPanelEvent?.id)
             ? () => {
                 if (!detailPanelEvent) return;
                 handleDeleteEvent(detailPanelEvent.id);

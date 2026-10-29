@@ -20,7 +20,6 @@ export interface TimelineScale {
 
 export interface TimelineVerticalScale {
   value: 'small' | 'medium';
-  eventHeight: number;
   eventRowHeight: number;
 }
 

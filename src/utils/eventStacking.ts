@@ -7,8 +7,11 @@ export interface StackedEvent extends TimelineEvent {
   stackIndex: number;
 }
 
-interface EventPlacement {
-  event: TimelineEvent;
+/** All the stacker reads: an event's span and its title. */
+type Stackable = Pick<TimelineEvent, 'startDate' | 'endDate' | 'title'>;
+
+interface EventPlacement<E extends Stackable = Stackable> {
+  event: E;
   startColumn: number;
   endColumn: number;
   visualEndColumn: number; // Includes space needed for title + trailing buffer
@@ -42,7 +45,7 @@ function measureTextWidth(text: string): number {
   return measureCtx.measureText(text).width;
 }
 
-function getEventColumns(event: TimelineEvent, months: Month[]): { start: number; end: number } {
+function getEventColumns(event: Stackable, months: Month[]): { start: number; end: number } {
   if (!months?.length) return { start: 0, end: 0 };
 
   // Shares `findMonthIndex` with TimelineEvent so the stacker and the renderer
@@ -58,8 +61,8 @@ function getEventColumns(event: TimelineEvent, months: Month[]): { start: number
   return { start, end };
 }
 
-function calculateRequiredColumns(title: string, monthWidth: number): number {
-  const textPx = measureTextWidth(title);
+function calculateRequiredColumns(title: string, monthWidth: number, extraTitlePx: number): number {
+  const textPx = measureTextWidth(title) + extraTitlePx;
   const displayPx = Math.max(EVENT_MIN_WIDTH, textPx + TITLE_CHROME_WIDTH);
   const requiredPx = displayPx + TRAILING_BUFFER_PX;
   return Math.ceil(requiredPx / monthWidth);
@@ -73,7 +76,17 @@ function hasCollision(placement: EventPlacement, existingPlacements: EventPlacem
   );
 }
 
-export function calculateEventStacks(events: TimelineEvent[], months: Month[] = [], monthWidth: number = 28): StackedEvent[] {
+/**
+ * `extraTitlePx` reserves room for anything rendered after the title — the
+ * World Events lane's source tag — so a tagged event's neighbour doesn't
+ * start underneath it.
+ */
+export function calculateEventStacks<E extends Stackable>(
+  events: E[],
+  months: Month[] = [],
+  monthWidth: number = 28,
+  extraTitlePx: number = 0,
+): Array<E & { stackIndex: number }> {
   if (!events?.length) return [];
 
   // Sort events by start date only — earlier events get the top rows.
@@ -84,7 +97,7 @@ export function calculateEventStacks(events: TimelineEvent[], months: Month[] = 
     a.startDate.localeCompare(b.startDate)
   );
 
-  const placements: EventPlacement[] = [];
+  const placements: EventPlacement<E>[] = [];
 
   // Place each event
   for (const event of sortedEvents) {
@@ -92,7 +105,7 @@ export function calculateEventStacks(events: TimelineEvent[], months: Month[] = 
     const { start: startColumn, end: endColumn } = getEventColumns(event, months);
 
     // Total visual span the event occupies (title + chrome + trailing buffer).
-    const requiredColumns = calculateRequiredColumns(event.title, monthWidth);
+    const requiredColumns = calculateRequiredColumns(event.title, monthWidth, extraTitlePx);
 
     // Use the larger of the date span or the title-driven span.
     const visualEndColumn = Math.max(
@@ -105,7 +118,7 @@ export function calculateEventStacks(events: TimelineEvent[], months: Month[] = 
     let placed = false;
 
     while (!placed) {
-      const placement: EventPlacement = {
+      const placement: EventPlacement<E> = {
         event,
         startColumn,
         endColumn,
