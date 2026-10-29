@@ -19,7 +19,6 @@ export interface LocalDraft {
   chapters?: TimelineChapter[]
   scale: 'large' | 'medium' | 'small'
   verticalScale?: 'small' | 'medium'
-  groupByCategory?: boolean
   /**
    * Optional: drafts written before the flag existed don't have it. Read it
    * through `isDraftAiGenerated`, which falls back to the chapters heuristic.
@@ -148,7 +147,6 @@ export function createDraftStore(config: DraftStoreConfig): DraftStore {
         chapters: [],
         scale: 'large',
         verticalScale: 'medium',
-        groupByCategory: false,
         savedAt: new Date().toISOString(),
       }
 

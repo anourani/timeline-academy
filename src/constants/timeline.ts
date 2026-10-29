@@ -5,9 +5,9 @@ export const HEADER_HEIGHT = 64;            // Height of year labels (32px) + mo
 export const EVENT_ROW_HEIGHT = 38;       // 36px event row + vertical padding
 export const EVENT_MIN_WIDTH = 120;       // Minimum width for event title visibility
 
-// Category lane dimensions
-export const CATEGORY_PADDING = 8;        // Vertical padding within a category lane
-export const CATEGORY_MIN_HEIGHT = 80;    // Minimum height of an empty category lane
+// Lane dimensions
+export const CATEGORY_PADDING = 8;        // Vertical padding below a lane's last row of events
+export const LANE_MIN_HEIGHT = 80;        // Minimum height of the World Events lane, so its label pill always fits
 
 // Scroll behaviour
 export const SCROLL_LEAD_IN_MONTHS = 2;   // Months of the previous chapter left visible when jumping to a chapter's head

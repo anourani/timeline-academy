@@ -32,11 +32,19 @@
      latest definition (20260908000000_timeline_chapters.sql) with the three
      settings added; `user_id` is still never returned.
 
+     It also stops returning `group_by_category`. The "Group events by
+     category" option was removed from the app, which no longer reads or
+     writes it. The column itself is kept for now: a visitor whose browser
+     still runs the previous site writes it on every autosave, and PostgREST
+     rejects a write that names a missing column — so dropping it now would
+     fail all of their saves. Drop it in a later migration, once that window
+     has passed.
+
   The `timelines_set_updated_at` WHEN clause is deliberately left alone. It
   skips the stamp only when `is_public` changed and none of the listed columns
   did; an update that changes the world-event settings without touching
-  `is_public` therefore stamps `updated_at` like any edit (as a
-  `group_by_category` change does), which is the intended behavior.
+  `is_public` therefore stamps `updated_at` like any edit (as a scale
+  change does), which is the intended behavior.
 
   Idempotent: safe to run more than once.
 */
@@ -99,7 +107,6 @@ as $$
       'chapters', t.chapters,
       'scale', t.scale,
       'vertical_scale', t.vertical_scale,
-      'group_by_category', t.group_by_category,
       'show_world_events', t.show_world_events,
       'world_event_sources', to_jsonb(t.world_event_sources),
       'world_event_country', t.world_event_country

@@ -36,7 +36,6 @@ export function useLocalDraft(store: DraftStore) {
       description: draft.description ?? '',
       scale: draft.scale,
       verticalScale: draft.verticalScale ?? 'medium',
-      groupByCategory: draft.groupByCategory ?? false,
       categories: draft.categories,
       // Normalised the same way every hydration branch reads them, so a draft
       // saved before World Events existed opens clean.

@@ -28,8 +28,6 @@ interface HeaderProps {
   onScaleChange: (scale: 'large' | 'medium' | 'small') => void;
   verticalScale: 'small' | 'medium';
   onVerticalScaleChange: (scale: 'small' | 'medium') => void;
-  groupByCategory: boolean;
-  onGroupByCategoryChange: (value: boolean) => void;
   /** The World Events lane's settings and fetch state, for the Design menu. */
   worldEvents: WorldEventsControl;
   activePanel: 'events' | 'settings' | 'legend' | 'design' | null;
@@ -63,8 +61,6 @@ export function Header({
   onScaleChange,
   verticalScale,
   onVerticalScaleChange,
-  groupByCategory,
-  onGroupByCategoryChange,
   worldEvents,
   activePanel,
   onActivePanelChange,
@@ -130,8 +126,6 @@ export function Header({
           onScaleChange,
           verticalScale,
           onVerticalScaleChange,
-          groupByCategory,
-          onGroupByCategoryChange,
           worldEvents,
         }}
         onDesignOpenChange={(open) => onActivePanelChange(open ? 'design' : null)}

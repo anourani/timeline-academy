@@ -35,7 +35,6 @@ interface TimelineData {
   chapters: TimelineChapter[];
   scale: 'large' | 'medium' | 'small';
   verticalScale: 'small' | 'medium';
-  groupByCategory: boolean;
   /** The owner's World Events settings. Read-only here — viewers can't change them. */
   worldEvents: WorldEventSettings;
 }
@@ -136,7 +135,6 @@ export function TimelineViewer() {
           chapters: normalizeChapters(timelineData.chapters),
           scale: timelineData.scale || 'large',
           verticalScale: timelineData.vertical_scale ?? 'medium',
-          groupByCategory: timelineData.group_by_category ?? false,
           // Same story as chapters: absent until the World Events migration
           // recreates `get_public_timeline`, which reads as "off".
           worldEvents: normalizeWorldEventSettings({
@@ -248,7 +246,6 @@ export function TimelineViewer() {
           categories={timeline.categories}
           scale={SCALES[timeline.scale]}
           verticalScale={VERTICAL_SCALES[timeline.verticalScale]}
-          groupByCategory={timeline.groupByCategory}
           mode="view"
           onOpenDetails={(event) => setDetailPanelEvent(event)}
           onVisibleMonthChange={handleVisibleMonthChange}

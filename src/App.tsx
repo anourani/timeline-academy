@@ -59,7 +59,6 @@ export function App() {
     chapters, updateChapters, resetChapters,
     scale, currentScale, handleScaleChange,
     verticalScale, currentVerticalScale, handleVerticalScaleChange,
-    groupByCategory, handleGroupByCategoryChange,
     worldEvents, handleWorldEventsChange,
     isAiGenerated, handleAiGeneratedChange,
   } = useTimelineState();
@@ -170,7 +169,6 @@ export function App() {
     chapters,
     scale: currentScale.value,
     verticalScale: currentVerticalScale.value,
-    groupByCategory,
   };
 
   const { saveStatus, lastSavedTime, handleChange, markClean, flushPendingSave, cancelPendingSave } = useAutosave(timelineData);
@@ -321,10 +319,9 @@ export function App() {
         chapters,
         scale: currentScale.value,
         verticalScale: currentVerticalScale.value,
-        groupByCategory,
       });
     }
-  }, [loadedTimelineId, title, description, events, categories, chapters, currentScale.value, currentVerticalScale.value, groupByCategory, handleChange]);
+  }, [loadedTimelineId, title, description, events, categories, chapters, currentScale.value, currentVerticalScale.value, handleChange]);
 
   // Persist the World Events settings for a signed-in timeline. Not part of
   // autosave: the columns arrive in a hand-applied migration, and naming a
@@ -516,9 +513,6 @@ export function App() {
         handleAiGeneratedChange(false);
         handleScaleChange(newDraft.scale);
         handleVerticalScaleChange(newDraft.verticalScale ?? 'medium');
-        // Reset grouping too, or the previous draft's setting leaks into this
-        // brand-new one — the sibling branches below already do this.
-        handleGroupByCategoryChange(newDraft.groupByCategory ?? false);
         handleWorldEventsChange(draftWorldEvents(newDraft));
       } else if (routeState?.aiStreaming) {
         // Arriving from AI mode with a subject, not a timeline.
@@ -560,7 +554,6 @@ export function App() {
           handleAiGeneratedChange(isDraftAiGenerated(draft));
           handleScaleChange(draft.scale);
           handleVerticalScaleChange(draft.verticalScale ?? 'medium');
-          handleGroupByCategoryChange(draft.groupByCategory ?? false);
           handleWorldEventsChange(draftWorldEvents(draft));
         } else {
           routerNavigate('/', { replace: true });
@@ -582,7 +575,6 @@ export function App() {
           handleAiGeneratedChange(isDraftAiGenerated(mostRecent));
           handleScaleChange(mostRecent.scale);
           handleVerticalScaleChange(mostRecent.verticalScale ?? 'medium');
-          handleGroupByCategoryChange(mostRecent.groupByCategory ?? false);
           handleWorldEventsChange(draftWorldEvents(mostRecent));
         } else {
           routerNavigate('/', { replace: true });
@@ -595,7 +587,7 @@ export function App() {
       // Clear the route state so refreshing doesn't re-trigger
       routerNavigate('/editor', { replace: true, state: {} });
     }
-  }, [authReady, storageReconciled, tier, user, draftHydrated, beginStreaming, resetGeneration, createDraft, getDraftCount, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange, handleWorldEventsChange, handleAiGeneratedChange, loadAllDrafts, loadDraft, location.state, location.key, routerNavigate, setDescription, setEvents, setTitle, updateCategories, updateChapters]);
+  }, [authReady, storageReconciled, tier, user, draftHydrated, beginStreaming, resetGeneration, createDraft, getDraftCount, handleScaleChange, handleVerticalScaleChange, handleWorldEventsChange, handleAiGeneratedChange, loadAllDrafts, loadDraft, location.state, location.key, routerNavigate, setDescription, setEvents, setTitle, updateCategories, updateChapters]);
 
   // Guest drafts save on a 500 ms debounce, so a rename followed immediately by
   // closing the tab or navigating away would be lost — the draft path has no
@@ -654,13 +646,12 @@ export function App() {
         chapters,
         scale: currentScale.value,
         verticalScale: currentVerticalScale.value,
-        groupByCategory,
         isAiGenerated,
         ...worldEvents,
         savedAt: new Date().toISOString()
       });
     }
-  }, [user, storageReconciled, draftHydrated, activeDraftId, title, description, events, categories, chapters, currentScale.value, currentVerticalScale.value, groupByCategory, isAiGenerated, worldEvents, saveDraft]);
+  }, [user, storageReconciled, draftHydrated, activeDraftId, title, description, events, categories, chapters, currentScale.value, currentVerticalScale.value, isAiGenerated, worldEvents, saveDraft]);
 
   /**
    * Move any work that is sitting in a store below the visitor's current tier
@@ -812,7 +803,6 @@ export function App() {
     const description = data.description || '';
     const scale = data.scale || 'medium';
     const verticalScale = data.verticalScale ?? 'small';
-    const groupByCategory = data.groupByCategory ?? false;
     // Resolved here rather than left to `updateCategories`' own fallback, so
     // the baseline below records what will actually be in state. Autosave
     // persists categories now, which means an unresolved `undefined` here
@@ -837,7 +827,6 @@ export function App() {
       chapters,
       scale,
       verticalScale,
-      groupByCategory,
     });
 
     setTitle(data.title);
@@ -848,7 +837,6 @@ export function App() {
     handleAiGeneratedChange(data.isAiGenerated ?? false);
     handleScaleChange(scale);
     handleVerticalScaleChange(verticalScale);
-    handleGroupByCategoryChange(groupByCategory);
     // Saved by its own side write, not autosave, so its baseline is recorded
     // here too — before the id moves, so the save effect below never mistakes
     // a load for an edit.
@@ -856,7 +844,7 @@ export function App() {
     worldEventsBaselineRef.current = { id: data.id, fp: JSON.stringify(loadedWorldEvents) };
     handleWorldEventsChange(loadedWorldEvents);
     setLoadedTimelineId(data.id);
-  }, [markClean, setTitle, setDescription, setEvents, updateCategories, updateChapters, handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange, handleWorldEventsChange, handleAiGeneratedChange]);
+  }, [markClean, setTitle, setDescription, setEvents, updateCategories, updateChapters, handleScaleChange, handleVerticalScaleChange, handleWorldEventsChange, handleAiGeneratedChange]);
 
   /** Resolves to the id the editor is now bound to, or null if the load failed. */
   const switchTimeline = useCallback(async (newTimelineId: string): Promise<string | null> => {
@@ -1040,7 +1028,6 @@ export function App() {
         setActiveDraftId(newDraft.id);
         handleScaleChange(newDraft.scale);
         handleVerticalScaleChange(newDraft.verticalScale ?? 'medium');
-        handleGroupByCategoryChange(newDraft.groupByCategory ?? false);
         handleWorldEventsChange(draftWorldEvents(newDraft));
       }
 
@@ -1058,7 +1045,7 @@ export function App() {
     })();
   }, [
     generation, authReady, storageReconciled, user, markResolved, switchTimeline, createDraft,
-    handleScaleChange, handleVerticalScaleChange, handleGroupByCategoryChange, handleWorldEventsChange,
+    handleScaleChange, handleVerticalScaleChange, handleWorldEventsChange,
     setTitle, setDescription, setEvents, updateCategories, updateChapters, handleAiGeneratedChange,
   ]);
 
@@ -1242,7 +1229,6 @@ export function App() {
     handleAiGeneratedChange(isDraftAiGenerated(draft));
     handleScaleChange(draft.scale);
     handleVerticalScaleChange(draft.verticalScale ?? 'medium');
-    handleGroupByCategoryChange(draft.groupByCategory ?? false);
     handleWorldEventsChange(draftWorldEvents(draft));
   };
 
@@ -1484,8 +1470,6 @@ export function App() {
         onScaleChange={handleScaleChange}
         verticalScale={verticalScale}
         onVerticalScaleChange={handleVerticalScaleChange}
-        groupByCategory={groupByCategory}
-        onGroupByCategoryChange={handleGroupByCategoryChange}
         worldEvents={{
           settings: worldEvents,
           onChange: handleWorldEventsChange,
@@ -1583,7 +1567,6 @@ export function App() {
             onOpenDetails={(event) => setDetailPanelEvent(event)}
             scale={currentScale}
             verticalScale={currentVerticalScale}
-            groupByCategory={groupByCategory}
             pendingScrollTarget={pendingScrollTarget}
             onScrollComplete={() => setPendingScrollTarget(null)}
             pendingEditEventId={pendingEditEventId}

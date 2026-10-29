@@ -8,7 +8,6 @@ interface TimelineEventProps {
   /** A real event, or a World Events entry — the component reads no category. */
   event: EnrichableEvent & { stackIndex: number };
   months: Month[];
-  categoryOffset: number;
   categoryColor?: string;
   /** Left click / Enter / Space, with the event's id. No position argument:
    *  the click opens the detail panel rather than a menu that needed

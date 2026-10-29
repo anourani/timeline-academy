@@ -33,8 +33,6 @@ export interface DockDesignProps {
   onScaleChange: (scale: TimelineScaleValue) => void
   verticalScale: VerticalScaleValue
   onVerticalScaleChange: (scale: VerticalScaleValue) => void
-  groupByCategory: boolean
-  onGroupByCategoryChange: (value: boolean) => void
   worldEvents: WorldEventsControl
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -51,7 +49,7 @@ const SOURCE_LABELS: Record<WorldEventSource, string> = {
 
 /**
  * The dock's Design menu: every setting that changes how the timeline looks —
- * scale, row height, grouping — and the World Events lane with its sources.
+ * scale and row height — and the World Events lane with its sources.
  *
  * Built on `DockMenu`, the Legend's shell: a popover rising from the dock on
  * desktop (centred over its button), a full-screen drawer on a phone. Shown in
@@ -63,8 +61,6 @@ export function DockDesign({
   onScaleChange,
   verticalScale,
   onVerticalScaleChange,
-  groupByCategory,
-  onGroupByCategoryChange,
   worldEvents,
   open,
   onOpenChange,
@@ -150,17 +146,6 @@ export function DockDesign({
           options={VERTICAL_SCALE_OPTIONS}
           value={verticalScale}
           onChange={onVerticalScaleChange}
-        />
-      </div>
-
-      <div className="my-[6px] h-px bg-[#262626]" />
-
-      <div className="flex min-h-[44px] items-center justify-between gap-2 px-[10px] py-3 md:min-h-0 md:py-[6px]">
-        <span className="body-m text-[#9B9EA3]">Group events by category</span>
-        <Switch
-          checked={groupByCategory}
-          onCheckedChange={onGroupByCategoryChange}
-          aria-label="Group events by category"
         />
       </div>
 

@@ -56,7 +56,6 @@ export interface TimelineData {
   chapters?: TimelineChapter[];
   scale?: 'large' | 'medium' | 'small';
   verticalScale?: 'small' | 'medium';
-  groupByCategory?: boolean;
   /** Came from an AI generation. Gates the dock's Legend and the add controls. */
   isAiGenerated?: boolean;
   /** The World Events lane's settings (Design menu). */
@@ -181,7 +180,6 @@ export function useTimeline() {
           user_id: user.id,
           scale: 'small',
           vertical_scale: 'medium',
-          group_by_category: false,
         })
         .select('id')
         .single();
@@ -199,7 +197,6 @@ export function useTimeline() {
         categories: undefined, // Will use default categories
         scale: 'small',
         verticalScale: 'medium',
-        groupByCategory: false,
         worldEvents: { ...DEFAULT_WORLD_EVENT_SETTINGS },
       };
     }
@@ -255,7 +252,6 @@ export function useTimeline() {
         : undefined,
       scale: timeline.scale || 'large',
       verticalScale: timeline.vertical_scale || 'medium',
-      groupByCategory: timeline.group_by_category ?? false,
       // Absent until the column's migration is applied; only an AI generation
       // produces chapters, so they stand in for the flag until then.
       isAiGenerated: timeline.is_ai_generated ??
@@ -296,7 +292,6 @@ export function useTimeline() {
         description: source.description || null,
         scale: source.scale ?? 'small',
         vertical_scale: source.verticalScale ?? 'medium',
-        group_by_category: source.groupByCategory ?? false,
         // Empty normalises to null, the inverse of loadTimeline's rule.
         categories: source.categories && source.categories.length > 0 ? source.categories : null,
         chapters: source.chapters && source.chapters.length > 0 ? source.chapters : null,

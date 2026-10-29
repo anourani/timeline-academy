@@ -3,7 +3,6 @@ import { TimelineHeader } from './TimelineHeader';
 import { StreamingSkeleton } from './StreamingSkeleton';
 import { TimelineGrid } from './TimelineGrid';
 import { TimelineVerticalLines } from './TimelineVerticalLines';
-import { TimelineCategoryLabels } from './TimelineCategoryLabels';
 import { TimelineEvent } from './TimelineEvent';
 import { EventHoverCursor, EventHoverCursorHandle } from './EventHoverCursor';
 import { TimelineEvent as ITimelineEvent, CategoryConfig } from '../../types/event';
@@ -15,7 +14,7 @@ import type { TimelineYearRange } from '../../utils/dateUtils';
 import { calculateEventStacks, StackedEvent } from '../../utils/eventStacking';
 import { useTimelineScroll } from '../../hooks/useTimelineScroll';
 import { useEventDrag } from '../../hooks/useEventDrag';
-import { CATEGORY_PADDING, CATEGORY_MIN_HEIGHT, HEADER_HEIGHT, SCROLL_LEAD_IN_MONTHS, WHEEL_SUPPRESS_MS } from '../../constants/timeline';
+import { CATEGORY_PADDING, LANE_MIN_HEIGHT, HEADER_HEIGHT, SCROLL_LEAD_IN_MONTHS, WHEEL_SUPPRESS_MS } from '../../constants/timeline';
 import { EventForm } from '../EventForm/EventForm';
 import {
   Dialog,
@@ -35,7 +34,6 @@ interface TimelineProps {
   onOpenDetails?: (event: ITimelineEvent) => void;
   scale: TimelineScale;
   verticalScale: TimelineVerticalScale;
-  groupByCategory?: boolean;
   /**
    * Fixes the axis span instead of deriving it from `events`.
    *
@@ -110,16 +108,9 @@ function worldEventTag(event: WorldEvent): string {
   return event.source === 'country' ? event.country ?? '' : 'WORLD';
 }
 
-interface CategoryBand {
-  id: string;
-  height: number;
-  offset: number;
-  events: StackedEvent[];
-}
-
 interface LayoutData {
-  bands: CategoryBand[];
-  totalHeight: number;
+  events: StackedEvent[];
+  height: number;
 }
 
 export function Timeline({
@@ -131,7 +122,6 @@ export function Timeline({
   onOpenDetails,
   scale,
   verticalScale,
-  groupByCategory = false,
   rangeOverride,
   intro = false,
   streaming = false,
@@ -398,48 +388,18 @@ export function Timeline({
     return monthIndex * scale.monthWidth - scrollLeft;
   }, [streaming, visibleEvents, months, scale.monthWidth]);
 
+  const rowHeight = verticalScale.eventRowHeight;
+
+  // Every visible event shares one band, stacked in a single pass; colour is
+  // what tells the categories apart.
   const layout = React.useMemo<LayoutData>(() => {
-    if (groupByCategory) {
-      let currentOffset = 0;
-      const bands: CategoryBand[] = visibleCategories.map(category => {
-        const categoryEvents = visibleEvents.filter(event => event.category === category.id);
-        const stackedEvents = calculateEventStacks(categoryEvents, months, scale.monthWidth);
-        const maxStack = Math.max(...stackedEvents.map(event => event.stackIndex), 0);
-
-        const height = (maxStack + 1) * verticalScale.eventHeight + CATEGORY_PADDING;
-
-        const band: CategoryBand = {
-          id: category.id,
-          height: Math.max(height, CATEGORY_MIN_HEIGHT),
-          offset: currentOffset,
-          events: stackedEvents,
-        };
-
-        currentOffset += band.height;
-        return band;
-      });
-
-      return {
-        bands,
-        totalHeight: currentOffset || CATEGORY_MIN_HEIGHT,
-      };
-    }
-
-    // Default: single global stacking pass.
-    const stackedEvents = calculateEventStacks(visibleEvents, months, scale.monthWidth);
-    const maxStack = Math.max(...stackedEvents.map(event => event.stackIndex), 0);
-    const height = stackedEvents.length === 0
-      ? verticalScale.eventRowHeight
-      : (maxStack + 1) * verticalScale.eventRowHeight + CATEGORY_PADDING;
-
-    return {
-      bands: [{ id: 'all', height, offset: 0, events: stackedEvents }],
-      totalHeight: height,
-    };
-  }, [groupByCategory, visibleEvents, visibleCategories, months, scale.monthWidth, verticalScale.eventHeight, verticalScale.eventRowHeight]);
-
-  const showCategoryLabels = groupByCategory;
-  const rowHeight = groupByCategory ? verticalScale.eventHeight : verticalScale.eventRowHeight;
+    const events = calculateEventStacks(visibleEvents, months, scale.monthWidth);
+    const maxStack = Math.max(...events.map(event => event.stackIndex), 0);
+    const height = events.length === 0
+      ? rowHeight
+      : (maxStack + 1) * rowHeight + CATEGORY_PADDING;
+    return { events, height };
+  }, [visibleEvents, months, scale.monthWidth, rowHeight]);
 
   /**
    * The World Events lane. Never shown mid-stream — the timeline it gives
@@ -463,7 +423,7 @@ export function Timeline({
     const maxStack = Math.max(...stacked.map(e => e.stackIndex), 0);
     const height = Math.max(
       (maxStack + 1) * rowHeight + CATEGORY_PADDING,
-      CATEGORY_MIN_HEIGHT,
+      LANE_MIN_HEIGHT,
     );
     return { events: stacked, height, loading: worldEventsStatus === 'loading' };
   }, [streaming, worldEventsStatus, worldEvents, months, scale.monthWidth, rowHeight]);
@@ -672,26 +632,14 @@ export function Timeline({
 
   return (
     <div className={isFullScreen ? 'h-[calc(100vh-6rem)] relative' : 'flex-1 min-h-0 flex flex-col relative'}>
-      {showCategoryLabels && (
-        <div
-          className="absolute left-0 z-10 pointer-events-none"
-          style={{ top: HEADER_HEIGHT, height: layout.totalHeight, transition: 'height 220ms ease' }}
-        >
-          <TimelineCategoryLabels
-            categories={layout.bands.map(b => ({ id: b.id, height: b.height }))}
-            customCategories={visibleCategories}
-          />
-        </div>
-      )}
-
-      {/* The World Events lane's label: the category pill, in a neutral
-          tint. Shown whether or not the user's own events are grouped. */}
+      {/* The World Events lane's label: a pill in a neutral tint, sitting
+          against the lane's top-left corner. */}
       {worldLane && (
         <div
           ref={worldLaneLabelRef}
           className="absolute left-0 z-10 pointer-events-none"
           style={{
-            top: HEADER_HEIGHT + layout.totalHeight,
+            top: HEADER_HEIGHT + layout.height,
             height: worldLane.height,
             transition: 'top 220ms ease, height 220ms ease',
           }}
@@ -743,57 +691,51 @@ export function Timeline({
                 scrollContainerRef={scrollContainerRef}
                 intro={intro}
               />
-              {layout.bands.map((band, bandIndex) => (
-                <div
-                  key={`band-${band.id}`}
-                  className="relative shrink-0"
-                  style={{
-                    height: band.height,
-                    // The seam above the World Events lane: dashed, so it
-                    // reads as "below here is context" rather than one more
-                    // category. Drawn inside the band's height (border-box).
-                    borderBottom: worldLane && bandIndex === layout.bands.length - 1
-                      ? '1px dashed #262626'
-                      : undefined,
-                    display: 'grid',
-                    gridTemplateColumns: `repeat(${months.length * 4}, ${scale.quarterWidth}px)`,
-                    ['--event-row-height' as string]: `${rowHeight}px`,
-                    gridAutoRows: 'var(--event-row-height)',
-                    gap: 0,
-                    transition: 'height 220ms ease, --event-row-height 220ms ease',
-                  }}
-                >
-                  <TimelineGrid
-                    months={months}
-                    height={band.height}
-                    onMonthHover={setHoveredMonth}
-                    onMonthClick={handleMonthClick}
-                    scale={scale}
-                  />
-                  {band.events.map((event) => {
-                    // Same in both modes now — a click always opens details.
-                    const canHandleClick = !!onOpenDetails;
-                    return (
-                      <TimelineEvent
-                        key={event.id}
-                        event={event}
-                        months={months}
-                        categoryOffset={band.offset}
-                        categoryColor={visibleCategories.find(c => c.id === event.category)?.color}
-                        onEventClick={canHandleClick ? handleEventClick : undefined}
-                        scale={scale}
-                        isDragging={dragState.isDragging && dragState.draggedEventId === event.id}
-                        dragDeltaPixels={dragState.draggedEventId === event.id ? dragState.deltaPixels : 0}
-                        onPointerDown={isEditing && onUpdateEvent ? handlePointerDown : undefined}
-                        rowHeight={rowHeight}
-                        onMounted={handleEventMounted}
-                        revealOnMount={streaming}
-                        suppressStackAnimation={streaming}
-                      />
-                    );
-                  })}
-                </div>
-              ))}
+              <div
+                className="relative shrink-0"
+                style={{
+                  height: layout.height,
+                  // The seam above the World Events lane: dashed, so it
+                  // reads as "below here is context" rather than more of
+                  // the timeline. Drawn inside the band's height (border-box).
+                  borderBottom: worldLane ? '1px dashed #262626' : undefined,
+                  display: 'grid',
+                  gridTemplateColumns: `repeat(${months.length * 4}, ${scale.quarterWidth}px)`,
+                  ['--event-row-height' as string]: `${rowHeight}px`,
+                  gridAutoRows: 'var(--event-row-height)',
+                  gap: 0,
+                  transition: 'height 220ms ease, --event-row-height 220ms ease',
+                }}
+              >
+                <TimelineGrid
+                  months={months}
+                  height={layout.height}
+                  onMonthHover={setHoveredMonth}
+                  onMonthClick={handleMonthClick}
+                  scale={scale}
+                />
+                {layout.events.map((event) => {
+                  // Same in both modes now — a click always opens details.
+                  const canHandleClick = !!onOpenDetails;
+                  return (
+                    <TimelineEvent
+                      key={event.id}
+                      event={event}
+                      months={months}
+                      categoryColor={visibleCategories.find(c => c.id === event.category)?.color}
+                      onEventClick={canHandleClick ? handleEventClick : undefined}
+                      scale={scale}
+                      isDragging={dragState.isDragging && dragState.draggedEventId === event.id}
+                      dragDeltaPixels={dragState.draggedEventId === event.id ? dragState.deltaPixels : 0}
+                      onPointerDown={isEditing && onUpdateEvent ? handlePointerDown : undefined}
+                      rowHeight={rowHeight}
+                      onMounted={handleEventMounted}
+                      revealOnMount={streaming}
+                      suppressStackAnimation={streaming}
+                    />
+                  );
+                })}
+              </div>
 
               {worldLane && (
                 <div
@@ -835,7 +777,6 @@ export function Timeline({
                       key={event.id}
                       event={event}
                       months={months}
-                      categoryOffset={layout.totalHeight}
                       categoryColor={WORLD_EVENT_BAR}
                       rangeFill={WORLD_EVENT_FILL}
                       titleColor={WORLD_EVENT_TITLE}

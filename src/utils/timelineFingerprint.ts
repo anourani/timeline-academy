@@ -34,7 +34,6 @@ interface MetaInput {
   description: string;
   scale: string;
   verticalScale: string;
-  groupByCategory: boolean;
   /** Guest drafts persist categories; signed-in timelines do not. */
   categories?: CategoryConfig[];
   /** Both stores persist chapters, so both must fingerprint them. */
@@ -67,7 +66,6 @@ export function metaFingerprint(input: MetaInput): string {
     input.description,
     input.scale,
     input.verticalScale,
-    input.groupByCategory,
     input.categories
       ? input.categories.map(c => [c.id, c.label, c.color, c.visible])
       : null,
