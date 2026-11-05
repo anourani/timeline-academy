@@ -16,8 +16,10 @@ npm run preview   # Preview production build locally
 **Nothing above typechecks.** `npm run build` is bare `vite build`, and `npx tsc --noEmit` at the repo root checks *zero files* — the root tsconfig is `"files": []` with project references, so it exits clean no matter what is broken. The real command is:
 
 ```bash
-npx tsc --noEmit -p tsconfig.app.json   # 12 pre-existing errors on main; add none
+npx tsc --noEmit -p tsconfig.app.json   # 10 pre-existing errors on main; add none
 ```
+
+Run `npm ci` first. Without `node_modules`, `npx` downloads the newest TypeScript instead of the pinned 5.6.2, and that version fails on `baseUrl` being deprecated — one unrelated error, and the ten real ones never get checked.
 
 No test framework is configured — every check is manual. This is the direct reason a five-month drift between this repo and the live project went unnoticed, along with three features that were silently broken in production for months (see `docs/2026-08-05-security-review-handoff.md`).
 
@@ -54,9 +56,11 @@ src/
 ├── constants/        # App constants (categories, defaults, scales, plans, models)
 ├── lib/              # Supabase client setup, plan limits
 ├── App.tsx           # Timeline editor page (/editor)
-├── Router.tsx        # Routes: / → AIModePage, /editor → App,
+├── Router.tsx        # Routes: / → AIModePage, /editor → App, /ai → redirect to /,
 │                     #   /view/:id → TimelineViewer, /privacy, /terms
-└── main.tsx          # Entry point
+├── main.tsx          # Entry point
+└── TIMELINE_ARCHITECTURE.md  # Deep reference for the canvas, streaming and persistence
+docs/                 # Dated session records, PRDs and runbooks — see "Docs" below
 supabase/
 ├── config.toml       # Per-function settings (verify_jwt) + project_id
 ├── functions/        # Edge Functions: generate-timeline, enrich-event,
@@ -72,14 +76,14 @@ supabase/
 - **TypeScript** strict mode enabled. No unused locals or parameters. Target ES2020.
 - **Path alias**: `@/` maps to `src/` — use for all imports.
 - **Tailwind CSS** for styling. Dark mode via `class` strategy.
-- **Fonts**: Aleo, IBM Plex Mono and JetBrains Mono load from Google Fonts (`src/index.css:1`). `Avenir` is declared and referenced throughout, but **has never actually loaded** — `index.css:81` points a `@font-face src` at a stylesheet URL rather than a font file, so everything specifying Avenir falls back to a system sans-serif. Known and deliberately deferred; fixing it changes the look of the whole interface.
-- **shadcn/ui** — Custom preset, Base UI library, Vega style, Neutral base/theme color, Lucide icons, Inter font, Medium radius, Default menu color, Subtle menu accent.
+- **Fonts**: Aleo, IBM Plex Mono and JetBrains Mono load from Google Fonts (`src/index.css:1`). `Avenir` is declared and referenced throughout, but **has never actually loaded** — `index.css:105` points a `@font-face src` at a stylesheet URL rather than a font file, so everything specifying Avenir falls back to a system sans-serif. Known and deliberately deferred; fixing it changes the look of the whole interface.
+- **shadcn/ui** — per `components.json`: `new-york` style, `zinc` base colour, CSS variables on, Lucide icons, primitives from `@radix-ui/*`. Only the primitives actually imported live in `src/components/ui/` (button, dialog, alert-dialog, dropdown-menu, popover, select, input, calendar, skeleton, plus the project's own Switch, Toast, SegmentedControl, PopupShell, UsageMeter, PanelResizeHandle). Scaffolded-but-unused ones were deleted in the September 2026 cleanup; don't re-add a primitive nothing imports.
 - **Component organization**: Feature folders under `src/components/` (e.g., `Auth/`, `Timeline/`, `Navigation/`, `AIMode/`).
 - **State management**: Custom hooks for feature logic; React Context for global state (auth, side panel).
 - **Anything that remembers what the editor did with an AI run lives in `GenerationContext`, not `App.tsx`.** `App` unmounts on every trip off `/editor` and the store does not, so per-run state kept in `App` is blank on re-entry while the run is still there — which is how a cancelled generation once bounced every route into the editor back to `/`. The store's `resolvedId` is that record, and the store describes only what the editor is showing: loading anything else calls `reset()`. See `src/TIMELINE_ARCHITECTURE.md` §AI Generation Streaming.
 - **No scrollbars anywhere.** A global rule in `src/index.css` (`@layer base`) hides them on every element — panels, modals, dropdowns, pages. Content still scrolls; overflowing content is cut off at the surface's edge, and that cut is the cue to scroll. Never set `scrollbar-width` on an element: in current Chrome and Safari it overrides the global rule and brings the bar back.
 - **ESLint** flat config with TypeScript ESLint and React Hooks plugins. No Prettier.
-- **No semicolons or formatting tool** — follow existing code style in each file.
+- **No formatting tool, and semicolon style is mixed** — roughly a sixth of files (`App.tsx`, `useTimeline.ts`, `useAutosave.ts`, `AuthContext.tsx`, most of `components/Timeline/`) end statements with semicolons; the rest omit them. Match the file you are in and never reformat a file wholesale.
 - **Spreadsheets** use `exceljs` via the shared helper in `src/utils/excelSheet.ts`, lazy-loaded into its own chunk. The `xlsx` package was removed (frozen on npm at 0.18.5 with prototype-pollution and ReDoS advisories, while parsing untrusted uploads). Don't reintroduce it.
 
 ## Environment
@@ -108,7 +112,7 @@ All client-exposed env vars use the `VITE_` prefix. In production these live in 
 Three independent paths. Understanding that they are separate — and finish at different moments — matters more than any other operational detail here.
 
 1. **Site → Netlify**, automatically on merge to `main`. `netlify.toml` also serves the CSP and security headers.
-2. **Edge functions → GitHub Actions** (`.github/workflows/deploy-functions.yml`), which runs `supabase functions deploy` on pushes to `main` touching `supabase/functions/**` or `supabase/config.toml`. Also triggerable manually from the Actions tab. Production project ref: `ltudgurcouffxyuxvpmw`.
+2. **Edge functions → GitHub Actions** (`.github/workflows/deploy-functions.yml`), which runs `supabase functions deploy` on pushes to `main` touching `supabase/functions/**`, `supabase/config.toml` or the workflow file itself. Also triggerable manually from the Actions tab. Production project ref: `ltudgurcouffxyuxvpmw`.
 3. **Migrations → by hand**, pasted into the Supabase SQL editor. Nothing enforces or verifies this.
 
 ## Critical operational rules
@@ -165,4 +169,18 @@ That sentence is the whole model. Everything below is how it is enforced.
 - `Avenir` never loads (see Code Style above).
 - Migrations are not automated — the other half of the drift problem.
 - `/privacy` and `/terms` are engineering drafts describing the real data flows accurately, but they have not had a legal review.
-- Several paths shipped in August 2026 are deployed but never exercised, including **account deletion, which is destructive**. See the handoff doc's verified/unverified section before trusting them.
+- Several paths are deployed but have never been exercised end to end. The source of truth is the status ledger at the top of `docs/2026-08-07-verification-runbook.md`, not the older handoff doc: account deletion **was** verified there on 7 Aug 2026 against a throwaway account. Still unproven as of that ledger: autosave persistence, sharing end to end, AI descriptions persisting to `events.description`, the anonymous sign-in-or-BYOK gate, `set-byok-flag`, every `byok-keys` path (round trip, derived `byok_enabled`, cross-browser sync, sign-out leaving the account key alone), security headers on production responses, and whether the `events` realtime subscription honours RLS. Nothing added since (model selector, chapters, AI read-only flag, World Events) has a ledger entry at all.
+
+## Docs
+
+Everything in `docs/` is dated and written against a named commit, so read the status line at the top before trusting the body. Newest first:
+
+- `2026-10-21-events-drawer-prd.md` — the events drawer as a full-height bottom drawer (shipped).
+- `2026-09-29-product-cleanup-review.md` — nine weighted fixes plus the dead-code sweep; **done**. The list of what was deleted and why is here, so check it before "restoring" something.
+- `2026-09-19-mobile-bottom-drawers-plan.md` — Legend and Settings as drawers below `md` (shipped).
+- `2026-09-10-model-selector-prd.md` — why `generate-timeline` ignores `model` and the selector is BYOK-only.
+- `2026-08-13-account-menu-prd.md`, `2026-08-12-openai-byok-prd.md` — the account menu and OpenAI as a second provider.
+- `2026-08-07-verification-runbook.md` — **the status ledger** of what has been proven live, plus the live-schema check to run before anything else.
+- `2026-08-05-security-review-handoff.md` — the incidents behind the operational rules above.
+
+Not in `docs/`: `src/TIMELINE_ARCHITECTURE.md` is the living reference for the canvas, streaming and persistence, and is the right place for mechanism-level detail that would bloat this file.
