@@ -56,13 +56,14 @@ export function isPanelOverlay(): boolean {
   return typeof window !== 'undefined' && window.innerWidth < PANEL_RESIZE_BREAKPOINT
 }
 
-/** Default footprint for the left timelines panel and the event details panel. */
+/** Default footprint for the left timelines panel. */
 export const PANEL_DEFAULT_WIDTH = 320
 
 /**
- * Settings opens wider than its siblings — the scale selectors and the BYOK
- * key rows were cramped at the 314px card. Kept below `PANEL_MAX_WIDTH` so it
- * has room to move in both directions.
+ * Settings opens wider than the left panel — the scale selectors and the BYOK
+ * key rows were cramped at the 314px card. The event details panel opens at
+ * the same width to match. Kept below `PANEL_MAX_WIDTH` so it has room to move
+ * in both directions.
  */
 export const SETTINGS_PANEL_DEFAULT_WIDTH = 360
 

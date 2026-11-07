@@ -6,7 +6,7 @@ import { PanelResizeHandle } from '../ui/PanelResizeHandle'
 import { Skeleton, SkeletonText } from '../ui/skeleton'
 import { usePanelWidth } from '@/hooks/usePanelWidth'
 import { useWindowResizing } from '@/hooks/useWindowResizing'
-import { PANEL_DEFAULT_WIDTH } from '@/constants/panels'
+import { SETTINGS_PANEL_DEFAULT_WIDTH } from '@/constants/panels'
 import { formatDateLong } from '@/utils/dateUtils'
 import {
   enrichEvent,
@@ -99,7 +99,7 @@ export function EventDetailPanel<E extends EnrichableEvent>({
   // two routes, so a resize on either follows the reader everywhere.
   const { width, setWidth, resetWidth } = usePanelWidth(
     'event_panel_width',
-    PANEL_DEFAULT_WIDTH
+    SETTINGS_PANEL_DEFAULT_WIDTH
   )
 
   // The other provider, offered only when the user has a key for it. No
