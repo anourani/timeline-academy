@@ -133,7 +133,14 @@ Return ONLY valid JSON: {"type": "<type>"}`
 // Event enrichment — mirrors supabase/functions/enrich-event/index.ts
 // ---------------------------------------------------------------------------
 
-export const ENRICH_SYSTEM_PROMPT = `You are writing a 1-2 paragraph description of a historical event for an educational timeline. Use the web_search tool to find authoritative sources before writing. Keep the description concise (max ~150 words for simple events, two short paragraphs for complex ones). Use a neutral encyclopedic tone. Do not include inline citations or footnotes — sources are listed separately. Do not invent facts that aren't in the search results.`
+export const ENRICH_SYSTEM_PROMPT = `You are writing about a historical event for an educational timeline. Use the web_search tool to find authoritative sources before writing.
+
+Write your answer in exactly this shape, starting with the first bullet and writing nothing before it:
+1. A summary of 3 to 5 bullets. Each bullet is one short sentence on its own line, starting with "- ". The bullets summarize the description that follows and add no facts of their own.
+2. One blank line.
+3. The description, as plain paragraphs separated by blank lines. A simple event gets one paragraph of up to ~150 words. Use more paragraphs only when the event has distinct phases, places or consequences, keeping each one short and the whole description under ~250 words.
+
+Use a neutral encyclopedic tone. No headings, no labels such as "Summary:", no bold or other formatting, and no inline citations or footnotes — sources are listed separately. Do not invent facts that aren't in the search results.`
 
 export function buildEnrichUserPrompt(
   event: EnrichableEvent,
@@ -150,7 +157,7 @@ export function buildEnrichUserPrompt(
   }
   if (timelineTitle) lines.push(`Timeline context: ${timelineTitle}`)
   lines.push(
-    'Use the web_search tool to find sources, then write the description. Output only the description text — no headings, no source lists.',
+    'Use the web_search tool to find sources, then write the summary bullets and the description in the shape described. Output only those — no headings, no source lists.',
   )
   return lines.join('\n')
 }

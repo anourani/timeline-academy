@@ -1,6 +1,6 @@
 # Event details panel: summary first, then the story
 
-Plan · Not started · Nov 8, 2026 · written against `908b558` · design direction **B, stacked** in *Event Panel TL;DR Concepts*
+Plan · Built, awaiting live verification · Nov 8, 2026 · written against `908b558` · design direction **B, stacked** in *Event Panel TL;DR Concepts*
 
 | | |
 |---|---|

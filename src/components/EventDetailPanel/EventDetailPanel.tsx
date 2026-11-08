@@ -8,6 +8,7 @@ import { usePanelWidth } from '@/hooks/usePanelWidth'
 import { useWindowResizing } from '@/hooks/useWindowResizing'
 import { PANEL_DEFAULT_WIDTH } from '@/constants/panels'
 import { formatDateLong } from '@/utils/dateUtils'
+import { parseEventDescription } from '@/utils/eventDescription'
 import {
   enrichEvent,
   fetchEventImage,
@@ -16,6 +17,7 @@ import type { EnrichableEvent, EventSource } from '@/types/event'
 import type { ByokProvider } from '@/types/ai'
 import { PROVIDER_META } from '@/constants/byokProviders'
 import { getKey } from '@/services/userApiKey'
+import { PhotoHeader, type PanelPhoto } from './PhotoHeader'
 
 interface EventDetailPanelProps<E extends EnrichableEvent> {
   open: boolean
@@ -61,6 +63,9 @@ const SCROLL_KEYS = new Set([
 /** Ragged on purpose — three equal bars read as a table, not as a list. */
 const SOURCE_SKELETON_WIDTHS = ['72%', '54%', '63%']
 
+/** Three one-line bullets, ragged for the same reason. */
+const SUMMARY_SKELETON_WIDTHS = ['88%', '76%', '82%']
+
 function formatDateRange(event: EnrichableEvent): string {
   if (event.startDate === event.endDate) return formatDateLong(event.startDate)
   return `${formatDateLong(event.startDate)} → ${formatDateLong(event.endDate)}`
@@ -86,7 +91,6 @@ export function EventDetailPanel<E extends EnrichableEvent>({
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [imageAttribution, setImageAttribution] = useState<string | null>(null)
   const [imageState, setImageState] = useState<ImageState>('idle')
-  const [imageLoaded, setImageLoaded] = useState(false)
   const [sources, setSources] = useState<EventSource[]>([])
   const [errorMessage, setErrorMessage] = useState('')
   const [errorProvider, setErrorProvider] = useState<ByokProvider | null>(null)
@@ -149,10 +153,9 @@ export function EventDetailPanel<E extends EnrichableEvent>({
       setImageUrl(event.imageUrl ?? null)
       setImageAttribution(event.imageAttribution ?? null)
       setSources(event.sources ?? [])
-      // Nothing is being fetched, so nothing should be pulsing. `imageLoaded`
-      // stays false until the <img> paints — a cached URL is still bytes away.
+      // Nothing is being fetched. `PhotoHeader` still pulses until the <img>
+      // paints — a cached URL is still bytes away.
       setImageState('settled')
-      setImageLoaded(false)
       return
     }
 
@@ -293,7 +296,6 @@ export function EventDetailPanel<E extends EnrichableEvent>({
     if (!preserveImage) {
       setImageUrl(null)
       setImageAttribution(null)
-      setImageLoaded(false)
     }
     setSources([])
     setErrorMessage('')
@@ -406,16 +408,23 @@ export function EventDetailPanel<E extends EnrichableEvent>({
   const displayAttribution = state === 'loaded' ? event?.imageAttribution ?? imageAttribution : imageAttribution
   const displaySources = state === 'loaded' ? event?.sources ?? sources : sources
 
-  // The description slot rendered nothing at all until the first token landed —
-  // seconds, because `enrichEvent` runs a web search before it writes a word.
-  const showDescriptionSkeleton = state === 'generating' && description.length === 0
+  const { summary, paragraphs } = parseEventDescription(description)
+  const generating = state === 'generating'
+  // Nothing has streamed yet: the model is still searching, and there is no
+  // telling whether a summary is coming (a new edge function) or not (an old
+  // one the site has outrun). Both sections hold a skeleton until the first
+  // token decides it.
+  const awaitingFirstToken = generating && description.length === 0
+  const showSummary = summary.length > 0 || awaitingFirstToken
+  // Bullets stream first, so the story skeleton sits under them until the
+  // first paragraph lands.
+  const showStorySkeleton = generating && paragraphs.length === 0
+  const showStory = state !== 'error' && (paragraphs.length > 0 || showStorySkeleton)
   // Sources arrive on their own callback, usually before the stream finishes.
-  const showSourcesSkeleton = state === 'generating' && displaySources.length === 0
-  // Pulse while the lookup is in flight, and keep pulsing once a URL is known
-  // until the bytes actually paint. Settling with no image stops the pulse: an
-  // empty frame is the answer, and an answer should not look like waiting.
-  const showImageSkeleton =
-    imageState === 'loading' || (!!displayImageUrl && !imageLoaded)
+  const showSourcesSkeleton = generating && displaySources.length === 0
+  const photos: PanelPhoto[] = displayImageUrl
+    ? [{ url: displayImageUrl, attribution: displayAttribution }]
+    : []
 
   return createPortal(
     <>
@@ -462,7 +471,7 @@ export function EventDetailPanel<E extends EnrichableEvent>({
           <div
             ref={contentRef}
             aria-busy={state === 'generating'}
-            className="flex flex-col items-stretch p-[24px_20px] gap-[16px] overflow-y-auto flex-1 min-h-0"
+            className="flex flex-col items-stretch overflow-y-auto flex-1 min-h-0"
           >
             {event && (
               <>
@@ -477,162 +486,137 @@ export function EventDetailPanel<E extends EnrichableEvent>({
                       : ''}
                 </p>
 
-                {/* Date row + authoring actions + mobile close */}
-                <div className="flex items-center justify-between gap-3">
-                  <p className="label-s-type1 text-[#9B9EA3] m-0">
-                    {formatDateRange(event)}
-                  </p>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {showAuthoringActions && (
-                      <>
-                        <HeaderIconButton onClick={onEdit} label="Edit event">
-                          <Pencil size={16} strokeWidth={1.25} />
-                        </HeaderIconButton>
-                        <HeaderIconButton
-                          onClick={() => setShowDeleteConfirm(true)}
-                          label="Delete event"
-                          destructive
+                <PhotoHeader
+                  // Remount per event: resets the slide and what has loaded.
+                  key={event.id}
+                  photos={photos}
+                  date={formatDateRange(event)}
+                  title={event.title}
+                  searching={imageState === 'loading'}
+                  actions={
+                    <>
+                      {showAuthoringActions && (
+                        <>
+                          <HeaderIconButton onClick={onEdit} label="Edit event">
+                            <Pencil size={16} strokeWidth={1.25} />
+                          </HeaderIconButton>
+                          <HeaderIconButton
+                            onClick={() => setShowDeleteConfirm(true)}
+                            label="Delete event"
+                            destructive
+                          >
+                            <Trash2 size={16} strokeWidth={1.25} />
+                          </HeaderIconButton>
+                        </>
+                      )}
+                      <button
+                        onClick={onClose}
+                        className="md:hidden flex items-center justify-center p-1.5 rounded-lg border border-white/15 bg-white/10 backdrop-blur-[12px] text-[#c9ced4] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4),inset_0px_1px_0px_0px_rgba(255,255,255,0.1)] hover:bg-white/20 hover:text-[#dadee5] transition-colors"
+                        aria-label="Close panel"
+                      >
+                        <X size={16} strokeWidth={1.25} />
+                      </button>
+                    </>
+                  }
+                />
+
+                <div className="flex flex-col px-[20px] pt-[20px] pb-[24px]">
+                  {state === 'error' && (
+                    <div className="flex flex-col gap-2">
+                      <p className="body-m text-[#9B9EA3] m-0">
+                        Couldn't generate details. {errorMessage ? `(${errorMessage})` : ''}
+                      </p>
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          onClick={() => regenerateNow()}
+                          className="font-['Avenir',sans-serif] text-[14px] leading-[20px] text-[#DADEE5] underline hover:text-white"
                         >
-                          <Trash2 size={16} strokeWidth={1.25} />
-                        </HeaderIconButton>
-                      </>
-                    )}
-                    <button
-                      onClick={onClose}
-                      className="md:hidden flex items-center justify-center p-1.5 rounded-lg border border-white/15 bg-white/10 backdrop-blur-[12px] text-[#c9ced4] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4),inset_0px_1px_0px_0px_rgba(255,255,255,0.1)] hover:bg-white/20 hover:text-[#dadee5] transition-colors"
-                      aria-label="Close panel"
+                          Try again
+                        </button>
+                        {retryProvider && (
+                          <button
+                            onClick={() => regenerateNow(retryProvider)}
+                            className="font-['Avenir',sans-serif] text-[14px] leading-[20px] text-[#9B9EA3] underline hover:text-[#DADEE5]"
+                          >
+                            Retry with {PROVIDER_META[retryProvider].label}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {state !== 'error' && showSummary && (
+                    <PanelSection label="Summary" first>
+                      {summary.length > 0 ? (
+                        <ul className="m-0 p-0 list-none flex flex-col gap-[10px]">
+                          {summary.map((item, i) => (
+                            <li key={i} className="flex gap-[12px] items-start">
+                              <span
+                                aria-hidden="true"
+                                className="mt-[9px] w-[6px] h-[6px] rounded-full bg-[#9B9EA3] shrink-0"
+                              />
+                              <span className="body-lg text-[#ECEEF1]">{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <SkeletonText lines={3} widths={SUMMARY_SKELETON_WIDTHS} className="gap-[14px]" />
+                      )}
+                    </PanelSection>
+                  )}
+
+                  {showStory && (
+                    <PanelSection label="The story" first={!showSummary}>
+                      {paragraphs.length > 0 ? (
+                        <div className="flex flex-col gap-[16px] max-w-[62ch]">
+                          {paragraphs.map((para, i) => (
+                            <p key={i} className="body-lg text-[#C4C7CC] m-0 whitespace-pre-wrap">
+                              {para}
+                            </p>
+                          ))}
+                        </div>
+                      ) : (
+                        // Two blocks rather than one run of bars: the reserved
+                        // height matches the two-paragraph shape most stories
+                        // come back in.
+                        <div className="flex flex-col gap-[16px]">
+                          <SkeletonText lines={4} />
+                          <SkeletonText lines={4} />
+                        </div>
+                      )}
+                    </PanelSection>
+                  )}
+
+                  {(showSourcesSkeleton || displaySources.length > 0) && (
+                    <PanelSection
+                      label="Sources"
+                      first={state !== 'error' && !showSummary && !showStory}
                     >
-                      <X size={16} strokeWidth={1.25} />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Photo frame. Fluid rather than a fixed 274px so it follows
-                    a resized panel; the 274/205 ratio is preserved.
-
-                    `shrink-0` is load-bearing. This is a flex item in a column
-                    whose content overflows as soon as a description arrives,
-                    and an aspect-ratio box has no min-content height to stop
-                    flexbox squeezing it — without this the frame collapsed to a
-                    2px line the moment the text got long, taking the picture
-                    with it. */}
-                <div
-                  className={`w-full shrink-0 aspect-[274/205] bg-[#0A0A0A] border border-[#525252] rounded-[8px] overflow-hidden ${
-                    showImageSkeleton ? 'animate-pulse' : ''
-                  }`}
-                >
-                  {displayImageUrl && (
-                    <img
-                      src={displayImageUrl}
-                      alt={event.title}
-                      // Never send the page URL (a /view share link is the
-                      // access capability itself) to the image host.
-                      referrerPolicy="no-referrer"
-                      onLoad={() => setImageLoaded(true)}
-                      // A broken URL stops the wait like a successful one — the
-                      // frame is empty either way, and pulsing at an image that
-                      // will never arrive is the bug this replaces.
-                      onError={() => setImageLoaded(true)}
-                      className="w-full h-full object-cover rounded-[8px]"
-                    />
+                      <div className="flex flex-col">
+                        {displaySources.length > 0
+                          ? displaySources.map((source, i) => (
+                              <a
+                                key={`${source.url}-${i}`}
+                                href={source.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="body-m text-[#9B9EA3] underline hover:text-[#DADEE5] py-2 border-b border-[#262626] last:border-b-0 break-words"
+                              >
+                                {source.title || source.url}
+                              </a>
+                            ))
+                          : SOURCE_SKELETON_WIDTHS.map((width, i) => (
+                              <div
+                                key={i}
+                                className="flex items-center py-2 border-b border-[#262626] last:border-b-0"
+                              >
+                                <Skeleton className="h-[14px]" style={{ width }} />
+                              </div>
+                            ))}
+                      </div>
+                    </PanelSection>
                   )}
                 </div>
-
-                {/* Photo attribution */}
-                {displayAttribution && (
-                  <p
-                    className="m-0"
-                    style={{
-                      fontFamily: "'Avenir', sans-serif",
-                      fontWeight: 400,
-                      fontSize: '8px',
-                      lineHeight: '140%',
-                      color: '#9B9EA3',
-                    }}
-                  >
-                    {displayAttribution}
-                  </p>
-                )}
-
-                {/* Title */}
-                <h2 className="header-xsmall text-[#DADEE5] m-0">{event.title}</h2>
-
-                {/* Description / state */}
-                {state === 'error' ? (
-                  <div className="flex flex-col gap-2">
-                    <p className="body-m text-[#9B9EA3] m-0">
-                      Couldn't generate details. {errorMessage ? `(${errorMessage})` : ''}
-                    </p>
-                    <div className="flex flex-wrap gap-3">
-                      <button
-                        onClick={() => regenerateNow()}
-                        className="font-['Avenir',sans-serif] text-[14px] leading-[20px] text-[#DADEE5] underline hover:text-white"
-                      >
-                        Try again
-                      </button>
-                      {retryProvider && (
-                        <button
-                          onClick={() => regenerateNow(retryProvider)}
-                          className="font-['Avenir',sans-serif] text-[14px] leading-[20px] text-[#9B9EA3] underline hover:text-[#DADEE5]"
-                        >
-                          Retry with {PROVIDER_META[retryProvider].label}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ) : showDescriptionSkeleton ? (
-                  // Two blocks rather than one run of bars: the reserved height
-                  // matches the two-paragraph shape most descriptions come back
-                  // in, so the first token replaces the skeleton instead of
-                  // pushing the page around. Both vanish together — a skeleton
-                  // tail below streaming text dances on every token.
-                  <>
-                    <SkeletonText lines={4} />
-                    <SkeletonText lines={4} />
-                  </>
-                ) : (
-                  description &&
-                  description
-                    .split(/\n\n+/)
-                    .filter((p) => p.trim().length > 0)
-                    .map((para, i) => (
-                      <p key={i} className="body-m text-[#9B9EA3] m-0 whitespace-pre-wrap">
-                        {para}
-                      </p>
-                    ))
-                )}
-
-                {/* Sources */}
-                {showSourcesSkeleton && (
-                  <div className="flex flex-col gap-0">
-                    <h3 className="label-m-type2 text-[#9B9EA3] m-0 mb-2">Sources</h3>
-                    {SOURCE_SKELETON_WIDTHS.map((width, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center py-2 border-b border-[#262626] last:border-b-0"
-                      >
-                        <Skeleton className="h-[14px]" style={{ width }} />
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {displaySources && displaySources.length > 0 && (
-                  <div className="flex flex-col gap-0">
-                    <h3 className="label-m-type2 text-[#9B9EA3] m-0 mb-2">Sources</h3>
-                    {displaySources.map((source, i) => (
-                      <a
-                        key={`${source.url}-${i}`}
-                        href={source.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="body-m text-[#9B9EA3] underline hover:text-[#DADEE5] py-2 border-b border-[#262626] last:border-b-0 break-words"
-                      >
-                        {source.title || source.url}
-                      </a>
-                    ))}
-                  </div>
-                )}
               </>
             )}
           </div>
@@ -688,6 +672,32 @@ export function EventDetailPanel<E extends EnrichableEvent>({
       />
     </>,
     document.body,
+  )
+}
+
+/**
+ * One of the panel's stacked sections — Summary, The story, Sources. Each
+ * after the first is set off by a hairline; `first` is computed by the caller
+ * because which section leads depends on what this description contains (an
+ * old one has no summary).
+ */
+function PanelSection({
+  label,
+  first,
+  children,
+}: {
+  label: string
+  first?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <section
+      aria-label={label}
+      className={`flex flex-col gap-[12px] ${first ? '' : 'mt-[24px] pt-[24px] border-t border-[#262626]'}`}
+    >
+      <h3 className="label-s-type1 uppercase tracking-[0.08em] text-[#9B9EA3] m-0">{label}</h3>
+      {children}
+    </section>
   )
 }
 
