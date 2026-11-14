@@ -1298,6 +1298,20 @@ list deliberately omits, implying a saved timeline that does not exist.
 - **Batch add:** `useEvents.addEvents(omits) → { added, duplicates }` deduplicates against the existing list by `(title, startDate, endDate, category)`.
 - **Delete:** the page filters the event out of local state; `saveTimelineEvents` detects the missing `id` and emits a DELETE.
 
+### Event descriptions — summary inside `description`
+
+An enriched event's `description` (in `events.description`, on drafts, and in `viewerEventCache`) is stored exactly as the model streamed it. Since Nov 2026 the enrich prompt (`llmPrompts.ts`, mirrored in `enrich-event`) asks for 3–5 `- ` bullets, a blank line, then the description as plain paragraphs. There is no separate summary column, on purpose: an unapplied migration would fail every save, while text in an existing column can't.
+
+`parseEventDescription` (`src/utils/eventDescription.ts`) is the only reader of the format. It splits the string into `summary` and `paragraphs`, and runs on every render of the detail panel, so it must accept every shape a description can be in:
+
+- **The new shape, complete** → Summary, The story, Sources.
+- **Mid-stream** — a bare `-`, a half-written bullet, bullets with no story yet. The panel keeps a story skeleton under the bullets until the first paragraph lands.
+- **The old shape** — written before the prompt changed, or by an edge function the site has outrun → no bullets, so no Summary section; the paragraphs render as the story, as before. Regenerate moves an event to the new shape; there is no backfill.
+
+The summary ends at the first non-bullet line, blank or not. Text the model writes before its first bullet (a "Let me search…" preamble) therefore suppresses the summary rather than being shown as one; the prompt forbids it.
+
+The photo above it is `PhotoHeader`, which takes a list of `{ url, attribution }`. Every event stores one image, so the list always holds 0 or 1 today; the swipe, hover arrows and dots for several are built but dormant. See `docs/2026-11-08-event-panel-tldr-plan.md` §7.
+
 ### Plan limits
 
 `src/lib/limits.ts` defines `LimitReachedError` (with `kind: 'event' | 'timeline'` and `limit: number`). `useTimeline.checkCreateTimelineLimits(userId)` runs before creating a new timeline (or saving the first version of one) and throws `LimitReachedError` if either the per-user event count or timeline count exceeds the current plan's limit (looked up via `getCurrentLimits()` in `lib/limits.ts`).
