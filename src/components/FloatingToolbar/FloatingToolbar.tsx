@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { ModeTabs } from '@/components/FloatingToolbar/ModeTabs'
 import { DockLegend, type DockLegendProps } from '@/components/FloatingToolbar/DockLegend'
 import { DockDesign, type DockDesignProps } from '@/components/FloatingToolbar/DockDesign'
+import { DockApiKeys } from '@/components/FloatingToolbar/DockApiKeys'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useSidePanel } from '@/hooks/useSidePanel'
 import { useWindowResizing } from '@/hooks/useWindowResizing'
@@ -12,7 +13,7 @@ interface FloatingToolbarProps {
   onAddEventClick: () => void
   onEventsClick: () => void
   onSettingsClick: () => void
-  activePanel: 'events' | 'settings' | 'legend' | 'design' | null
+  activePanel: 'events' | 'settings' | 'legend' | 'design' | 'apiKeys' | null
   mode?: 'edit' | 'view'
   onModeChange?: (mode: 'edit' | 'view') => void
   /**
@@ -32,6 +33,8 @@ interface FloatingToolbarProps {
   /** The Design menu's settings. Shown on every timeline, in both modes. */
   design?: Omit<DockDesignProps, 'open' | 'onOpenChange' | 'disabled' | 'iconOnly' | 'triggerClassName'>
   onDesignOpenChange?: (open: boolean) => void
+  /** The API Keys menu. Shown on every timeline; on phones, edit mode only. */
+  onApiKeysOpenChange?: (open: boolean) => void
 }
 
 const INTRO_RISE_MS = 550
@@ -52,6 +55,7 @@ export function FloatingToolbar({
   onLegendOpenChange,
   design,
   onDesignOpenChange,
+  onApiKeysOpenChange,
 }: FloatingToolbarProps) {
   // The pill is centered on the viewport, then shifted by half the side
   // panel's width to recenter over the visible timeline area. The width is
@@ -74,11 +78,12 @@ export function FloatingToolbar({
   // exact complement of `md`, which is also where the footer drops its
   // button labels: four labelled buttons don't fit a 390px screen.
   const isMobile = useIsMobile()
-  // In present mode the phone footer also carries the Edit/Present switch,
-  // and on an AI timeline that is three buttons plus the switch — wider than
-  // a 360px screen at the dock's usual 80px minimum. Narrower there only;
-  // still well clear of a 44px touch target.
-  const compactClass = isMobile && !isEditing ? 'min-w-[60px]' : ''
+  // The phone footer holds up to five icon buttons in edit mode (Add or
+  // Legend, Events, Design, Settings, API Keys), or three plus the
+  // Edit/Present switch in present mode — wider than a 360px screen at the
+  // dock's usual 80px minimum. 56px is an icon button's natural width, still
+  // well clear of a 44px touch target.
+  const compactClass = isMobile ? 'min-w-[56px]' : ''
   const legendControl = aiGenerated && legend && onLegendOpenChange ? (
     <DockLegend
       {...legend}
@@ -96,6 +101,17 @@ export function FloatingToolbar({
       open={activePanel === 'design'}
       onOpenChange={onDesignOpenChange}
       disabled={streaming}
+      iconOnly={isMobile}
+      triggerClassName={compactClass}
+    />
+  ) : null
+  const apiKeysControl = onApiKeysOpenChange ? (
+    <DockApiKeys
+      open={activePanel === 'apiKeys'}
+      onOpenChange={onApiKeysOpenChange}
+      // Collapsed in the phone's present-mode footer: disabled there too, so
+      // the invisible button drops out of the tab order.
+      disabled={streaming || (isMobile && !isEditing)}
       iconOnly={isMobile}
       triggerClassName={compactClass}
     />
@@ -128,7 +144,7 @@ export function FloatingToolbar({
           <Collapsible open={isEditing}>
             <Button
               variant="glass" size="none"
-              className={lockedClass}
+              className={`${lockedClass} ${iconOnly ? compactClass : ''}`}
               onClick={onAddEventClick}
               disabled={streaming}
               tabIndex={isEditing && !streaming ? 0 : -1}
@@ -157,7 +173,7 @@ export function FloatingToolbar({
         <Collapsible open={isEditing}>
           <Button
             variant="glass" size="none"
-            className={lockedClass}
+            className={`${lockedClass} ${iconOnly ? compactClass : ''}`}
             data-active={activePanel === 'settings'}
             onClick={onSettingsClick}
             disabled={streaming}
@@ -169,6 +185,15 @@ export function FloatingToolbar({
             {!iconOnly && 'Settings'}
           </Button>
         </Collapsible>
+        {/* Keys belong to the account, not the timeline, so on desktop they
+            stay reachable in present mode (World Events still spends them).
+            The phone footer has no room for them beside the Edit/Present
+            switch, so there they follow Settings and collapse. */}
+        {(surface === 'mobile') === isMobile && (
+          iconOnly
+            ? <Collapsible open={isEditing}>{apiKeysControl}</Collapsible>
+            : apiKeysControl
+        )}
       </>
     )
   }
@@ -186,9 +211,10 @@ export function FloatingToolbar({
           collapsing a child animates the pill's width *and* keeps it centred,
           with no width transition of its own.
 
-          Order: Events, Design, Legend, then Settings last before the
-          Edit/Present switch — the menus that change what you see sit
-          together, and the one that manages the timeline itself sits apart. */}
+          Order: Events, Design, Legend, Settings, then API Keys last before
+          the Edit/Present switch — the menus that change what you see sit
+          together, then the one that manages the timeline itself, then the
+          one that belongs to the account rather than the timeline. */}
       <div
         className={`
           hidden md:flex

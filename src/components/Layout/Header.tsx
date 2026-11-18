@@ -30,8 +30,8 @@ interface HeaderProps {
   onVerticalScaleChange: (scale: 'small' | 'medium') => void;
   /** The World Events lane's settings and fetch state, for the Design menu. */
   worldEvents: WorldEventsControl;
-  activePanel: 'events' | 'settings' | 'legend' | 'design' | null;
-  onActivePanelChange: (panel: 'events' | 'settings' | 'legend' | 'design' | null) => void;
+  activePanel: 'events' | 'settings' | 'legend' | 'design' | 'apiKeys' | null;
+  onActivePanelChange: (panel: 'events' | 'settings' | 'legend' | 'design' | 'apiKeys' | null) => void;
   showAddEventModal: boolean;
   onAddEventClick: () => void;
   onCloseAddEventModal: () => void;
@@ -129,6 +129,7 @@ export function Header({
           worldEvents,
         }}
         onDesignOpenChange={(open) => onActivePanelChange(open ? 'design' : null)}
+        onApiKeysOpenChange={(open) => onActivePanelChange(open ? 'apiKeys' : null)}
       />
 
       <Dialog open={showAddEventModal} onOpenChange={(open) => { if (!open) onCloseAddEventModal(); }}>
@@ -153,6 +154,7 @@ export function Header({
         onImportEvents={onImportEvents}
         categories={categories}
         onDeleteTimeline={onDeleteTimeline}
+        onOpenApiKeys={() => onActivePanelChange('apiKeys')}
       />
 
       <EventTableEditor

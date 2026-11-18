@@ -92,7 +92,7 @@ export function App() {
   const routerNavigate = useNavigate();
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [activePanel, setActivePanel] = useState<'events' | 'settings' | 'legend' | 'design' | null>(null);
+  const [activePanel, setActivePanel] = useState<'events' | 'settings' | 'legend' | 'design' | 'apiKeys' | null>(null);
   const [showAddEventModal, setShowAddEventModal] = useState(false);
   const [mode, setMode] = useState<'edit' | 'view'>('edit');
   // A real event, or a World Events entry (read-only context; `we:` id).
@@ -158,7 +158,7 @@ export function App() {
   // Nothing may hydrate, seed or create until storage has been reconciled: all
   // three would otherwise write into a store whose contents are about to move.
   const storageReconciled = tier !== 'loading' && reconciledTier === tier;
-  const { setOnTimelineSelect, setOnDraftSelect, refreshTimelines, setOnOpenSettings, setActiveTimelineId, setActiveDraftId: setPanelActiveDraftId, setActiveTimelineTitle, setActiveEventCount, setActiveDominantCategoryColor } = useSidePanel();
+  const { setOnTimelineSelect, setOnDraftSelect, refreshTimelines, setOnOpenApiKeys, setActiveTimelineId, setActiveDraftId: setPanelActiveDraftId, setActiveTimelineTitle, setActiveEventCount, setActiveDominantCategoryColor } = useSidePanel();
 
   const timelineData = {
     id: loadedTimelineId,
@@ -1285,13 +1285,13 @@ export function App() {
   useEffect(() => {
     setOnTimelineSelect((id: string) => timelineSwitchRef.current(id));
     setOnDraftSelect((id: string) => draftSwitchRef.current(id));
-    setOnOpenSettings(() => setActivePanel('settings'));
+    setOnOpenApiKeys(() => setActivePanel('apiKeys'));
     return () => {
       setOnTimelineSelect(null);
       setOnDraftSelect(null);
-      setOnOpenSettings(null);
+      setOnOpenApiKeys(null);
     };
-  }, [setOnTimelineSelect, setOnDraftSelect, setOnOpenSettings]);
+  }, [setOnTimelineSelect, setOnDraftSelect, setOnOpenApiKeys]);
 
   // Keep the side panel informed of which timeline/draft is active so it can
   // highlight it. useLayoutEffect ensures the context update commits

@@ -37,6 +37,14 @@ interface DockMenuProps {
   side?: 'top' | 'bottom'
   sideOffset?: number
   onOpenAutoFocus?: (e: Event) => void
+  /**
+   * Desktop popover only. A menu opened from somewhere other than its trigger
+   * (a link in a modal that closes as it opens) can have focus handed back
+   * to that modal's trigger a moment later, which reads as "focus left" and
+   * dismisses it. Prevent the default to keep it open; clicks outside still
+   * close it.
+   */
+  onFocusOutside?: (e: Event) => void
   children: ReactNode
 }
 
@@ -65,6 +73,7 @@ export function DockMenu({
   side = 'top',
   sideOffset = DOCK_SIDE_OFFSET,
   onOpenAutoFocus,
+  onFocusOutside,
   children,
 }: DockMenuProps) {
   const isMobile = useIsMobile()
@@ -136,6 +145,7 @@ export function DockMenu({
         collisionPadding={16}
         aria-label={label}
         onOpenAutoFocus={onOpenAutoFocus}
+        onFocusOutside={onFocusOutside}
         // Inline, because an arbitrary duration utility is ambiguous to
         // Tailwind here — the core transition scale and tailwindcss-animate's
         // animation scale share the `duration-` namespace and both take a
