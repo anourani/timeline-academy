@@ -160,7 +160,7 @@ export function AccountDetailsModal({
 
           <div className="sm:col-start-2 sm:row-start-2 min-w-0 min-h-0 overflow-y-auto px-6 pb-6">
             {section === 'details' && <DetailsPane />}
-            {section === 'usage' && <UsagePane />}
+            {section === 'usage' && <UsagePane onCloseModal={onClose} />}
             {section === 'management' && (
               <ManagementPane
                 onDelete={() => {
@@ -196,7 +196,7 @@ function DetailsPane() {
   )
 }
 
-function UsagePane() {
+function UsagePane({ onCloseModal }: { onCloseModal: () => void }) {
   const tier = useAccountTier()
   // Counts from the hook, caps from the tier — the split `UsageLimits` already
   // makes. `useEventUsage` sources its limits from `getCurrentLimits()`, which
@@ -205,7 +205,7 @@ function UsagePane() {
   // value if that call never lands.
   const { eventCount, timelineCount, isLoading } = useEventUsage()
   const credential = useByokCredential()
-  const { onOpenSettings, hasSettingsHandler } = useSidePanel()
+  const { onOpenApiKeys, hasApiKeysHandler } = useSidePanel()
 
   if (tier === 'loading') return null
   const caps = tier === 'trial' ? null : PLAN_LIMITS[tier]
@@ -261,20 +261,25 @@ function UsagePane() {
           )}
         </p>
         <p className="text-[12px] leading-[18px] text-[#6b6e73] mt-1">
-          {hasSettingsHandler ? (
+          {hasApiKeysHandler ? (
             <>
               Keys are added and removed in{' '}
               <button
                 type="button"
-                onClick={onOpenSettings}
+                // Close first: the API Keys menu opens from the dock, which
+                // this modal would otherwise sit on top of.
+                onClick={() => {
+                  onCloseModal()
+                  onOpenApiKeys()
+                }}
                 className="underline hover:text-[#9b9ea3] transition-colors"
               >
-                Settings
+                API Keys
               </button>
               .
             </>
           ) : (
-            'Keys are added and removed in a timeline’s Settings panel.'
+            'Keys are added and removed from API Keys in a timeline’s dock.'
           )}
         </p>
       </div>

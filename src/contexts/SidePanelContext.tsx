@@ -6,7 +6,7 @@ import { PANEL_DEFAULT_WIDTH, PANEL_RESIZE_BREAKPOINT } from '@/constants/panels
 type TimelineSelectHandler = (timelineId: string) => void
 type DraftSelectHandler = (draftId: string) => void
 type TimelinesRefreshHandler = () => void
-type OpenSettingsHandler = () => void
+type OpenApiKeysHandler = () => void
 
 interface SidePanelContextValue {
   isOpen: boolean
@@ -31,16 +31,20 @@ interface SidePanelContextValue {
   /** Force the timelines list to refetch (e.g. after deleting from the editor). No-op if nothing is registered. */
   refreshTimelines: () => void
   setRefreshTimelines: (handler: TimelinesRefreshHandler | null) => void
-  /** Open the Settings panel. Registered by the editor route; no-op elsewhere. */
-  onOpenSettings: OpenSettingsHandler
-  setOnOpenSettings: (handler: OpenSettingsHandler | null) => void
   /**
-   * Whether `onOpenSettings` currently has somewhere to go. State rather than a
-   * read of the ref, because a ref write does not re-render the account menu
-   * that needs to know — and a Settings item that is visibly present and does
-   * nothing is worse than one that isn't there.
+   * Open the dock's API Keys menu — where keys are added and removed. It
+   * opened the Settings panel until the keys moved out of it. Registered by
+   * the editor route; no-op elsewhere.
    */
-  hasSettingsHandler: boolean
+  onOpenApiKeys: OpenApiKeysHandler
+  setOnOpenApiKeys: (handler: OpenApiKeysHandler | null) => void
+  /**
+   * Whether `onOpenApiKeys` currently has somewhere to go. State rather than a
+   * read of the ref, because a ref write does not re-render the account menu
+   * that needs to know — and a "manage your key" link that is visibly present
+   * and does nothing is worse than one that isn't there.
+   */
+  hasApiKeysHandler: boolean
   activeTimelineId: string | null
   setActiveTimelineId: (id: string | null) => void
   activeDraftId: string | null
@@ -99,12 +103,12 @@ export function SidePanelProvider({ children }: { children: ReactNode }) {
   const [activeTimelineTitle, setActiveTimelineTitle] = useState<string | null>(null)
   const [activeEventCount, setActiveEventCount] = useState<number | null>(null)
   const [activeDominantCategoryColor, setActiveDominantCategoryColor] = useState<string | null>(null)
-  const [hasSettingsHandler, setHasSettingsHandler] = useState(false)
+  const [hasApiKeysHandler, setHasApiKeysHandler] = useState(false)
   const navigate = useNavigate()
   const customHandlerRef = useRef<TimelineSelectHandler | null>(null)
   const customDraftHandlerRef = useRef<DraftSelectHandler | null>(null)
   const customRefreshRef = useRef<TimelinesRefreshHandler | null>(null)
-  const customOpenSettingsRef = useRef<OpenSettingsHandler | null>(null)
+  const customOpenApiKeysRef = useRef<OpenApiKeysHandler | null>(null)
 
   useEffect(() => {
     try {
@@ -150,13 +154,13 @@ export function SidePanelProvider({ children }: { children: ReactNode }) {
     customRefreshRef.current = handler
   }, [])
 
-  const onOpenSettings = useCallback<OpenSettingsHandler>(() => {
-    customOpenSettingsRef.current?.()
+  const onOpenApiKeys = useCallback<OpenApiKeysHandler>(() => {
+    customOpenApiKeysRef.current?.()
   }, [])
 
-  const setOnOpenSettings = useCallback((handler: OpenSettingsHandler | null) => {
-    customOpenSettingsRef.current = handler
-    setHasSettingsHandler(Boolean(handler))
+  const setOnOpenApiKeys = useCallback((handler: OpenApiKeysHandler | null) => {
+    customOpenApiKeysRef.current = handler
+    setHasApiKeysHandler(Boolean(handler))
   }, [])
 
   const value = useMemo<SidePanelContextValue>(() => ({
@@ -175,9 +179,9 @@ export function SidePanelProvider({ children }: { children: ReactNode }) {
     setOnDraftSelect,
     refreshTimelines,
     setRefreshTimelines,
-    onOpenSettings,
-    setOnOpenSettings,
-    hasSettingsHandler,
+    onOpenApiKeys,
+    setOnOpenApiKeys,
+    hasApiKeysHandler,
     activeTimelineId,
     setActiveTimelineId,
     activeDraftId,
@@ -188,7 +192,7 @@ export function SidePanelProvider({ children }: { children: ReactNode }) {
     setActiveEventCount,
     activeDominantCategoryColor,
     setActiveDominantCategoryColor,
-  }), [isOpen, open, close, toggle, width, setWidth, resetWidth, isResizing, onTimelineSelect, setOnTimelineSelect, onDraftSelect, setOnDraftSelect, refreshTimelines, setRefreshTimelines, onOpenSettings, setOnOpenSettings, hasSettingsHandler, activeTimelineId, activeDraftId, activeTimelineTitle, activeEventCount, activeDominantCategoryColor])
+  }), [isOpen, open, close, toggle, width, setWidth, resetWidth, isResizing, onTimelineSelect, setOnTimelineSelect, onDraftSelect, setOnDraftSelect, refreshTimelines, setRefreshTimelines, onOpenApiKeys, setOnOpenApiKeys, hasApiKeysHandler, activeTimelineId, activeDraftId, activeTimelineTitle, activeEventCount, activeDominantCategoryColor])
 
   return (
     <SidePanelContext.Provider value={value}>

@@ -18,7 +18,7 @@ const LINK_CLASS =
 export function UsageLimits() {
   const tier = useAccountTier()
   const { eventCount, timelineCount, isLoading } = useEventUsage()
-  const { onOpenSettings, hasSettingsHandler } = useSidePanel()
+  const { onOpenApiKeys, hasApiKeysHandler } = useSidePanel()
 
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [showApiKeyModal, setShowApiKeyModal] = useState(false)
@@ -36,7 +36,7 @@ export function UsageLimits() {
   }
 
   function handleManageApiKey() {
-    onOpenSettings()
+    onOpenApiKeys()
   }
 
   // Caps for the meters — pulled from PLAN_LIMITS so this stays in sync with
@@ -78,7 +78,7 @@ export function UsageLimits() {
 
   const cta = renderUpgradeCta({
     tier,
-    hasSettingsHandler,
+    hasApiKeysHandler,
     onLogIn: handleLogIn,
     onAddKey: handleAddApiKey,
     onManageKey: handleManageApiKey,
@@ -146,13 +146,13 @@ function capPhrase(limit: number | null, noun: string): string {
  */
 function renderUpgradeCta({
   tier,
-  hasSettingsHandler,
+  hasApiKeysHandler,
   onLogIn,
   onAddKey,
   onManageKey,
 }: {
   tier: AccountTier
-  hasSettingsHandler: boolean
+  hasApiKeysHandler: boolean
   onLogIn: () => void
   onAddKey: () => void
   onManageKey: () => void
@@ -189,15 +189,15 @@ function renderUpgradeCta({
 
   // byok is the top tier: nothing left to sell, and the meters above already
   // state the caps. The only thing left is a way to manage the key — and
-  // onOpenSettings is a no-op off the editor route, where nothing registers a
+  // onOpenApiKeys is a no-op off the editor route, where nothing registers a
   // handler. With nowhere to send anyone, say nothing rather than render a
   // link that silently does nothing.
-  if (!hasSettingsHandler) return null
+  if (!hasApiKeysHandler) return null
   return (
     <p className={CTA_TEXT_CLASS}>
       Your API key is connected.{' '}
       <button type="button" onClick={onManageKey} className={LINK_CLASS}>
-        Manage it in Settings.
+        Manage it in API Keys.
       </button>
     </p>
   )

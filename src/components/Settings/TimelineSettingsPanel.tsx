@@ -1,11 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, FileSpreadsheet, Download, Trash2 } from 'lucide-react';
+import { X, FileSpreadsheet, Download, Trash2, KeyRound } from 'lucide-react';
 import { TimelineEvent, CategoryConfig } from '../../types/event';
 import type { AddEventsResult } from '../../hooks/useEvents';
 import { exportEventsToExcel } from '../../utils/excelExport';
 import { ConfirmationModal } from '../Modal/ConfirmationModal';
-import { ApiKeySection } from './ApiKeySection';
 import { SidePanelActionButton } from '../SidePanel/SidePanelActionButton';
 import { PanelResizeHandle } from '../ui/PanelResizeHandle';
 import { usePanelWidth } from '../../hooks/usePanelWidth';
@@ -25,6 +24,12 @@ interface TimelineSettingsPanelProps {
   onImportEvents: (events: Omit<TimelineEvent, 'id'>[]) => AddEventsResult;
   categories: CategoryConfig[];
   onDeleteTimeline: () => Promise<void> | void;
+  /**
+   * Opens the dock's API Keys menu. The keys used to live at the top of this
+   * panel; the note that replaced them points there for anyone who still
+   * looks here first.
+   */
+  onOpenApiKeys?: () => void;
 }
 
 export function TimelineSettingsPanel({
@@ -35,6 +40,7 @@ export function TimelineSettingsPanel({
   onImportEvents,
   categories,
   onDeleteTimeline,
+  onOpenApiKeys,
 }: TimelineSettingsPanelProps) {
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -184,8 +190,24 @@ export function TimelineSettingsPanel({
               {/* Body */}
               <div className="flex-1 min-h-0 overflow-y-auto">
                 <div className="flex flex-col px-5 pt-6 pb-2 gap-8 min-h-full">
-                  {/* AI Settings (BYOK) */}
-                  <ApiKeySection />
+                  {/* Signpost: the keys and model moved to the dock's API
+                      Keys menu. Transitional — drop it once people have had
+                      time to find the new place. */}
+                  {onOpenApiKeys && (
+                    <div className="flex items-center gap-3 rounded-[12px] bg-[rgba(37,99,235,0.12)] py-3 pl-[14px] pr-3">
+                      <KeyRound size={18} className="shrink-0 text-[#93b4f5]" aria-hidden />
+                      <span className="flex-1 font-['Avenir',sans-serif] text-[13px] leading-[18px] text-[#c9ced4]">
+                        API keys and model now live in the dock.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={onOpenApiKeys}
+                        className="shrink-0 rounded-[8px] px-[10px] py-[6px] font-['Avenir',sans-serif] text-[13px] font-medium text-[#93b4f5] hover:bg-white/[0.08] transition-colors outline-none focus-visible:ring-1 focus-visible:ring-white/40"
+                      >
+                        Open
+                      </button>
+                    </div>
+                  )}
 
                   {/* Spacer */}
                   <div className="flex-1" />
