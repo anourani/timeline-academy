@@ -28,8 +28,8 @@ interface DockMenuProps {
   /** Popover width class, desktop only. */
   widthClass: string
   /**
-   * Horizontal alignment against the trigger. The Legend keeps `end`; the
-   * Design menu centres over its button. Collision padding still pushes the
+   * Horizontal alignment against the trigger. Dock menus (Design, the dock
+   * Legend) centre over their button; the nav Legend keeps `end`. Collision padding still pushes the
    * surface inward when it would cross the viewport edge.
    */
   align?: 'start' | 'center' | 'end'

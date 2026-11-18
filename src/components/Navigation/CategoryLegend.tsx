@@ -208,6 +208,9 @@ export function CategoryLegend({ categories, events, onCategoriesChange, dock, c
       label="Category legend"
       // Desktop only — below `md` the drawer replaces the popover entirely.
       widthClass="w-[264px]"
+      // Centred over its dock button, like the Design menu; the nav Legend
+      // keeps the default `end` so it stays tucked under its trigger.
+      align={dock ? 'center' : 'end'}
       side={dock ? 'top' : 'bottom'}
       sideOffset={dock ? DOCK_SIDE_OFFSET : 8}
       onOpenAutoFocus={focusFirstRow}
