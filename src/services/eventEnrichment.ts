@@ -10,12 +10,15 @@ import type { EnrichableEvent, EventSource } from '../types/event'
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string
 
-export async function fetchEventImage(title: string): Promise<{
+export async function fetchEventImage(
+  title: string,
+  subject?: string,
+): Promise<{
   imageUrl: string | null
   attribution: string | null
 }> {
   // Browser-direct Wikipedia lookup — no server round-trip.
-  return fetchWikipediaImage(title)
+  return fetchWikipediaImage(title, subject)
 }
 
 /**
@@ -119,6 +122,10 @@ export async function enrichEvent(
       if (eventName === 'delta') {
         const text = data.text as string | undefined
         if (text) handlers.onDelta(text)
+      } else if (eventName === 'reset') {
+        // Sent by enrich-event when the model searches after writing text.
+        // An older function never sends it, which just means no reset.
+        handlers.onReset?.()
       } else if (eventName === 'sources') {
         const sources = (data.sources as EventSource[] | undefined) ?? []
         handlers.onSources(sources)

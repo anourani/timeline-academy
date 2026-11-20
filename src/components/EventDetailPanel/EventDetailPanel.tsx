@@ -8,7 +8,7 @@ import { usePanelWidth } from '@/hooks/usePanelWidth'
 import { useWindowResizing } from '@/hooks/useWindowResizing'
 import { SETTINGS_PANEL_DEFAULT_WIDTH } from '@/constants/panels'
 import { formatDateLong } from '@/utils/dateUtils'
-import { parseEventDescription } from '@/utils/eventDescription'
+import { parseEventDescription, stripPreamble } from '@/utils/eventDescription'
 import {
   enrichEvent,
   fetchEventImage,
@@ -69,6 +69,12 @@ const SUMMARY_SKELETON_WIDTHS = ['88%', '76%', '82%']
 function formatDateRange(event: EnrichableEvent): string {
   if (event.startDate === event.endDate) return formatDateLong(event.startDate)
   return `${formatDateLong(event.startDate)} → ${formatDateLong(event.endDate)}`
+}
+
+/** The person or era a timeline is about, for scoping the image search:
+ *  "Paddy Pimblett: The Baddy" → "Paddy Pimblett". */
+function imageSubject(timelineTitle: string): string {
+  return timelineTitle.split(':')[0].trim()
 }
 
 function hasGeneratedContent(event: EnrichableEvent | null): boolean {
@@ -311,7 +317,7 @@ export function EventDetailPanel<E extends EnrichableEvent>({
     // Image fetch in parallel with text streaming. Only re-fetch if not preserving.
     if (!preserveImage) {
       setImageState('loading')
-      fetchEventImage(currentEvent.title)
+      fetchEventImage(currentEvent.title, imageSubject(timelineTitle))
         .then((res) => {
           if (ctrl.signal.aborted) return
           nextImageUrl = res.imageUrl
@@ -340,6 +346,11 @@ export function EventDetailPanel<E extends EnrichableEvent>({
           descBuffer += text
           setStreamedDescription(descBuffer)
         },
+        onReset: () => {
+          if (ctrl.signal.aborted) return
+          descBuffer = ''
+          setStreamedDescription('')
+        },
         onSources: (s) => {
           if (ctrl.signal.aborted) return
           collectedSources = s
@@ -348,6 +359,8 @@ export function EventDetailPanel<E extends EnrichableEvent>({
         onDone: () => {
           if (ctrl.signal.aborted) return
           // Persist the full set of fields atomically.
+          descBuffer = stripPreamble(descBuffer)
+          setStreamedDescription(descBuffer)
           onEventChange({
             ...currentEvent,
             description: descBuffer || null,

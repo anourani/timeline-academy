@@ -147,13 +147,27 @@ export async function enrichEventOpenAIDirect(
   }
 
   let failure: string | null = null
+  // Text written before a search is narration, not the description — see
+  // the same flag in anthropicDirect.ts.
+  let emittedText = false
 
   try {
     await readSseStream(res.body, (eventName, data) => {
       switch (eventName) {
         case 'response.output_text.delta': {
           const text = data.delta as string | undefined
-          if (text) handlers.onDelta(text)
+          if (text) {
+            emittedText = true
+            handlers.onDelta(text)
+          }
+          break
+        }
+        case 'response.output_item.added': {
+          const item = data.item as Record<string, unknown> | undefined
+          if (emittedText && item?.type === 'web_search_call') {
+            emittedText = false
+            handlers.onReset?.()
+          }
           break
         }
         case 'response.output_text.annotation.added': {

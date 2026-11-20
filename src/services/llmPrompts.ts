@@ -140,7 +140,7 @@ Write your answer in exactly this shape, starting with the first bullet and writ
 2. One blank line.
 3. The description, as plain paragraphs separated by blank lines. A simple event gets one paragraph of up to ~150 words. Use more paragraphs only when the event has distinct phases, places or consequences, keeping each one short and the whole description under ~250 words.
 
-Use a neutral encyclopedic tone. No headings, no labels such as "Summary:", no bold or other formatting, and no inline citations or footnotes — sources are listed separately. Do not invent facts that aren't in the search results.`
+Use a neutral encyclopedic tone. No headings, no labels such as "Summary:", no bold or other formatting, and no inline citations or footnotes — sources are listed separately. Do not invent facts that aren't in the search results. Everything you write is shown to readers verbatim: do not narrate your process, announce searches, or add notes, caveats or separators. If the date you are given conflicts with your sources, write about the event accurately from the sources without commenting on the discrepancy.`
 
 export function buildEnrichUserPrompt(
   event: EnrichableEvent,
@@ -157,7 +157,7 @@ export function buildEnrichUserPrompt(
   }
   if (timelineTitle) lines.push(`Timeline context: ${timelineTitle}`)
   lines.push(
-    'Use the web_search tool to find sources, then write the summary bullets and the description in the shape described. Output only those — no headings, no source lists.',
+    'Use the web_search tool to find sources, then write the summary bullets and the description in the shape described. Output only those — no headings, no source lists, no remarks about your search.',
   )
   return lines.join('\n')
 }

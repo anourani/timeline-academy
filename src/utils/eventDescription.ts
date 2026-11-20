@@ -75,3 +75,34 @@ export function parseEventDescription(
 
   return { summary, paragraphs: splitParagraphs(lines.slice(i).join('\n')) }
 }
+
+/**
+ * Remove commentary a model put in front of the description despite the
+ * prompt — "A note before the text: the sources place this event on …",
+ * usually closed off with a `---` divider. Run once on the finished text,
+ * before it is saved.
+ *
+ *  - A divider line never belongs in a description, so everything up to the
+ *    last one goes.
+ *  - The summary bullets are asked for first, so text before the first
+ *    bullet is commentary. Without this the parser above would stop at that
+ *    first line and render every bullet as a story paragraph. A description
+ *    with no bullets at all (the old shape) is left alone.
+ *
+ * Text written before a web search never reaches here: the stream readers
+ * discard it via `onReset`.
+ */
+export function stripPreamble(text: string): string {
+  const sections = text
+    .replace(/\r\n?/g, '\n')
+    .split(/^[ \t]*-{3,}[ \t]*$/m)
+    .map((s) => s.trim())
+    .filter(Boolean)
+  let result = sections.length > 0 ? sections[sections.length - 1] : text.trim()
+
+  const lines = result.split('\n')
+  const firstBullet = lines.findIndex((line) => BULLET.test(line))
+  if (firstBullet > 0) result = lines.slice(firstBullet).join('\n')
+
+  return result
+}

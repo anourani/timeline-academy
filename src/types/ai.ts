@@ -21,6 +21,11 @@ export interface ByokCredential {
 
 export interface EnrichmentStreamHandlers {
   onDelta: (text: string) => void
+  /** Discard everything `onDelta` delivered so far. Fired when the model
+   *  wrote something ("I'll search for…") and then went on to search: text
+   *  written before a search is narration, not the description. Optional so
+   *  a caller that ignores it degrades to the old concatenating behaviour. */
+  onReset?: () => void
   onSources: (sources: EventSource[]) => void
   onDone: () => void
   /** `provider` is set when the failure came from a specific BYOK provider,
