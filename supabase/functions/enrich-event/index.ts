@@ -47,7 +47,7 @@ Write your answer in exactly this shape, starting with the first bullet and writ
 2. One blank line.
 3. The description, as plain paragraphs separated by blank lines. A simple event gets one paragraph of up to ~150 words. Use more paragraphs only when the event has distinct phases, places or consequences, keeping each one short and the whole description under ~250 words.
 
-Use a neutral encyclopedic tone. No headings, no labels such as "Summary:", no bold or other formatting, and no inline citations or footnotes — sources are listed separately. Do not invent facts that aren't in the search results.`;
+Use a neutral encyclopedic tone. No headings, no labels such as "Summary:", no bold or other formatting, and no inline citations or footnotes — sources are listed separately. Do not invent facts that aren't in the search results. Everything you write is shown to readers verbatim: do not narrate your process, announce searches, or add notes, caveats or separators. If the date you are given conflicts with your sources, write about the event accurately from the sources without commenting on the discrepancy.`;
 
 function buildUserPrompt(req: EnrichRequest): string {
   const lines: string[] = [];
@@ -63,7 +63,7 @@ function buildUserPrompt(req: EnrichRequest): string {
     lines.push(`Timeline context: ${req.timelineTitle}`);
   }
   lines.push(
-    `Use the web_search tool to find sources, then write the summary bullets and the description in the shape described. Output only those — no headings, no source lists.`
+    `Use the web_search tool to find sources, then write the summary bullets and the description in the shape described. Output only those — no headings, no source lists, no remarks about your search.`
   );
   return lines.join("\n");
 }
@@ -234,6 +234,12 @@ Deno.serve(async (req: Request) => {
         // events with type info, then content_block_delta events.
         const blockTypes = new Map<number, string>();
 
+        // Text written before a search ("I'll search for information on this
+        // event.") is narration, not the description. When a search starts
+        // after text went out, tell the client to discard it. Clients that
+        // predate the `reset` event ignore it and keep the old behaviour.
+        let emittedText = false;
+
         const reader = anthropicRes.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
@@ -269,6 +275,14 @@ Deno.serve(async (req: Request) => {
               if (block && typeof block.type === "string") {
                 blockTypes.set(index, block.type);
               }
+              if (
+                emittedText &&
+                (block?.type === "server_tool_use" ||
+                  block?.type === "web_search_tool_result")
+              ) {
+                emittedText = false;
+                send("reset", {});
+              }
               // web_search_tool_result blocks come fully-formed in
               // content_block_start (or sometimes via deltas) — extract URLs
               // immediately if present.
@@ -294,7 +308,10 @@ Deno.serve(async (req: Request) => {
               // Only emit description text from text blocks (not tool input).
               if (blockType === "text" && delta?.type === "text_delta") {
                 const text = delta.text as string;
-                if (text) send("delta", { text });
+                if (text) {
+                  emittedText = true;
+                  send("delta", { text });
+                }
               }
             } else if (eventName === "message_stop") {
               // End of stream; loop will exit when reader is done.

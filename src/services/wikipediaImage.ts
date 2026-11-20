@@ -18,16 +18,51 @@ function stripHtml(input: string): string {
   return input.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
 }
 
-async function searchPage(title: string): Promise<string | null> {
+// Words that identify the subject ("Paddy Pimblett" → paddy, pimblett).
+// Short words ("of", "the", "WW2"'s digits aside) say nothing about whether
+// a page is the right one.
+function subjectWords(subject: string): string[] {
+  return subject
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((w) => w.length >= 4)
+}
+
+/**
+ * The Wikipedia page whose image illustrates this event, or null.
+ *
+ * Searching the event title alone and taking the top hit is what put a photo
+ * of Joe Biden on "Post-fight speech on men's mental health goes viral" in a
+ * Paddy Pimblett timeline: the title doesn't name its subject, so Wikipedia's
+ * best match was about something else entirely. So the subject goes into the
+ * query, and a hit is only accepted if its title or snippet mentions the
+ * subject. No relevant hit means no image — an empty frame is better than a
+ * confidently wrong photo.
+ */
+async function searchPage(title: string, subject?: string): Promise<string | null> {
+  const words = subject ? subjectWords(subject) : []
+  const query = words.length > 0 ? `${title} ${subject}` : title
   const url = `https://en.wikipedia.org/w/rest.php/v1/search/page?q=${encodeURIComponent(
-    title,
-  )}&limit=1`
+    query,
+  )}&limit=5`
   const res = await fetch(url)
   if (!res.ok) return null
   const json = await res.json()
-  const page = json?.pages?.[0]
-  if (!page?.title) return null
-  return page.title as string
+  const pages = (json?.pages ?? []) as Array<{
+    title?: string
+    excerpt?: string
+    description?: string
+  }>
+
+  for (const page of pages) {
+    if (!page?.title) continue
+    if (words.length === 0) return page.title
+    const haystack = [page.title, page.excerpt ?? '', page.description ?? '']
+      .join(' ')
+      .toLowerCase()
+    if (words.some((w) => haystack.includes(w))) return page.title
+  }
+  return null
 }
 
 async function fetchPageImage(
@@ -76,11 +111,14 @@ function buildAttribution(author: string | null, license: string | null): string
   return 'Photo: Wikimedia Commons'
 }
 
-export async function fetchWikipediaImage(title: string): Promise<ImageResult> {
+export async function fetchWikipediaImage(
+  title: string,
+  subject?: string,
+): Promise<ImageResult> {
   try {
     if (!title.trim()) return EMPTY
 
-    const pageTitle = await searchPage(title.trim())
+    const pageTitle = await searchPage(title.trim(), subject?.trim())
     if (!pageTitle) return EMPTY
 
     const { thumbUrl, fileTitle } = await fetchPageImage(pageTitle)

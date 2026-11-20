@@ -145,6 +145,11 @@ export async function enrichEventDirect(
   // A refusal arrives mid-stream with HTTP 200 and no text blocks, so without
   // this the panel would simply settle on an empty description.
   let refused = false
+  // Text written before a search ("I'll search for information on this
+  // event.") is narration, not the description. Every text block is
+  // otherwise streamed straight through, so when a search starts after text
+  // went out, the caller is told to throw that text away.
+  let emittedText = false
 
   try {
     await readSseStream(res.body, (eventName, data) => {
@@ -156,6 +161,14 @@ export async function enrichEventDirect(
         const block = data.content_block as Record<string, unknown>
         if (block && typeof block.type === 'string') {
           blockTypes.set(index, block.type)
+        }
+        if (
+          emittedText &&
+          (block?.type === 'server_tool_use' ||
+            block?.type === 'web_search_tool_result')
+        ) {
+          emittedText = false
+          handlers.onReset?.()
         }
         if (block?.type === 'web_search_tool_result') {
           const content = block.content as Array<Record<string, unknown>> | undefined
@@ -178,7 +191,10 @@ export async function enrichEventDirect(
         const blockType = blockTypes.get(index)
         if (blockType === 'text' && delta?.type === 'text_delta') {
           const text = delta.text as string
-          if (text) handlers.onDelta(text)
+          if (text) {
+            emittedText = true
+            handlers.onDelta(text)
+          }
         }
       }
     })
