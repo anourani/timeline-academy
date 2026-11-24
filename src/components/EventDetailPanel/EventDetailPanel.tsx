@@ -669,7 +669,7 @@ export function EventDetailPanel<E extends EnrichableEvent>({
                               className="mt-[10px] w-[6px] h-[6px] rounded-full shrink-0"
                               style={{ backgroundColor: accent }}
                             />
-                            <span className="font-['Aleo',serif] text-[18px] lg:text-[19px] leading-[1.4] text-[#ECEEF1]">
+                            <span className="font-['Aleo',serif] text-[18px] leading-[1.4] text-[#ECEEF1]">
                               {item}
                             </span>
                           </li>
@@ -808,7 +808,7 @@ const STORY_BULLET = /^\s*[-*•]\s+/
  */
 function StoryParagraph({ text, accent }: { text: string; accent: string }) {
   const textClass =
-    "font-['Avenir',sans-serif] text-[16px] lg:text-[17px] leading-[1.7] text-[#C4C7CC]"
+    "font-['Avenir',sans-serif] text-[16px] leading-[1.7] text-[#C4C7CC]"
   const lines = text.split('\n')
   if (!lines.some((line) => STORY_BULLET.test(line))) {
     return <p className={`m-0 whitespace-pre-wrap ${textClass}`}>{text}</p>
