@@ -29,9 +29,10 @@ export function AtAGlance({ when, rows, pending }: AtAGlanceProps) {
   if (all.length === 0 && !pending) return null
 
   return (
+    // No visible heading: the rows speak for themselves under the title. The
+    // section keeps its name for screen readers.
     <section aria-label="At a glance">
-      <h2 className="m-0 label-s-type1 uppercase tracking-[0.08em] text-[#9B9EA3]">At a glance</h2>
-      <dl className="m-0 mt-[10px] border-b border-[#262626]">
+      <dl className="m-0 border-b border-[#262626]">
         {all.map((row) => (
           <div key={row.label} className="flex gap-[16px] py-[12px] border-t border-[#262626]">
             <dt className="shrink-0 w-[72px] font-['Avenir',sans-serif] text-[13px] leading-[22px] text-[#9B9EA3]">

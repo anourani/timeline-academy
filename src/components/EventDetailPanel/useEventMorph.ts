@@ -91,6 +91,9 @@ export function useEventMorph(layerRef: RefObject<HTMLElement>): EventMorph {
   const pushRef = useRef<Animation | null>(null)
   const phaseRef = useRef<Phase>('idle')
   const pageOverflowRef = useRef<string | null>(null)
+  // Counts opens and closes, so a close that finishes after a newer open has
+  // started can tell it no longer owns the layer.
+  const runRef = useRef(0)
 
   const reset = useCallback(() => {
     animsRef.current.forEach((a) => a.cancel())
@@ -116,7 +119,10 @@ export function useEventMorph(layerRef: RefObject<HTMLElement>): EventMorph {
     (eventId: string) => {
       const layer = layerRef.current
       if (!layer) return
+      runRef.current++
       reset()
+      // A finished close leaves the layer hidden (see `close`).
+      layer.style.visibility = ''
       phaseRef.current = 'opening'
 
       const root = document.getElementById('root')
@@ -246,6 +252,7 @@ export function useEventMorph(layerRef: RefObject<HTMLElement>): EventMorph {
       if (phaseRef.current === 'closing') return
       const wasOpening = phaseRef.current === 'opening'
       phaseRef.current = 'closing'
+      const run = ++runRef.current
 
       const root = document.getElementById('root')
       let closing: Animation[]
@@ -349,6 +356,14 @@ export function useEventMorph(layerRef: RefObject<HTMLElement>): EventMorph {
       }
 
       await Promise.all(closing.map((a) => a.finished)).catch(() => {})
+      // Reopened while this was closing: that open owns the layer now.
+      if (runRef.current !== run) return
+      // Hide the layer before the animations are cancelled. Cancelling drops
+      // their `fill: forwards` end state, so the layer would snap back to its
+      // own styles — the whole page, opaque, full-screen — for the frame or
+      // two before React unmounts it: a flash of the event over the timeline
+      // it has just shrunk back into.
+      layer.style.visibility = 'hidden'
       reset()
     },
     [layerRef, reset],
