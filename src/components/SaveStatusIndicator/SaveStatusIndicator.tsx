@@ -1,4 +1,3 @@
-import React from 'react';
 import { Check, Loader2, AlertCircle } from 'lucide-react';
 
 export type SaveStatus = 'saved' | 'saving' | 'error';

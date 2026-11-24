@@ -16,10 +16,10 @@ npm run preview   # Preview production build locally
 **Nothing above typechecks.** `npm run build` is bare `vite build`, and `npx tsc --noEmit` at the repo root checks *zero files* — the root tsconfig is `"files": []` with project references, so it exits clean no matter what is broken. The real command is:
 
 ```bash
-npx tsc --noEmit -p tsconfig.app.json   # 10 pre-existing errors on main; add none
+npx tsc --noEmit -p tsconfig.app.json   # 5 pre-existing errors on main; add none
 ```
 
-Run `npm ci` first. Without `node_modules`, `npx` downloads the newest TypeScript instead of the pinned 5.6.2, and that version fails on `baseUrl` being deprecated — one unrelated error, and the ten real ones never get checked.
+Run `npm ci` first. Without `node_modules`, `npx` downloads the newest TypeScript instead of the pinned 5.6.2, and that version fails on `baseUrl` being deprecated — one unrelated error, and the five real ones never get checked.
 
 No test framework is configured — every check is manual. This is the direct reason a five-month drift between this repo and the live project went unnoticed, along with three features that were silently broken in production for months (see `docs/2026-08-05-security-review-handoff.md`).
 

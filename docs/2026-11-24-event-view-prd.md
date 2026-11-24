@@ -267,7 +267,7 @@ The user prompt already passes the timeline title, which is enough for the model
 
 ## 12. Acceptance checklist
 
-There is no test suite, so every item is checked by hand. Run `npx tsc --noEmit -p tsconfig.app.json` (10 pre-existing errors; add none) and `npm run lint`.
+There is no test suite, so every item is checked by hand. Run `npx tsc --noEmit -p tsconfig.app.json` (5 pre-existing errors; add none) and `npm run lint`.
 
 - [ ] Clicking an event opens the view with the morph starting from that bar's exact rectangle. Desktop and phone, edit and view mode, `/editor` and `/view/:id`.
 - [ ] Close and Esc run the reverse morph into the bar's current position, and focus returns to the bar.
