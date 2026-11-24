@@ -1,14 +1,5 @@
 import { useRef, useState } from 'react'
-
-export interface EventPhoto {
-  url: string
-  /** A smaller rendition for the thumbnail row; falls back to `url`. */
-  thumbUrl?: string | null
-  /** What the photo shows — from the file's description on Wikimedia. */
-  caption?: string | null
-  /** "Photo: Author / Licence", as `wikipediaImage.ts` builds it. */
-  attribution: string | null
-}
+import type { EventPhoto } from '@/types/event'
 
 interface PhotoViewerProps {
   photos: EventPhoto[]

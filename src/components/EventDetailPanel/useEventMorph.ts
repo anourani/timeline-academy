@@ -90,6 +90,7 @@ export function useEventMorph(layerRef: RefObject<HTMLElement>): EventMorph {
   const animsRef = useRef<Animation[]>([])
   const pushRef = useRef<Animation | null>(null)
   const phaseRef = useRef<Phase>('idle')
+  const pageOverflowRef = useRef<string | null>(null)
 
   const reset = useCallback(() => {
     animsRef.current.forEach((a) => a.cancel())
@@ -100,6 +101,10 @@ export function useEventMorph(layerRef: RefObject<HTMLElement>): EventMorph {
       root.inert = false
       root.style.transformOrigin = ''
       root.style.willChange = ''
+    }
+    if (pageOverflowRef.current !== null) {
+      document.documentElement.style.overflow = pageOverflowRef.current
+      pageOverflowRef.current = null
     }
     phaseRef.current = 'idle'
   }, [])
@@ -116,6 +121,13 @@ export function useEventMorph(layerRef: RefObject<HTMLElement>): EventMorph {
 
       const root = document.getElementById('root')
       if (root) root.inert = true
+      // Clip the page while the view is up: it stops the page behind from
+      // scrolling, and keeps the pushed-back root (scaled past the viewport)
+      // from counting as overflow — a phone browser otherwise widens its
+      // layout viewport to fit it, dragging this fixed layer wider than the
+      // screen. `<html>`, not `<body>`: it is the one mobile browsers honour.
+      pageOverflowRef.current = document.documentElement.style.overflow
+      document.documentElement.style.overflow = 'hidden'
       const anims: Animation[] = []
 
       if (prefersReducedMotion()) {
@@ -214,6 +226,9 @@ export function useEventMorph(layerRef: RefObject<HTMLElement>): EventMorph {
           if (phaseRef.current !== 'opening') return
           phaseRef.current = 'open'
           if (root) root.style.willChange = ''
+          // The root is invisible behind the page by now; drop its scale so it
+          // stops overhanging the viewport. Close puts it back to animate from.
+          pushRef.current?.cancel()
         })
         // Cancelled by a close or an unmount — nothing to do.
         .catch(() => {})

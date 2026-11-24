@@ -14,11 +14,11 @@ interface ImageResult {
 const EMPTY: ImageResult = { imageUrl: null, attribution: null }
 
 // Strip HTML tags from Wikimedia attribution metadata (Commons returns rich HTML).
-function stripHtml(input: string): string {
+export function stripHtml(input: string): string {
   return input.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
 }
 
-async function searchPage(title: string): Promise<string | null> {
+export async function searchPage(title: string): Promise<string | null> {
   const url = `https://en.wikipedia.org/w/rest.php/v1/search/page?q=${encodeURIComponent(
     title,
   )}&limit=1`
@@ -33,7 +33,7 @@ async function searchPage(title: string): Promise<string | null> {
 async function fetchPageImage(
   pageTitle: string,
 ): Promise<{ thumbUrl: string | null; fileTitle: string | null }> {
-  const url = `https://en.wikipedia.org/w/api.php?action=query&prop=pageimages&pithumbsize=600&piprop=thumbnail|name&titles=${encodeURIComponent(
+  const url = `https://en.wikipedia.org/w/api.php?action=query&prop=pageimages&pithumbsize=1600&piprop=thumbnail|name&titles=${encodeURIComponent(
     pageTitle,
   )}&format=json&origin=*`
   const res = await fetch(url)
@@ -69,7 +69,7 @@ async function fetchImageMeta(
   return { author, license }
 }
 
-function buildAttribution(author: string | null, license: string | null): string {
+export function buildAttribution(author: string | null, license: string | null): string {
   if (author && license) return `Photo: ${author} / ${license}`
   if (author) return `Photo: ${author}`
   if (license) return `Photo: Wikimedia Commons / ${license}`

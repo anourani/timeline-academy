@@ -9,14 +9,20 @@ import {
   enrichEvent,
   fetchEventImage,
 } from '@/services/eventEnrichment'
-import type { CategoryConfig, EnrichableEvent, EventSource } from '@/types/event'
+import type { CategoryConfig, EnrichableEvent, EventPhoto, EventSource } from '@/types/event'
 import type { TimelineChapter } from '@/types/timeline'
 import type { ByokProvider } from '@/types/ai'
 import { PROVIDER_META } from '@/constants/byokProviders'
 import { getKey } from '@/services/userApiKey'
-import { PhotoViewer, type EventPhoto } from './PhotoViewer'
+import { PhotoViewer } from './PhotoViewer'
 import { AtAGlance } from './AtAGlance'
 import { focusEventBar, useEventMorph } from './useEventMorph'
+import { fetchEventPhotos } from '@/services/wikipediaPhotos'
+import {
+  clearCachedEventPhotos,
+  getCachedEventPhotos,
+  setCachedEventPhotos,
+} from '@/services/eventPhotoCache'
 
 // The event view: clicking an event opens it as a full page, grown out of the
 // bar that was clicked (docs/2026-11-24-event-view-prd.md). It replaced a
@@ -188,6 +194,31 @@ export function EventDetailPanel<E extends EnrichableEvent>({
     // `morph` is stable; keyed on the event's identity, not its content.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, event?.id])
+
+  // The gallery: several photos from the event's Wikipedia article, cached in
+  // the browser. Independent of the description — it runs for cached events
+  // too, and Regenerate leaves it alone. `null` while it is being looked up.
+  const [gallery, setGallery] = useState<EventPhoto[] | null>(null)
+  useEffect(() => {
+    if (!open || !event) return
+    const cached = getCachedEventPhotos(event.id, event.title)
+    if (cached) {
+      setGallery(cached)
+      return
+    }
+    setGallery(null)
+    let cancelled = false
+    const { id, title } = event
+    fetchEventPhotos(title).then((photos) => {
+      if (cancelled) return
+      setCachedEventPhotos(id, title, photos)
+      setGallery(photos)
+    })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, event?.id, event?.title])
 
   // Reset state when the view closes or the event changes.
   useEffect(() => {
@@ -435,6 +466,7 @@ export function EventDetailPanel<E extends EnrichableEvent>({
 
   function handleRemove() {
     if (!event) return
+    clearCachedEventPhotos(event.id)
     onEventChange({
       ...event,
       description: null,
@@ -470,11 +502,17 @@ export function EventDetailPanel<E extends EnrichableEvent>({
   const showStory = state !== 'error' && (paragraphs.length > 0 || showStorySkeleton)
   // Sources arrive on their own callback, usually before the stream finishes.
   const showSourcesSkeleton = generating && displaySources.length === 0
-  const photos: EventPhoto[] = displayImageUrl
-    ? [{ url: displayImageUrl, attribution: displayAttribution }]
-    : []
-  // `idle` is the first frame of a fresh event, before the lookup has started.
-  const searchingPhotos = imageState !== 'settled'
+  // The gallery when it has anything (its first photo is the article's lead
+  // image, at full size); until then, or when it finds nothing usable, the
+  // single persisted lead image.
+  const lead: EventPhoto | null = displayImageUrl
+    ? { url: displayImageUrl, attribution: displayAttribution }
+    : null
+  const photos: EventPhoto[] = gallery?.length ? gallery : lead ? [lead] : []
+  // Only worth a pulsing frame while there is nothing to show yet and a lookup
+  // is still out. `idle` is the first frame of a fresh event, before the
+  // lead-image lookup has started.
+  const searchingPhotos = photos.length === 0 && (imageState !== 'settled' || gallery === null)
   const hasPhotoArea = photos.length > 0 || searchingPhotos
 
   const categoryId = (view as { category?: string }).category
