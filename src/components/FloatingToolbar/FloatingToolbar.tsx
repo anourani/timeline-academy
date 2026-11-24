@@ -41,6 +41,16 @@ const INTRO_RISE_MS = 550
 const INTRO_RISE_DELAY_MS = 600
 const INTRO_RISE_PX = 96
 
+/**
+ * The Edit/Present switch is hidden for now — not removed. `ModeTabs`, the
+ * `mode`/`onModeChange` props and everything present mode does are all still
+ * here; flip this back to `true` to bring the switch back. The dock is the
+ * only place that changes modes and `mode` starts as 'edit' and is never
+ * persisted, so with the switch hidden nobody can land in present mode and be
+ * stranded there.
+ */
+const SHOW_MODE_TABS = false
+
 export function FloatingToolbar({
   onAddEventClick,
   onEventsClick,
@@ -232,7 +242,7 @@ export function FloatingToolbar({
         }}
       >
         {renderButtons('desktop')}
-        {onModeChange && <ModeTabs mode={mode} onChange={onModeChange} />}
+        {SHOW_MODE_TABS && onModeChange && <ModeTabs mode={mode} onChange={onModeChange} />}
       </div>
 
       {/* Mobile: full-width sticky footer, icons only — the buttons carry
@@ -243,7 +253,7 @@ export function FloatingToolbar({
           than stranding the reader in a mode it cannot leave. */}
       <div className="fixed bottom-0 left-0 right-0 z-30 w-full flex md:hidden justify-center items-center gap-2 px-4 pt-2 pb-6 bg-black border-t border-[#3d3e40]">
         {renderButtons('mobile')}
-        {!isEditing && onModeChange && <ModeTabs mode={mode} onChange={onModeChange} />}
+        {SHOW_MODE_TABS && !isEditing && onModeChange && <ModeTabs mode={mode} onChange={onModeChange} />}
       </div>
     </>
   )

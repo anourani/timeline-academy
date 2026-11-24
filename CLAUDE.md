@@ -31,8 +31,9 @@ src/
 │   ├── EventTableEditor/  # The events drawer: Events table (sort, filter, row
 │   │                 #   numbers) + Categories tab. 95dvh bottom drawer at every
 │   │                 #   breakpoint; event rows are read-only below `sm`
-│   ├── FloatingToolbar/  # The dock: Events · Design · Legend · Settings · API Keys · mode
-│   │                 #   tabs (icon-only below `md`). DockMenu is the popover/
+│   ├── FloatingToolbar/  # The dock: Events · Design · Legend · Settings · API Keys (icon-only
+│   │                 #   below `md`). The Edit/Present mode tabs are hidden for now
+│   │                 #   (`SHOW_MODE_TABS`), code kept. DockMenu is the popover/
 │   │                 #   drawer shell the Design, Legend and API Keys menus share
 │   ├── Legal/        # /privacy and /terms pages
 │   ├── Onboarding/   # First-visit welcome modal → tour, + "Getting started" checklist on /

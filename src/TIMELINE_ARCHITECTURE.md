@@ -163,6 +163,8 @@ Every visible event shares the one band; colour alone tells the categories apart
 
 The `mode` prop is `'edit' | 'view'` and defaults to `'edit'`. `Timeline.tsx` derives `const isEditing = mode === 'edit'`, as do `FloatingToolbar` and `EventTableEditor`.
 
+**The switch is hidden for now** (`SHOW_MODE_TABS = false` in `FloatingToolbar.tsx`, November 2026): the code below is all still in place, but with no switch on screen the editor always stays in edit mode. Flip the flag to bring it back.
+
 The switch itself lives in the **dock** (`FloatingToolbar/ModeTabs.tsx`), not the nav. That is why the dock renders in both modes: unmounting it in view mode would leave no way back. `GlobalNav` still takes `mode` — it decides whether the title is an input — but no longer changes it.
 
 | Affordance | Edit mode | View mode |
