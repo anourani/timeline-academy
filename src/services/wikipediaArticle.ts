@@ -112,3 +112,53 @@ export function isAboutEvent(
   }
   return false
 }
+
+/**
+ * Which subjects an event's photos may show, strictest reading: something
+ * else — never the timeline's own subject — that the event's *title itself*
+ * names. "Marries Lori Huang" names Lori; "Launches CUDA…" names CUDA.
+ *
+ * Candidates are the description's `Pictured:` names; for descriptions
+ * written before that line existed, its `Who:` names and the Wikipedia
+ * article the model cited. Being a candidate is not enough: the model has
+ * pictured the subject's own portrait on events about him, and his company's
+ * headquarters on an award — so every candidate, whatever its source, must
+ * pass both checks here. An empty result means no photos, which is the right
+ * answer for most events.
+ */
+export function photoSubjects({
+  eventTitle,
+  timelineTitle,
+  pictured,
+  who,
+  citedArticle,
+}: {
+  eventTitle: string
+  timelineTitle?: string
+  /** The `Pictured:` fact line, " | "-separated; undefined when absent. */
+  pictured?: string
+  /** The `Who:` fact line. */
+  who?: string
+  citedArticle?: string | null
+}): string[] {
+  const split = (text: string | undefined) =>
+    (text ?? '')
+      .split(/[|,;]/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+
+  const candidates =
+    pictured !== undefined ? split(pictured) : [...split(who), ...(citedArticle ? [citedArticle] : [])]
+
+  const subjects: string[] = []
+  const seen = new Set<string>()
+  for (const name of candidates) {
+    const key = name.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    if (isTimelineSubject(name, timelineTitle)) continue
+    if (!isAboutEvent(name, eventTitle, timelineTitle)) continue
+    subjects.push(name)
+  }
+  return subjects
+}

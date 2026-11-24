@@ -50,8 +50,8 @@ Write your answer in exactly this shape, starting with the first bullet and writ
 Where: <the place, as specific as the sources allow>
 Who: <the main people or groups involved, at most four names>
 Age: <the subject's age in whole years when the event began>
-Pictured: <who or what a photo of this event should show, as exact English Wikipedia article titles separated by " | ", at most three>
-Leave out any fact line the sources do not support. Write the Age line only when the timeline follows one person's life and this event is part of that life. For Pictured, choose what the event is about: for a marriage the spouse, for a founding the company and co-founders, for a launch or discovery the thing itself, for a meeting the other people there. Name the timeline's own subject only when the event is about them alone, and only titles of articles that exist.
+Pictured: <the other person or thing this event's title names, as exact English Wikipedia article titles separated by " | ", at most three>
+Leave out any fact line the sources do not support. Separate the names in the Who line with commas. Write the Age line only when the timeline follows one person's life and this event is part of that life. Most events have no Pictured line. Write it only when the event's title itself names another specific person, organization, product, work or discovery that the event is centrally about and a reader would expect to see: the spouse in a marriage, the company in a founding, the product in a launch, the thing discovered. Never name the timeline's own subject, and never a country, city, venue, publication or award. When the event is about the timeline's subject alone, such as an award, a ranking, a speech, a public appearance, a move or a personal milestone, or when you are unsure, leave the Pictured line out. Name only articles that exist.
 
 Use a neutral encyclopedic tone. Apart from the fact lines, no headings, no labels such as "Summary:", no bold or other formatting, and no inline citations or footnotes — sources are listed separately. Do not invent facts that aren't in the search results.`;
 

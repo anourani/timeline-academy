@@ -15,11 +15,7 @@ import { PhotoViewer } from './PhotoViewer'
 import { AtAGlance, type GlanceRow } from './AtAGlance'
 import { focusEventBar, useEventMorph } from './useEventMorph'
 import { fetchSubjectPhotos } from '@/services/wikipediaPhotos'
-import {
-  articleFromSources,
-  isAboutEvent,
-  isTimelineSubject,
-} from '@/services/wikipediaArticle'
+import { articleFromSources, photoSubjects } from '@/services/wikipediaArticle'
 import {
   clearCachedEventPhotos,
   getCachedEventPhotos,
@@ -182,17 +178,13 @@ export function EventDetailPanel<E extends EnrichableEvent>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, event?.id])
 
-  // The photos: one picture of each person, thing or place the event is
-  // about — the spouse in a marriage, the product in a launch — taken from
-  // that subject's own Wikipedia article (wikipediaPhotos.ts). What to picture
-  // is decided once the description has settled, in this order:
-  //   1. the description's `Pictured:` line — the model's own choice;
-  //   2. a World Events entry's fact-checked article;
-  //   3. the `Who:` names, leaving out the timeline's own subject;
-  //   4. the Wikipedia article the model cited, if it is about the event
-  //      itself — never one that only matches the timeline's subject.
-  // Nothing is ever searched for: a guess is how unrelated pictures got in.
-  // Nothing found means no photos, which is better than an unrelated one.
+  // The photos: one picture of each *other* person or thing the event's title
+  // names — the spouse in "Marries Lori Huang", the product in "Launches
+  // CUDA" — taken from that subject's own Wikipedia article
+  // (wikipediaPhotos.ts). Which subjects qualify is `photoSubjects`' call, and
+  // it is strict on purpose: never the timeline's own subject, and nothing the
+  // title does not name. Most events get no photos, and then the photo area is
+  // not rendered at all. Nothing is ever searched for.
   //
   // `gallery` is null while deciding or looking; once found it is the answer,
   // even when empty. `galleryFailed`: Wikipedia could not be reached.
@@ -208,22 +200,19 @@ export function EventDetailPanel<E extends EnrichableEvent>({
   if (event && (state === 'loaded' || state === 'error')) {
     const settledFacts =
       state === 'loaded' ? parseEventDescription(event.description ?? streamedDescription).facts : {}
-    const pictured = (settledFacts.pictured ?? '')
-      .split('|')
-      .map((s) => s.trim())
-      .filter(Boolean)
-    const who = (settledFacts.who ?? '')
-      .split(',')
-      .map((s) => s.trim())
-      .filter((name) => name && !isTimelineSubject(name, timelineTitle))
-    if (pictured.length) photoPlan = { subjects: pictured }
-    else if (checkedArticle) photoPlan = { subjects: [checkedArticle] }
-    else if (who.length) photoPlan = { subjects: who }
-    else {
-      const cited = articleFromSources(currentSources)
-      photoPlan = {
-        subjects: cited && isAboutEvent(cited, event.title, timelineTitle) ? [cited] : [],
-      }
+    // A World Events entry's article was fact-checked as that entry's own;
+    // everything else goes through `photoSubjects`, which keeps only what the
+    // event's title names and never the timeline's own subject.
+    photoPlan = {
+      subjects: checkedArticle
+        ? [checkedArticle]
+        : photoSubjects({
+            eventTitle: event.title,
+            timelineTitle,
+            pictured: settledFacts.pictured,
+            who: settledFacts.who,
+            citedArticle: articleFromSources(currentSources),
+          }),
     }
   }
   const photoBasis = photoPlan ? JSON.stringify(photoPlan) : null
@@ -486,7 +475,8 @@ export function EventDetailPanel<E extends EnrichableEvent>({
   // generating with none yet, one skeleton row holds their place.
   const factRows: GlanceRow[] = [
     facts.where ? { label: 'Where', value: facts.where } : null,
-    facts.who ? { label: 'Who', value: facts.who } : null,
+    // Models sometimes separate the names with the Pictured line's pipes.
+    facts.who ? { label: 'Who', value: facts.who.replace(/\s*\|\s*/g, ', ') } : null,
     facts.age ? { label: 'Age', value: facts.age } : null,
   ].filter((row): row is GlanceRow => row !== null)
   const generating = state === 'generating'

@@ -304,6 +304,12 @@ Built on `godin/dreamy-gauss-65s815` in three commits (layout + morph; gallery; 
   - The view shows each named article's lead image and nothing else.
   - Older descriptions fall back to the `Who:` names minus the timeline's own subject, then to a cited article that is about the event itself.
   - Nothing is searched for. No article or no photograph means no photo.
+  - Naming a subject is not enough. The model pictured the timeline's subject himself on events about him, and Nvidia's headquarters and a Fortune image on an award. So code now enforces the rule:
+    - never the timeline's own subject
+    - only something the event's title itself names
+    - never an article Wikipedia describes as a publication, an award or a place
+  - The prompt says the same, and says most events have no `Pictured` line.
+  - The same photo can still appear on two events whose titles both name the same thing ("Co-founds Nvidia", "Nvidia goes public").
   - The lead image in `events.image_url` is no longer read or written.
 - **Not built yet:**
   - The full-screen photo view (§5, open question 1).

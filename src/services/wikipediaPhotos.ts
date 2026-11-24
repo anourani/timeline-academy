@@ -24,6 +24,17 @@ const THUMB_WIDTH = 330
 const MAX_SUBJECTS = 3
 const MIN_SIDE = 300
 
+/**
+ * Kinds of article that are never an event's picture, read from Wikipedia's
+ * one-line description of the article ("American business magazine", "Country
+ * in East Asia"): publications, awards and places. An event that names one —
+ * "Named Fortune Businessperson of the Year", "Mobbed by fans in Taiwan" — is
+ * not about it, and its lead image (a cover, a medal, a skyline) is not a
+ * picture of the event. The prompt says the same; this holds when it slips.
+ */
+const NEVER_PICTURED =
+  /\b(magazines?|newspapers?|periodicals?|journals?|publications?|publishers?|news (agency|website|channel)|websites?|awards?|prizes?|medals?|honou?rs?|rankings?|list of|country|sovereign state|u\.s\. state|state (of|in)|republic|kingdom|nation|city|town|village|capital|municipality|county|province|prefecture|district|region|island|continent|neighbou?rhood|venue|stadium|arena|convention cent(er|re)|exhibition cent(er|re)|trade (show|fair))\b/i
+
 /** Photographs only; an SVG lead image is a logo, a map or a diagram. */
 const PHOTO_MIME = new Set(['image/jpeg', 'image/png', 'image/webp'])
 
@@ -41,6 +52,8 @@ interface QueryPage {
   missing?: unknown
   invalid?: unknown
   pageimage?: string
+  /** Wikipedia's short description of the article. */
+  description?: string
   pageprops?: { disambiguation?: unknown }
   imageinfo?: ImageInfo[]
 }
@@ -88,7 +101,8 @@ function rescale(thumbUrl: string, width: number): string | null {
 /**
  * One photo per subject, in the order given: the lead image of the article
  * with exactly that title (redirects followed, disambiguation pages skipped).
- * Subjects with no such article or no usable photograph are left out.
+ * Subjects with no such article, of a kind that is never pictured, or with no
+ * usable photograph are left out.
  */
 export async function fetchSubjectPhotos(subjects: string[]): Promise<EventPhoto[]> {
   const titles = [...new Set(subjects.map((s) => s.trim()).filter(Boolean))].slice(0, MAX_SUBJECTS)
@@ -98,7 +112,7 @@ export async function fetchSubjectPhotos(subjects: string[]): Promise<EventPhoto
   const articles = await query({
     titles: titles.join('|'),
     redirects: '1',
-    prop: 'pageimages|pageprops',
+    prop: 'pageimages|pageprops|description',
     piprop: 'name',
     ppprop: 'disambiguation',
   })
@@ -111,6 +125,7 @@ export async function fetchSubjectPhotos(subjects: string[]): Promise<EventPhoto
     const page = byTitle.get(resolveTitle(articles, requested))
     if (!page?.title || page.missing !== undefined || page.invalid !== undefined) continue
     if (page.pageprops?.disambiguation !== undefined) continue
+    if (page.description && NEVER_PICTURED.test(page.description)) continue
     if (!page.pageimage) continue
     found.push({ subject: page.title, file: `File:${page.pageimage}` })
   }

@@ -19,8 +19,10 @@ const BASE_PREFIX = 'timeline_event_photos_'
  *       search hit and could cache a gallery from an unrelated article.
  *   v3: one photo per subject the event is about (the spouse in a marriage),
  *       never every image on a related article.
+ *   v4: only subjects the event's title names, and never the timeline's own
+ *       subject — v3 could cache the subject's portrait on any event.
  */
-const PREFIX = `${BASE_PREFIX}v3_`
+const PREFIX = `${BASE_PREFIX}v4_`
 
 // Each entry is ≤ 3 URLs and captions, so this is well under 100 KB.
 const MAX_ENTRIES = 150
