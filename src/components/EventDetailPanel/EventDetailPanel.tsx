@@ -17,7 +17,8 @@ import { getKey } from '@/services/userApiKey'
 import { PhotoViewer } from './PhotoViewer'
 import { AtAGlance, type GlanceRow } from './AtAGlance'
 import { focusEventBar, useEventMorph } from './useEventMorph'
-import { fetchEventPhotos } from '@/services/wikipediaPhotos'
+import { fetchEventGallery } from '@/services/wikipediaPhotos'
+import { articleFromSources } from '@/services/wikipediaArticle'
 import {
   clearCachedEventPhotos,
   getCachedEventPhotos,
@@ -196,29 +197,59 @@ export function EventDetailPanel<E extends EnrichableEvent>({
   }, [open, event?.id])
 
   // The gallery: several photos from the event's Wikipedia article, cached in
-  // the browser. Independent of the description — it runs for cached events
-  // too, and Regenerate leaves it alone. `null` while it is being looked up.
+  // the browser. Which article matters more than anything else here — see
+  // wikipediaArticle.ts for how a search once filled the CUDA event with
+  // pictures of Blender. In order of trust:
+  //   - a World Events entry's article, fact-checked when the lane was built;
+  //   - the English Wikipedia page among the sources the model cited;
+  //   - a Wikipedia search, accepted only if the result is relevant.
+  // So for an event still generating, the lookup waits until its sources have
+  // arrived (or the generation has ended without any).
+  //
+  // `gallery` is null while looking; once found it is the answer, even when
+  // empty. `galleryFailed` means Wikipedia could not be reached, and only then
+  // does the event's stored lead image stand in.
   const [gallery, setGallery] = useState<EventPhoto[] | null>(null)
+  const [galleryFailed, setGalleryFailed] = useState(false)
+  const currentSources = state === 'loaded' ? event?.sources ?? sources : sources
+  const checkedArticle =
+    event && 'article' in event
+      ? (event as { article?: { title?: string } }).article?.title ?? null
+      : null
+  const knownArticle = checkedArticle ?? articleFromSources(currentSources)
+  const sourcesSettled =
+    state === 'loaded' || state === 'error' || currentSources.length > 0 || !!checkedArticle
   useEffect(() => {
     if (!open || !event) return
+    setGalleryFailed(false)
+    if (!sourcesSettled) {
+      setGallery(null)
+      return
+    }
     const cached = getCachedEventPhotos(event.id, event.title)
-    if (cached) {
-      setGallery(cached)
+    // A cached gallery stands unless we now know better: a cited article it
+    // did not come from.
+    if (cached && (!knownArticle || cached.article === knownArticle)) {
+      setGallery(cached.photos)
       return
     }
     setGallery(null)
     let cancelled = false
     const { id, title } = event
-    fetchEventPhotos(title).then((photos) => {
-      if (cancelled) return
-      setCachedEventPhotos(id, title, photos)
-      setGallery(photos)
-    })
+    fetchEventGallery({ title, timelineTitle, article: knownArticle })
+      .then(({ article, photos }) => {
+        if (cancelled) return
+        setCachedEventPhotos(id, title, article, photos)
+        setGallery(photos)
+      })
+      .catch(() => {
+        if (!cancelled) setGalleryFailed(true)
+      })
     return () => {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, event?.id, event?.title])
+  }, [open, event?.id, event?.title, knownArticle, sourcesSettled])
 
   // Reset state when the view closes or the event changes.
   useEffect(() => {
@@ -390,7 +421,7 @@ export function EventDetailPanel<E extends EnrichableEvent>({
     // Image fetch in parallel with text streaming. Only re-fetch if not preserving.
     if (!preserveImage) {
       setImageState('loading')
-      fetchEventImage(currentEvent.title)
+      fetchEventImage(currentEvent.title, timelineTitle)
         .then((res) => {
           if (ctrl.signal.aborted) return
           nextImageUrl = res.imageUrl
@@ -509,17 +540,17 @@ export function EventDetailPanel<E extends EnrichableEvent>({
   const showStory = state !== 'error' && (paragraphs.length > 0 || showStorySkeleton)
   // Sources arrive on their own callback, usually before the stream finishes.
   const showSourcesSkeleton = generating && displaySources.length === 0
-  // The gallery when it has anything (its first photo is the article's lead
-  // image, at full size); until then, or when it finds nothing usable, the
-  // single persisted lead image.
+  // The gallery decides, once it has answered — empty included: the stored
+  // lead image came from the same kind of lookup and may be just as wrong.
+  // Only when Wikipedia could not be reached does that lead image stand in.
   const lead: EventPhoto | null = displayImageUrl
     ? { url: displayImageUrl, attribution: displayAttribution }
     : null
-  const photos: EventPhoto[] = gallery?.length ? gallery : lead ? [lead] : []
-  // Only worth a pulsing frame while there is nothing to show yet and a lookup
-  // is still out. `idle` is the first frame of a fresh event, before the
-  // lead-image lookup has started.
-  const searchingPhotos = photos.length === 0 && (imageState !== 'settled' || gallery === null)
+  const photos: EventPhoto[] = gallery ?? (galleryFailed && lead ? [lead] : [])
+  // A pulsing frame while a lookup that could still bring photos is out.
+  const searchingPhotos =
+    photos.length === 0 &&
+    ((gallery === null && !galleryFailed) || (galleryFailed && imageState !== 'settled'))
   const hasPhotoArea = photos.length > 0 || searchingPhotos
 
   const categoryId = (view as { category?: string }).category

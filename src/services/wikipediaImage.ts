@@ -6,6 +6,8 @@
 // Best-effort: any failure path returns { imageUrl: null, attribution: null }
 // rather than erroring so the detail panel can render gracefully.
 
+import { searchRelevantArticle } from './wikipediaArticle'
+
 interface ImageResult {
   imageUrl: string | null
   attribution: string | null
@@ -18,22 +20,10 @@ export function stripHtml(input: string): string {
   return input.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
 }
 
-export async function searchPage(title: string): Promise<string | null> {
-  const url = `https://en.wikipedia.org/w/rest.php/v1/search/page?q=${encodeURIComponent(
-    title,
-  )}&limit=1`
-  const res = await fetch(url)
-  if (!res.ok) return null
-  const json = await res.json()
-  const page = json?.pages?.[0]
-  if (!page?.title) return null
-  return page.title as string
-}
-
 async function fetchPageImage(
   pageTitle: string,
 ): Promise<{ thumbUrl: string | null; fileTitle: string | null }> {
-  const url = `https://en.wikipedia.org/w/api.php?action=query&prop=pageimages&pithumbsize=1600&piprop=thumbnail|name&titles=${encodeURIComponent(
+  const url = `https://en.wikipedia.org/w/api.php?action=query&prop=pageimages&pithumbsize=1600&piprop=thumbnail|name&redirects=1&titles=${encodeURIComponent(
     pageTitle,
   )}&format=json&origin=*`
   const res = await fetch(url)
@@ -76,11 +66,19 @@ export function buildAttribution(author: string | null, license: string | null):
   return 'Photo: Wikimedia Commons'
 }
 
-export async function fetchWikipediaImage(title: string): Promise<ImageResult> {
+/**
+ * The lead image of the event's Wikipedia article — only if a search finds an
+ * article that is plausibly about the event (see wikipediaArticle.ts). An
+ * unrelated picture is worse than none.
+ */
+export async function fetchWikipediaImage(
+  title: string,
+  timelineTitle?: string,
+): Promise<ImageResult> {
   try {
     if (!title.trim()) return EMPTY
 
-    const pageTitle = await searchPage(title.trim())
+    const pageTitle = await searchRelevantArticle(title.trim(), timelineTitle)
     if (!pageTitle) return EMPTY
 
     const { thumbUrl, fileTitle } = await fetchPageImage(pageTitle)

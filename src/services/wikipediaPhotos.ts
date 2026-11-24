@@ -1,16 +1,20 @@
 // The event view's photo gallery, looked up from the event's Wikipedia
 // article, browser-direct like wikipediaImage.ts
-// (docs/2026-11-24-event-view-prd.md §5).
+// (docs/2026-11-24-event-view-prd.md §5). Which article that is — and when
+// there is none — is wikipediaArticle.ts's call.
 //
-// Two requests to en.wikipedia.org after the article is found — the lead
+// Two requests to en.wikipedia.org once the article is known — the lead
 // image's name, and every image on the article with its size, type and
 // Commons metadata — so `connect-src` needs nothing new, and the 1600px
 // renditions come from upload.wikimedia.org, which `img-src` already allows.
 //
-// Best-effort throughout: any failure is an empty gallery, never an error.
+// A network failure rejects, so the caller can tell "Wikipedia has nothing
+// relevant" (an empty gallery, cached) from "could not ask" (not cached, and
+// the event's stored lead image stands in).
 
 import type { EventPhoto } from '@/types/event'
-import { buildAttribution, searchPage, stripHtml } from './wikipediaImage'
+import { buildAttribution, stripHtml } from './wikipediaImage'
+import { searchRelevantArticle } from './wikipediaArticle'
 
 const API = 'https://en.wikipedia.org/w/api.php'
 const WIDTH = 1600
@@ -66,7 +70,7 @@ function rescale(thumbUrl: string, width: number): string | null {
 }
 
 async function leadImageName(pageTitle: string): Promise<string | null> {
-  const url = `${API}?action=query&prop=pageimages&piprop=name&titles=${encodeURIComponent(
+  const url = `${API}?action=query&prop=pageimages&piprop=name&redirects=1&titles=${encodeURIComponent(
     pageTitle,
   )}&format=json&origin=*`
   const res = await fetch(url)
@@ -83,6 +87,8 @@ async function articleImages(pageTitle: string): Promise<FilePage[]> {
     action: 'query',
     generator: 'images',
     titles: pageTitle,
+    // A source URL may name a redirect ("Nvidia_CUDA"); follow it.
+    redirects: '1',
     gimlimit: '50',
     prop: 'imageinfo',
     iiprop: 'url|size|mime|extmetadata',
@@ -92,7 +98,7 @@ async function articleImages(pageTitle: string): Promise<FilePage[]> {
     origin: '*',
   })
   const res = await fetch(`${API}?${params.toString()}`)
-  if (!res.ok) return []
+  if (!res.ok) throw new Error(`Wikipedia images failed: ${res.status}`)
   const json = await res.json()
   const pages = json?.query?.pages
   return pages ? (Object.values(pages) as FilePage[]) : []
@@ -120,30 +126,48 @@ function toPhoto(page: FilePage): EventPhoto | null {
   }
 }
 
-/** Up to six photos for an event, the article's lead image first. */
-export async function fetchEventPhotos(title: string): Promise<EventPhoto[]> {
-  try {
-    if (!title.trim()) return []
-    const pageTitle = await searchPage(title.trim())
-    if (!pageTitle) return []
+export interface EventGallery {
+  /** The article the photos came from; null when no relevant one was found. */
+  article: string | null
+  photos: EventPhoto[]
+}
 
-    const [lead, files] = await Promise.all([leadImageName(pageTitle), articleImages(pageTitle)])
-    // The lead image is the article's own choice of picture; keep it first.
-    const ordered = lead
-      ? [...files.filter((f) => f.title === lead), ...files.filter((f) => f.title !== lead)]
-      : files
+/**
+ * Up to six photos for an event, the article's lead image first. `article`
+ * is the one to use when the caller already knows it (a cited Wikipedia
+ * source, a World Events entry's checked article); otherwise Wikipedia is
+ * searched and only a relevant result is accepted. Rejects on a network
+ * failure.
+ */
+export async function fetchEventGallery({
+  title,
+  timelineTitle,
+  article,
+}: {
+  title: string
+  timelineTitle?: string
+  article?: string | null
+}): Promise<EventGallery> {
+  const pageTitle = article || (await searchRelevantArticle(title, timelineTitle))
+  if (!pageTitle) return { article: null, photos: [] }
 
-    const photos: EventPhoto[] = []
-    const seen = new Set<string>()
-    for (const file of ordered) {
-      const photo = toPhoto(file)
-      if (!photo || seen.has(photo.url)) continue
-      seen.add(photo.url)
-      photos.push(photo)
-      if (photos.length === MAX_PHOTOS) break
-    }
-    return photos
-  } catch {
-    return []
+  const [lead, files] = await Promise.all([
+    leadImageName(pageTitle).catch(() => null),
+    articleImages(pageTitle),
+  ])
+  // The lead image is the article's own choice of picture; keep it first.
+  const ordered = lead
+    ? [...files.filter((f) => f.title === lead), ...files.filter((f) => f.title !== lead)]
+    : files
+
+  const photos: EventPhoto[] = []
+  const seen = new Set<string>()
+  for (const file of ordered) {
+    const photo = toPhoto(file)
+    if (!photo || seen.has(photo.url)) continue
+    seen.add(photo.url)
+    photos.push(photo)
+    if (photos.length === MAX_PHOTOS) break
   }
+  return { article: pageTitle, photos }
 }

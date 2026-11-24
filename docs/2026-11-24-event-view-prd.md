@@ -299,7 +299,8 @@ Built on `godin/dreamy-gauss-65s815` in three commits (layout + morph; gallery; 
 - **Two columns from `lg` (1024px), not `md`.** Below that the page is one column with the photos first, on tablets as well as phones.
 - **Close (§4).** The bar's tint returns only in the last half of the shrink; earlier it washed the whole screen orange. The timeline's push-back scale is dropped once the open finishes and re-applied for the close. Left on, it overhangs the viewport, and phone browsers widened the page to fit it. `<html>` is also `overflow: hidden` while the view is up.
 - **Duration (§6)** is elapsed time ("July 16 – 24" is "8 days"), not inclusive days.
-- **The gallery (§5) is fetched for every open**, cached events included, unless it is already in the browser cache. The persisted lead image shows until the gallery arrives.
+- **The gallery (§5) is fetched for every open**, cached events included, unless it is already in the browser cache.
+- **The article is no longer the top search hit (§5, open question 3).** Trusting it put six pictures of Blender on the CUDA event. The article now comes from the event's cited English Wikipedia source (or a World Events entry's checked article); otherwise a search result is accepted only if its title shares an identifying word with the event or timeline title, and no match means no photos. The gallery's answer, even an empty one, overrides the persisted lead image, which shows only if Wikipedia can't be reached. Cache bumped to v2.
 - **Not built yet:**
   - The full-screen photo view (§5, open question 1).
   - Browser-back closing the view (§9). Back still leaves the route, exactly as it did with the side panel.
