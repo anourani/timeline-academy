@@ -1,22 +1,16 @@
-// Which Wikipedia article an event's photos come from.
+// Matching Wikipedia articles to events, for the event view's photos
+// (wikipediaPhotos.ts decides which pictures are shown).
 //
-// This used to be "search Wikipedia for the event's title and take the top
-// hit". Event titles read like sentences, not article names, and full-text
-// search ranks whatever page shares the most words: "Launches CUDA, opening
-// GPUs to general computing" came back as "Blender (software)", and the event
-// view showed six pictures of Blender. Two rules replace it:
-//
-//   1. Prefer an article we already have good reason to trust: the English
-//      Wikipedia page among the sources the model cited for the event, or the
-//      article a World Events entry was fact-checked against.
-//   2. Otherwise search, but only accept a result whose title shares a real
-//      word with the event's title or the timeline's. No match, no article —
-//      and no photos, which is better than unrelated ones.
+// Photos used to come from "search Wikipedia for the event's title, take the
+// top hit, show its images". Two things went wrong. Event titles read like
+// sentences, and full-text search ranks whatever page shares the most words:
+// "Launches CUDA, opening GPUs to general computing" came back as "Blender
+// (software)". And when the article was right but broad — the subject's own
+// biography for "Marries Lori Huang" — its images were of decades of other
+// things. So this file answers narrower questions: is a name the timeline's
+// own subject, and is an article about the event itself.
 
 import type { EventSource } from '@/types/event'
-
-const SEARCH = 'https://en.wikipedia.org/w/rest.php/v1/search/page'
-const SEARCH_LIMIT = 5
 
 /** Pages in these namespaces are never an event's article. */
 const NON_ARTICLE = /^(file|image|special|category|help|wikipedia|talk|template|portal|user|draft|module|mediawiki):/i
@@ -33,7 +27,8 @@ const STOPWORDS = new Set([
 
 /**
  * The words of a title that identify something: lower-cased, accents removed,
- * at least three characters, not a stopword, with a trailing plural "s"
+ * at least three characters (or a number: the "11" of "Apollo 11"), not a
+ * stopword, with a trailing plural "s"
  * dropped so "GPUs" meets "GPU". A parenthesised qualifier — the "(software)"
  * in "Blender (software)" — is ignored: it is a category, not the subject.
  */
@@ -47,21 +42,8 @@ function keywords(title: string): Set<string> {
     .map((w) => (/(ch|sh|x|z)es$/.test(w) ? w.slice(0, -2) : w))
     .map((w) => (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w))
     // After the plural is dropped, so "launches" meets the stopword "launch".
-    .filter((w) => w.length >= 3 && !STOPWORDS.has(w))
+    .filter((w) => (w.length >= 3 || /^\d+$/.test(w)) && !STOPWORDS.has(w))
   return new Set(words)
-}
-
-/** Does this article title share an identifying word with the event or its timeline? */
-export function isRelevantArticle(
-  articleTitle: string,
-  eventTitle: string,
-  timelineTitle?: string,
-): boolean {
-  const article = keywords(articleTitle)
-  if (article.size === 0) return false
-  const wanted = new Set([...keywords(eventTitle), ...keywords(timelineTitle ?? '')])
-  for (const word of article) if (wanted.has(word)) return true
-  return false
 }
 
 /**
@@ -93,23 +75,40 @@ export function articleFromSources(sources: EventSource[] | null | undefined): s
 }
 
 /**
- * The first of Wikipedia's top search results for the event that passes the
- * relevance check, or null when none does. Throws on a network failure, so a
- * caller can tell "nothing relevant" from "could not ask".
+ * Is this name the timeline's own subject — "Jensen Huang" on a timeline
+ * titled "Jensen Huang"? Every identifying word of the name must be in the
+ * timeline's title. Used to keep the subject out of the photos of events that
+ * are about someone or something else in their life.
  */
-export async function searchRelevantArticle(
+export function isTimelineSubject(name: string, timelineTitle?: string): boolean {
+  const words = keywords(name)
+  if (words.size === 0) return false
+  const timeline = keywords(timelineTitle ?? '')
+  for (const word of words) if (!timeline.has(word)) return false
+  return true
+}
+
+/**
+ * Is this article about the event itself, rather than about the timeline's
+ * subject? It must share a word with the event's title that is not also a
+ * word of the timeline's title: "CUDA" for "Launches CUDA…" on a Jensen Huang
+ * timeline, but not "Jensen Huang" for "Marries Lori Huang", which only
+ * matches on the surname.
+ */
+export function isAboutEvent(
+  articleTitle: string,
   eventTitle: string,
   timelineTitle?: string,
-): Promise<string | null> {
-  const query = eventTitle.trim()
-  if (!query) return null
-  const res = await fetch(`${SEARCH}?q=${encodeURIComponent(query)}&limit=${SEARCH_LIMIT}`)
-  if (!res.ok) throw new Error(`Wikipedia search failed: ${res.status}`)
-  const json = await res.json()
-  const pages: { title?: unknown }[] = Array.isArray(json?.pages) ? json.pages : []
-  for (const page of pages) {
-    if (typeof page.title !== 'string') continue
-    if (isRelevantArticle(page.title, query, timelineTitle)) return page.title
+): boolean {
+  const timeline = keywords(timelineTitle ?? '')
+  const article = keywords(articleTitle)
+  const event = keywords(eventTitle)
+  // The event is named exactly as the article is.
+  if (article.size > 0 && article.size === event.size && [...article].every((w) => event.has(w))) {
+    return true
   }
-  return null
+  for (const word of event) {
+    if (!timeline.has(word) && article.has(word)) return true
+  }
+  return false
 }

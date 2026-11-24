@@ -15,6 +15,7 @@
 //   Where: Paris, in a converted shed at the School of Physics and Chemistry
 //   Who: Marie Curie, Pierre Curie
 //   Age: 30
+//   Pictured: Pierre Curie | Polonium
 //
 // The trailing fact lines (Nov 2026, the event view's At a glance list) are
 // each optional. They come last, not first, for deploy skew: an old cached
@@ -42,6 +43,11 @@ export interface EventFacts {
   where?: string
   who?: string
   age?: string
+  /**
+   * Who or what a photo of the event should show, as exact English Wikipedia
+   * article titles separated by " | ". Not displayed: it drives the photos.
+   */
+  pictured?: string
 }
 
 export interface ParsedEventDescription {
@@ -59,11 +65,11 @@ export interface ParsedEventDescription {
 // `*` and `•` are accepted because models drift from the instruction.
 const BULLET = /^\s*[-*•](?:\s+|$)/
 
-/** A complete fact line. Only these three keys; anything else stays story. */
-const FACT = /^\s*(where|who|age)\s*:\s*(.*)$/i
+/** A complete fact line. Only these keys; anything else stays story. */
+const FACT = /^\s*(where|who|age|pictured)\s*:\s*(.*)$/i
 
 /** A fact line still being streamed: a prefix of a key, with or without its colon. */
-const FACT_PARTIAL = /^\s*(w|wh|whe|wher|where|who|a|ag|age)\s*:?\s*$/i
+const FACT_PARTIAL = /^\s*(w|wh|whe|wher|where|who|a|ag|age|p|pi|pic|pict|pictu|pictur|picture|pictured)\s*:?\s*$/i
 
 /**
  * First-person narration the model writes before (or between) its web

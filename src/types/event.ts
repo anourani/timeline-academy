@@ -10,7 +10,7 @@ export interface EventPhoto {
   thumbUrl?: string | null;
   /** What the photo shows — from the file's description on Wikimedia. */
   caption?: string | null;
-  /** "Photo: Author / Licence", as wikipediaImage.ts builds it. */
+  /** "Photo: Author / Licence", as wikipediaPhotos.ts builds it. */
   attribution: string | null;
 }
 

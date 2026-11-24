@@ -5,10 +5,7 @@ import { ConfirmationModal } from '../Modal/ConfirmationModal'
 import { Skeleton, SkeletonText } from '../ui/skeleton'
 import { parseEventDescription } from '@/utils/eventDescription'
 import { formatEventWhen } from '@/utils/eventWhen'
-import {
-  enrichEvent,
-  fetchEventImage,
-} from '@/services/eventEnrichment'
+import { enrichEvent } from '@/services/eventEnrichment'
 import type { CategoryConfig, EnrichableEvent, EventPhoto, EventSource } from '@/types/event'
 import type { TimelineChapter } from '@/types/timeline'
 import type { ByokProvider } from '@/types/ai'
@@ -17,8 +14,12 @@ import { getKey } from '@/services/userApiKey'
 import { PhotoViewer } from './PhotoViewer'
 import { AtAGlance, type GlanceRow } from './AtAGlance'
 import { focusEventBar, useEventMorph } from './useEventMorph'
-import { fetchEventGallery } from '@/services/wikipediaPhotos'
-import { articleFromSources } from '@/services/wikipediaArticle'
+import { fetchSubjectPhotos } from '@/services/wikipediaPhotos'
+import {
+  articleFromSources,
+  isAboutEvent,
+  isTimelineSubject,
+} from '@/services/wikipediaArticle'
 import {
   clearCachedEventPhotos,
   getCachedEventPhotos,
@@ -59,18 +60,6 @@ interface EventDetailPanelProps<E extends EnrichableEvent> {
 }
 
 type PanelState = 'idle' | 'generating' | 'loaded' | 'error'
-
-/**
- * The image is a separate request from the description — a Wikipedia lookup
- * that runs alongside the stream — so it needs its own state. Keying its
- * placeholder off `PanelState` meant the frame stopped pulsing the moment the
- * *text* finished, with the picture still in flight, and kept pulsing for the
- * whole generation when Wikipedia had no picture to give.
- *
- * `'settled'` covers found, not-found and failed alike: all three are the end
- * of waiting, and an empty frame is the honest answer to the last two.
- */
-type ImageState = 'idle' | 'loading' | 'settled'
 
 /** Keys that scroll a container, plus Tab — moving focus to a link near the
  *  bottom scrolls it into view, and that is the reader's doing. */
@@ -122,9 +111,6 @@ export function EventDetailPanel<E extends EnrichableEvent>({
 }: EventDetailPanelProps<E>) {
   const [state, setState] = useState<PanelState>('idle')
   const [streamedDescription, setStreamedDescription] = useState('')
-  const [imageUrl, setImageUrl] = useState<string | null>(null)
-  const [imageAttribution, setImageAttribution] = useState<string | null>(null)
-  const [imageState, setImageState] = useState<ImageState>('idle')
   const [sources, setSources] = useState<EventSource[]>([])
   const [errorMessage, setErrorMessage] = useState('')
   const [errorProvider, setErrorProvider] = useState<ByokProvider | null>(null)
@@ -196,19 +182,20 @@ export function EventDetailPanel<E extends EnrichableEvent>({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, event?.id])
 
-  // The gallery: several photos from the event's Wikipedia article, cached in
-  // the browser. Which article matters more than anything else here — see
-  // wikipediaArticle.ts for how a search once filled the CUDA event with
-  // pictures of Blender. In order of trust:
-  //   - a World Events entry's article, fact-checked when the lane was built;
-  //   - the English Wikipedia page among the sources the model cited;
-  //   - a Wikipedia search, accepted only if the result is relevant.
-  // So for an event still generating, the lookup waits until its sources have
-  // arrived (or the generation has ended without any).
+  // The photos: one picture of each person, thing or place the event is
+  // about — the spouse in a marriage, the product in a launch — taken from
+  // that subject's own Wikipedia article (wikipediaPhotos.ts). What to picture
+  // is decided once the description has settled, in this order:
+  //   1. the description's `Pictured:` line — the model's own choice;
+  //   2. a World Events entry's fact-checked article;
+  //   3. the `Who:` names, leaving out the timeline's own subject;
+  //   4. the Wikipedia article the model cited, if it is about the event
+  //      itself — never one that only matches the timeline's subject.
+  // Nothing is ever searched for: a guess is how unrelated pictures got in.
+  // Nothing found means no photos, which is better than an unrelated one.
   //
-  // `gallery` is null while looking; once found it is the answer, even when
-  // empty. `galleryFailed` means Wikipedia could not be reached, and only then
-  // does the event's stored lead image stand in.
+  // `gallery` is null while deciding or looking; once found it is the answer,
+  // even when empty. `galleryFailed`: Wikipedia could not be reached.
   const [gallery, setGallery] = useState<EventPhoto[] | null>(null)
   const [galleryFailed, setGalleryFailed] = useState(false)
   const currentSources = state === 'loaded' ? event?.sources ?? sources : sources
@@ -216,30 +203,49 @@ export function EventDetailPanel<E extends EnrichableEvent>({
     event && 'article' in event
       ? (event as { article?: { title?: string } }).article?.title ?? null
       : null
-  const knownArticle = checkedArticle ?? articleFromSources(currentSources)
-  const sourcesSettled =
-    state === 'loaded' || state === 'error' || currentSources.length > 0 || !!checkedArticle
+  type PhotoPlan = { subjects: string[] }
+  let photoPlan: PhotoPlan | null = null
+  if (event && (state === 'loaded' || state === 'error')) {
+    const settledFacts =
+      state === 'loaded' ? parseEventDescription(event.description ?? streamedDescription).facts : {}
+    const pictured = (settledFacts.pictured ?? '')
+      .split('|')
+      .map((s) => s.trim())
+      .filter(Boolean)
+    const who = (settledFacts.who ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter((name) => name && !isTimelineSubject(name, timelineTitle))
+    if (pictured.length) photoPlan = { subjects: pictured }
+    else if (checkedArticle) photoPlan = { subjects: [checkedArticle] }
+    else if (who.length) photoPlan = { subjects: who }
+    else {
+      const cited = articleFromSources(currentSources)
+      photoPlan = {
+        subjects: cited && isAboutEvent(cited, event.title, timelineTitle) ? [cited] : [],
+      }
+    }
+  }
+  const photoBasis = photoPlan ? JSON.stringify(photoPlan) : null
   useEffect(() => {
     if (!open || !event) return
     setGalleryFailed(false)
-    if (!sourcesSettled) {
+    if (!photoPlan || !photoBasis) {
       setGallery(null)
       return
     }
     const cached = getCachedEventPhotos(event.id, event.title)
-    // A cached gallery stands unless we now know better: a cited article it
-    // did not come from.
-    if (cached && (!knownArticle || cached.article === knownArticle)) {
+    if (cached && cached.basis === photoBasis) {
       setGallery(cached.photos)
       return
     }
     setGallery(null)
     let cancelled = false
     const { id, title } = event
-    fetchEventGallery({ title, timelineTitle, article: knownArticle })
-      .then(({ article, photos }) => {
+    fetchSubjectPhotos(photoPlan.subjects)
+      .then((photos) => {
         if (cancelled) return
-        setCachedEventPhotos(id, title, article, photos)
+        setCachedEventPhotos(id, title, photoBasis, photos)
         setGallery(photos)
       })
       .catch(() => {
@@ -248,8 +254,9 @@ export function EventDetailPanel<E extends EnrichableEvent>({
     return () => {
       cancelled = true
     }
+    // `photoBasis` stands for `photoPlan`, which is rebuilt every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, event?.id, event?.title, knownArticle, sourcesSettled])
+  }, [open, event?.id, event?.title, photoBasis])
 
   // Reset state when the view closes or the event changes.
   useEffect(() => {
@@ -272,12 +279,7 @@ export function EventDetailPanel<E extends EnrichableEvent>({
       // Cached content — render straight from the event.
       setState('loaded')
       setStreamedDescription(event.description ?? '')
-      setImageUrl(event.imageUrl ?? null)
-      setImageAttribution(event.imageAttribution ?? null)
       setSources(event.sources ?? [])
-      // Nothing is being fetched. `PhotoViewer` still pulses until the <img>
-      // paints — a cached URL is still bytes away.
-      setImageState('settled')
       return
     }
 
@@ -287,13 +289,11 @@ export function EventDetailPanel<E extends EnrichableEvent>({
     // not after it: skeletons settle into the page as it grows.
     setState('generating')
     setStreamedDescription('')
-    setImageUrl(null)
-    setImageAttribution(null)
     setSources([])
     setErrorMessage('')
     setErrorProvider(null)
 
-    runGeneration(event, false)
+    runGeneration(event)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, event?.id])
 
@@ -363,7 +363,7 @@ export function EventDetailPanel<E extends EnrichableEvent>({
     const el = contentRef.current
     if (!el || el.scrollTop === 0) return
     el.scrollTop = 0
-  }, [streamedDescription, imageUrl, imageAttribution, sources])
+  }, [streamedDescription, gallery, sources])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -391,11 +391,7 @@ export function EventDetailPanel<E extends EnrichableEvent>({
     if (!open) setShowDeleteConfirm(false)
   }, [open])
 
-  function runGeneration(
-    currentEvent: E,
-    preserveImage: boolean,
-    providerOverride?: ByokProvider,
-  ) {
+  function runGeneration(currentEvent: E, providerOverride?: ByokProvider) {
     // Abort any prior in-flight generation
     if (abortRef.current) abortRef.current.abort()
     const ctrl = new AbortController()
@@ -403,44 +399,12 @@ export function EventDetailPanel<E extends EnrichableEvent>({
 
     setState('generating')
     setStreamedDescription('')
-    if (!preserveImage) {
-      setImageUrl(null)
-      setImageAttribution(null)
-    }
     setSources([])
     setErrorMessage('')
     setErrorProvider(null)
 
     let descBuffer = ''
     let collectedSources: EventSource[] = []
-    let nextImageUrl: string | null = preserveImage ? currentEvent.imageUrl ?? null : null
-    let nextImageAttribution: string | null = preserveImage
-      ? currentEvent.imageAttribution ?? null
-      : null
-
-    // Image fetch in parallel with text streaming. Only re-fetch if not preserving.
-    if (!preserveImage) {
-      setImageState('loading')
-      fetchEventImage(currentEvent.title, timelineTitle)
-        .then((res) => {
-          if (ctrl.signal.aborted) return
-          nextImageUrl = res.imageUrl
-          nextImageAttribution = res.attribution
-          setImageUrl(res.imageUrl)
-          setImageAttribution(res.attribution)
-          setImageState('settled')
-        })
-        .catch(() => {
-          // `fetchEventImage` already resolves to null/null on failure, so this
-          // only fires on something unexpected — but the frame must stop
-          // waiting either way rather than pulse forever.
-          if (ctrl.signal.aborted) return
-          setImageState('settled')
-        })
-    } else {
-      setImageState('settled')
-    }
-
     enrichEvent(
       currentEvent,
       timelineTitle,
@@ -457,12 +421,13 @@ export function EventDetailPanel<E extends EnrichableEvent>({
         },
         onDone: () => {
           if (ctrl.signal.aborted) return
-          // Persist the full set of fields atomically.
+          // Persist the full set of fields atomically. `imageUrl` rides along
+          // untouched in the spread: the view no longer reads or writes it —
+          // its photos are looked up from what the description says the event
+          // is about, and cached in the browser.
           onEventChange({
             ...currentEvent,
             description: descBuffer || null,
-            imageUrl: nextImageUrl,
-            imageAttribution: nextImageAttribution,
             sources: collectedSources.length > 0 ? collectedSources : null,
           })
           setState('loaded')
@@ -483,8 +448,7 @@ export function EventDetailPanel<E extends EnrichableEvent>({
    *  where the previous attempt produced nothing to protect. */
   function regenerateNow(providerOverride?: ByokProvider) {
     if (!event) return
-    // Preserve image only if we already have one.
-    runGeneration(event, !!imageUrl, providerOverride)
+    runGeneration(event, providerOverride)
   }
 
   /** Footer "Regenerate", which replaces a description that already worked.
@@ -515,8 +479,6 @@ export function EventDetailPanel<E extends EnrichableEvent>({
   // gone — a click opens this view — so the top bar carries them instead.
   const showAuthoringActions = mode === 'edit' && !!onEdit && !!onDelete && !readOnly
   const description = state === 'loaded' ? view.description ?? streamedDescription : streamedDescription
-  const displayImageUrl = state === 'loaded' ? view.imageUrl ?? imageUrl : imageUrl
-  const displayAttribution = state === 'loaded' ? view.imageAttribution ?? imageAttribution : imageAttribution
   const displaySources = state === 'loaded' ? view.sources ?? sources : sources
 
   const { summary, paragraphs, facts } = parseEventDescription(description)
@@ -540,17 +502,12 @@ export function EventDetailPanel<E extends EnrichableEvent>({
   const showStory = state !== 'error' && (paragraphs.length > 0 || showStorySkeleton)
   // Sources arrive on their own callback, usually before the stream finishes.
   const showSourcesSkeleton = generating && displaySources.length === 0
-  // The gallery decides, once it has answered — empty included: the stored
-  // lead image came from the same kind of lookup and may be just as wrong.
-  // Only when Wikipedia could not be reached does that lead image stand in.
-  const lead: EventPhoto | null = displayImageUrl
-    ? { url: displayImageUrl, attribution: displayAttribution }
-    : null
-  const photos: EventPhoto[] = gallery ?? (galleryFailed && lead ? [lead] : [])
-  // A pulsing frame while a lookup that could still bring photos is out.
-  const searchingPhotos =
-    photos.length === 0 &&
-    ((gallery === null && !galleryFailed) || (galleryFailed && imageState !== 'settled'))
+  // The photos are only ever the subjects' own pictures. The lead image stored
+  // on the event is not shown: it came from a title search and was not chosen
+  // for what the event is about.
+  const photos: EventPhoto[] = gallery ?? []
+  // A pulsing frame while the subjects are still being decided or looked up.
+  const searchingPhotos = photos.length === 0 && gallery === null && !galleryFailed
   const hasPhotoArea = photos.length > 0 || searchingPhotos
 
   const categoryId = (view as { category?: string }).category

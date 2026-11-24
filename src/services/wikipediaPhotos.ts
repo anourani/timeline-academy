@@ -1,36 +1,31 @@
-// The event view's photo gallery, looked up from the event's Wikipedia
-// article, browser-direct like wikipediaImage.ts
-// (docs/2026-11-24-event-view-prd.md §5). Which article that is — and when
-// there is none — is wikipediaArticle.ts's call.
+// The event view's photos: one picture of each person, thing or place the
+// event is about — the spouse in a marriage, the product in a launch — and
+// nothing else (docs/2026-11-24-event-view-prd.md §5, §14).
 //
-// Two requests to en.wikipedia.org once the article is known — the lead
-// image's name, and every image on the article with its size, type and
-// Commons metadata — so `connect-src` needs nothing new, and the 1600px
-// renditions come from upload.wikimedia.org, which `img-src` already allows.
+// Each subject is an exact English Wikipedia article title, and its photo is
+// that article's own lead image: a person's portrait, an object's photograph.
+// No article, no lead image, or only a drawing/logo means no photo for that
+// subject. This replaced pulling every image on one related article, which on
+// a biography meant decades of unrelated pictures — the subject at the White
+// House in 2025 on the event of his 1985 marriage. No photo is better than an
+// unrelated one.
 //
-// A network failure rejects, so the caller can tell "Wikipedia has nothing
-// relevant" (an empty gallery, cached) from "could not ask" (not cached, and
-// the event's stored lead image stands in).
+// Browser-direct to en.wikipedia.org (already in `connect-src`); the images
+// come from upload.wikimedia.org (already in `img-src`). A network failure
+// rejects, so the caller can tell "nothing to show" (cached) from "could not
+// ask" (not cached).
 
 import type { EventPhoto } from '@/types/event'
-import { buildAttribution, stripHtml } from './wikipediaImage'
-import { searchRelevantArticle } from './wikipediaArticle'
 
 const API = 'https://en.wikipedia.org/w/api.php'
-const WIDTH = 1600
-const THUMB_WIDTH = 240
-const MAX_PHOTOS = 6
-const MIN_WIDTH = 800
-const MIN_HEIGHT = 500
-const CAPTION_MAX = 120
+/** Standard Wikimedia thumbnail steps: other widths may be refused. */
+const WIDTH = 1280
+const THUMB_WIDTH = 330
+const MAX_SUBJECTS = 3
+const MIN_SIDE = 300
 
+/** Photographs only; an SVG lead image is a logo, a map or a diagram. */
 const PHOTO_MIME = new Set(['image/jpeg', 'image/png', 'image/webp'])
-
-/**
- * File names that are page furniture rather than pictures of the event:
- * logos, icons, flags, maps, signatures, heraldry, portal and stub badges.
- */
-const CHROME_NAME = /logo|icon|flag|map|signature|coat.of.arms|seal|symbol|portal|commons-|wiki|stub|disambig|question.book/i
 
 interface ImageInfo {
   url?: string
@@ -41,133 +36,116 @@ interface ImageInfo {
   extmetadata?: Record<string, { value?: string } | undefined>
 }
 
-interface FilePage {
+interface QueryPage {
   title?: string
+  missing?: unknown
+  invalid?: unknown
+  pageimage?: string
+  pageprops?: { disambiguation?: unknown }
   imageinfo?: ImageInfo[]
 }
 
-function cutAtWord(text: string, max: number): string {
-  if (text.length <= max) return text
-  const cut = text.slice(0, max)
-  const space = cut.lastIndexOf(' ')
-  return `${(space > max * 0.6 ? cut.slice(0, space) : cut).replace(/[\s,;:.]+$/, '')}…`
+interface QueryResult {
+  normalized?: { from: string; to: string }[]
+  redirects?: { from: string; to: string }[]
+  pages?: Record<string, QueryPage>
 }
 
-/** "File:Pierre_and_Marie_Curie.jpg" → "Pierre and Marie Curie". */
-function nameAsCaption(fileTitle: string): string {
-  return fileTitle
-    .replace(/^File:/i, '')
-    .replace(/\.[a-z0-9]+$/i, '')
-    .replace(/_/g, ' ')
-    .trim()
+async function query(params: Record<string, string>): Promise<QueryResult> {
+  const search = new URLSearchParams({ action: 'query', format: 'json', origin: '*', ...params })
+  const res = await fetch(`${API}?${search.toString()}`)
+  if (!res.ok) throw new Error(`Wikipedia query failed: ${res.status}`)
+  const json = await res.json()
+  return (json?.query ?? {}) as QueryResult
+}
+
+/** Follow Wikipedia's title normalisation, then any redirect, to the page's real title. */
+function resolveTitle(result: QueryResult, requested: string): string {
+  let title = requested
+  for (const n of result.normalized ?? []) if (n.from === title) title = n.to
+  for (const r of result.redirects ?? []) if (r.from === title) title = r.to
+  return title
+}
+
+/** Strip HTML tags from Wikimedia credit metadata (Commons returns rich HTML). */
+function stripHtml(input: string): string {
+  return input.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
+}
+
+function buildAttribution(author: string | null, license: string | null): string {
+  if (author && license) return `Photo: ${author} / ${license}`
+  if (author) return `Photo: ${author}`
+  if (license) return `Photo: Wikimedia Commons / ${license}`
+  return 'Photo: Wikimedia Commons'
 }
 
 /** A thumbnail URL rescaled to another width, when it is a scalable one. */
 function rescale(thumbUrl: string, width: number): string | null {
-  const m = thumbUrl.match(/\/(\d+)px-[^/]+$/)
-  if (!m) return null
+  if (!/\/\d+px-[^/]+$/.test(thumbUrl)) return null
   return thumbUrl.replace(/\/\d+px-([^/]+)$/, `/${width}px-$1`)
 }
 
-async function leadImageName(pageTitle: string): Promise<string | null> {
-  const url = `${API}?action=query&prop=pageimages&piprop=name&redirects=1&titles=${encodeURIComponent(
-    pageTitle,
-  )}&format=json&origin=*`
-  const res = await fetch(url)
-  if (!res.ok) return null
-  const json = await res.json()
-  const pages = json?.query?.pages
-  if (!pages) return null
-  const page = pages[Object.keys(pages)[0]]
-  return typeof page?.pageimage === 'string' ? `File:${page.pageimage}` : null
-}
+/**
+ * One photo per subject, in the order given: the lead image of the article
+ * with exactly that title (redirects followed, disambiguation pages skipped).
+ * Subjects with no such article or no usable photograph are left out.
+ */
+export async function fetchSubjectPhotos(subjects: string[]): Promise<EventPhoto[]> {
+  const titles = [...new Set(subjects.map((s) => s.trim()).filter(Boolean))].slice(0, MAX_SUBJECTS)
+  if (titles.length === 0) return []
 
-async function articleImages(pageTitle: string): Promise<FilePage[]> {
-  const params = new URLSearchParams({
-    action: 'query',
-    generator: 'images',
-    titles: pageTitle,
-    // A source URL may name a redirect ("Nvidia_CUDA"); follow it.
+  // 1. Each subject's article and the name of its lead image.
+  const articles = await query({
+    titles: titles.join('|'),
     redirects: '1',
-    gimlimit: '50',
+    prop: 'pageimages|pageprops',
+    piprop: 'name',
+    ppprop: 'disambiguation',
+  })
+  const byTitle = new Map<string, QueryPage>()
+  for (const page of Object.values(articles.pages ?? {})) {
+    if (page.title) byTitle.set(page.title, page)
+  }
+  const found: { subject: string; file: string }[] = []
+  for (const requested of titles) {
+    const page = byTitle.get(resolveTitle(articles, requested))
+    if (!page?.title || page.missing !== undefined || page.invalid !== undefined) continue
+    if (page.pageprops?.disambiguation !== undefined) continue
+    if (!page.pageimage) continue
+    found.push({ subject: page.title, file: `File:${page.pageimage}` })
+  }
+  if (found.length === 0) return []
+
+  // 2. Those images: a large rendition, size, type and credit.
+  const files = await query({
+    titles: found.map((f) => f.file).join('|'),
     prop: 'imageinfo',
     iiprop: 'url|size|mime|extmetadata',
     iiurlwidth: String(WIDTH),
-    iiextmetadatafilter: 'ImageDescription|Artist|LicenseShortName|UsageTerms',
-    format: 'json',
-    origin: '*',
+    iiextmetadatafilter: 'Artist|LicenseShortName|UsageTerms',
   })
-  const res = await fetch(`${API}?${params.toString()}`)
-  if (!res.ok) throw new Error(`Wikipedia images failed: ${res.status}`)
-  const json = await res.json()
-  const pages = json?.query?.pages
-  return pages ? (Object.values(pages) as FilePage[]) : []
-}
-
-function toPhoto(page: FilePage): EventPhoto | null {
-  const info = page.imageinfo?.[0]
-  const title = page.title ?? ''
-  if (!info?.url || !title) return null
-  if (!info.mime || !PHOTO_MIME.has(info.mime)) return null
-  if ((info.width ?? 0) < MIN_WIDTH || (info.height ?? 0) < MIN_HEIGHT) return null
-  if (CHROME_NAME.test(title)) return null
-
-  const meta = info.extmetadata ?? {}
-  const description = meta.ImageDescription?.value ? stripHtml(meta.ImageDescription.value) : ''
-  const author = meta.Artist?.value ? stripHtml(meta.Artist.value) : null
-  const license = meta.LicenseShortName?.value ?? meta.UsageTerms?.value ?? null
-  const url = info.thumburl ?? info.url
-
-  return {
-    url,
-    thumbUrl: rescale(url, THUMB_WIDTH),
-    caption: cutAtWord(description || nameAsCaption(title), CAPTION_MAX),
-    attribution: buildAttribution(author, license),
+  const infoByTitle = new Map<string, ImageInfo>()
+  for (const page of Object.values(files.pages ?? {})) {
+    const info = page.imageinfo?.[0]
+    if (page.title && info) infoByTitle.set(page.title, info)
   }
-}
-
-export interface EventGallery {
-  /** The article the photos came from; null when no relevant one was found. */
-  article: string | null
-  photos: EventPhoto[]
-}
-
-/**
- * Up to six photos for an event, the article's lead image first. `article`
- * is the one to use when the caller already knows it (a cited Wikipedia
- * source, a World Events entry's checked article); otherwise Wikipedia is
- * searched and only a relevant result is accepted. Rejects on a network
- * failure.
- */
-export async function fetchEventGallery({
-  title,
-  timelineTitle,
-  article,
-}: {
-  title: string
-  timelineTitle?: string
-  article?: string | null
-}): Promise<EventGallery> {
-  const pageTitle = article || (await searchRelevantArticle(title, timelineTitle))
-  if (!pageTitle) return { article: null, photos: [] }
-
-  const [lead, files] = await Promise.all([
-    leadImageName(pageTitle).catch(() => null),
-    articleImages(pageTitle),
-  ])
-  // The lead image is the article's own choice of picture; keep it first.
-  const ordered = lead
-    ? [...files.filter((f) => f.title === lead), ...files.filter((f) => f.title !== lead)]
-    : files
 
   const photos: EventPhoto[] = []
-  const seen = new Set<string>()
-  for (const file of ordered) {
-    const photo = toPhoto(file)
-    if (!photo || seen.has(photo.url)) continue
-    seen.add(photo.url)
-    photos.push(photo)
-    if (photos.length === MAX_PHOTOS) break
+  for (const { subject, file } of found) {
+    const info = infoByTitle.get(resolveTitle(files, file))
+    if (!info?.url || !info.mime || !PHOTO_MIME.has(info.mime)) continue
+    if ((info.width ?? 0) < MIN_SIDE || (info.height ?? 0) < MIN_SIDE) continue
+    const meta = info.extmetadata ?? {}
+    const author = meta.Artist?.value ? stripHtml(meta.Artist.value) : null
+    const license = meta.LicenseShortName?.value ?? meta.UsageTerms?.value ?? null
+    const url = info.thumburl ?? info.url
+    photos.push({
+      url,
+      thumbUrl: rescale(url, THUMB_WIDTH),
+      // The caption says who or what is pictured — the reason it is here.
+      caption: subject,
+      attribution: buildAttribution(author, license),
+    })
   }
-  return { article: pageTitle, photos }
+  return photos
 }

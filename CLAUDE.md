@@ -49,8 +49,8 @@ src/
 │                     #   llmShared (provider-neutral), eventEnrichment,
 │                     #   llmPrompts, userApiKey, viewerEventCache,
 │                     #   worldEvents + worldEventCache (the World Events lane),
-│                     #   wikipediaSearch, wikipediaImage, wikipediaPhotos +
-│                     #   eventPhotoCache (the event view's gallery)
+│                     #   wikipediaSearch, wikipediaPhotos + wikipediaArticle +
+│                     #   eventPhotoCache (the event view's photos)
 ├── utils/            # Helpers (excelSheet/excelExport, dateUtils,
 │                     #   eventStacking, draftStorage, saveEvents, etc.)
 ├── types/            # TypeScript type definitions (event.ts, timeline.ts)

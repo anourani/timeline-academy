@@ -1,11 +1,11 @@
-// Gallery cache for the event view's photos.
+// Cache for the event view's photos.
 //
-// Only the lead photo is persisted with the event (`imageUrl` /
-// `imageAttribution`, as before). The rest of the gallery is a few Wikipedia
-// requests away and costs nothing to refetch, so it lives here rather than in
-// a new column — no migration to forget to apply
-// (docs/2026-11-24-event-view-prd.md §5). Same shape and eviction as
-// worldEventCache.ts.
+// The photos are a couple of Wikipedia requests away and cost nothing to
+// refetch, so they live here rather than in a column — no migration to
+// forget to apply (docs/2026-11-24-event-view-prd.md §5, §14). Each entry
+// records the plan it was looked up from (which subjects), so a description
+// that later names different subjects looks again. Same shape and eviction
+// as worldEventCache.ts.
 
 import type { EventPhoto } from '@/types/event'
 
@@ -17,21 +17,23 @@ const BASE_PREFIX = 'timeline_event_photos_'
  *   v2: the article comes from the event's cited Wikipedia source, or a
  *       search result is accepted only if it is relevant — v1 trusted the top
  *       search hit and could cache a gallery from an unrelated article.
+ *   v3: one photo per subject the event is about (the spouse in a marriage),
+ *       never every image on a related article.
  */
-const PREFIX = `${BASE_PREFIX}v2_`
+const PREFIX = `${BASE_PREFIX}v3_`
 
-// Each entry is ≤ 6 URLs and captions, so this is well under 200 KB.
+// Each entry is ≤ 3 URLs and captions, so this is well under 100 KB.
 const MAX_ENTRIES = 150
 
 interface CacheEntry {
-  /** The article the photos came from; null when no relevant one was found. */
-  article: string | null
+  /** What the photos were chosen from; a change means looking again. */
+  basis: string
   photos: EventPhoto[]
   savedAt: number
 }
 
 export interface CachedGallery {
-  article: string | null
+  basis: string
   photos: EventPhoto[]
 }
 
@@ -77,8 +79,8 @@ function evictOldest(): void {
 }
 
 /**
- * The cached gallery and the article it came from, or null when there is
- * none. An empty `photos` is a real answer: no relevant photos.
+ * The cached gallery and what it was chosen from, or null when there is
+ * none. An empty `photos` is a real answer: nothing to show.
  */
 export function getCachedEventPhotos(eventId: string, title: string): CachedGallery | null {
   try {
@@ -86,7 +88,7 @@ export function getCachedEventPhotos(eventId: string, title: string): CachedGall
     if (!raw) return null
     const entry = JSON.parse(raw) as CacheEntry
     if (!Array.isArray(entry.photos)) return null
-    return { article: typeof entry.article === 'string' ? entry.article : null, photos: entry.photos }
+    return { basis: typeof entry.basis === 'string' ? entry.basis : '', photos: entry.photos }
   } catch {
     return null
   }
@@ -95,11 +97,11 @@ export function getCachedEventPhotos(eventId: string, title: string): CachedGall
 export function setCachedEventPhotos(
   eventId: string,
   title: string,
-  article: string | null,
+  basis: string,
   photos: EventPhoto[],
 ): void {
   try {
-    const entry: CacheEntry = { article, photos, savedAt: Date.now() }
+    const entry: CacheEntry = { basis, photos, savedAt: Date.now() }
     localStorage.setItem(key(eventId, title), JSON.stringify(entry))
     evictOldest()
   } catch {
