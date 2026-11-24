@@ -65,6 +65,33 @@ const FACT = /^\s*(where|who|age)\s*:\s*(.*)$/i
 /** A fact line still being streamed: a prefix of a key, with or without its colon. */
 const FACT_PARTIAL = /^\s*(w|wh|whe|wher|where|who|a|ag|age)\s*:?\s*$/i
 
+/**
+ * First-person narration the model writes before (or between) its web
+ * searches — "I'll research this event before writing." The answer is meant
+ * to start at the first bullet, and the prompt asks for a neutral
+ * encyclopedic tone, so a first-person sentence at the very start is never
+ * the description. Text blocks either side of a search are streamed with
+ * nothing between them, so it usually arrives glued to the first bullet
+ * ("…before writing.- In 1973…"): the sentence ends at its punctuation, or
+ * at the end of the text while it is still streaming.
+ */
+const PREAMBLE =
+  /^\s*(?:(?:okay|ok|sure|alright|great|now)[,.!]?\s+)?(?:I'll|I will|I'm going to|I am going to|I need to|I'm|I am|I have|I've|Let me|Let's|First,?\s+(?:I'll|let me))\b[^\n]*?(?:[.!?:…]+(?=\s|[-*•]|[A-Z]|$)|$)/i
+
+/** A short lead-in glued to the first bullet: "Here is the summary:- In 1973…". */
+const GLUED_LEAD_IN = /^\s*[^\n]{1,200}?[.!?:]\s*([-*•]\s+[^\n]*)$/
+
+/** Drop the model's narration ahead of the answer, however many sentences of it. */
+function stripPreamble(text: string): string {
+  let out = text
+  for (let guard = 0; guard < 5; guard++) {
+    const m = out.match(PREAMBLE)
+    if (!m || m[0].length === 0) break
+    out = out.slice(m[0].length)
+  }
+  return out
+}
+
 /** Bold markers are the one bit of markdown models add unasked. */
 function clean(text: string): string {
   return text.replace(/\*\*/g, '').trim()
@@ -118,9 +145,26 @@ export function parseEventDescription(
 ): ParsedEventDescription {
   if (!text) return { summary: [], paragraphs: [], facts: {} }
 
-  const { rest: lines, facts } = takeFacts(text.replace(/\r\n?/g, '\n').split('\n'))
+  const { rest: lines, facts } = takeFacts(
+    stripPreamble(text.replace(/\r\n?/g, '\n')).split('\n'),
+  )
   let i = 0
   while (i < lines.length && lines[i].trim() === '') i++
+
+  // A short line that is not a bullet, directly ahead of the bullets, is a
+  // lead-in ("Here's what I found:") rather than the story — drop it, whether
+  // it sits on its own line or is glued to the first bullet.
+  if (i < lines.length && !BULLET.test(lines[i])) {
+    let next = i + 1
+    while (next < lines.length && lines[next].trim() === '') next++
+    const bulletsFollow = next < lines.length && BULLET.test(lines[next])
+    const glued = lines[i].match(GLUED_LEAD_IN)
+    if (glued && (bulletsFollow || next >= lines.length)) {
+      lines[i] = glued[1]
+    } else if (bulletsFollow && lines[i].trim().length <= 200) {
+      i = next
+    }
+  }
 
   const summary: string[] = []
   for (; i < lines.length; i++) {

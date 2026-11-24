@@ -723,12 +723,7 @@ export function EventDetailPanel<E extends EnrichableEvent>({
                     {paragraphs.length > 0 ? (
                       <div className="flex flex-col gap-[16px] max-w-[62ch]">
                         {paragraphs.map((para, i) => (
-                          <p
-                            key={i}
-                            className="m-0 whitespace-pre-wrap font-['Avenir',sans-serif] text-[16px] lg:text-[17px] leading-[1.7] text-[#C4C7CC]"
-                          >
-                            {para}
-                          </p>
+                          <StoryParagraph key={i} text={para} accent={accent} />
                         ))}
                       </div>
                     ) : (
@@ -822,6 +817,59 @@ export function EventDetailPanel<E extends EnrichableEvent>({
       />
     </>,
     document.body,
+  )
+}
+
+/** A line the model started with a list marker. */
+const STORY_BULLET = /^\s*[-*•]\s+/
+
+/**
+ * One paragraph of the story. The prompt asks for plain paragraphs, but when a
+ * model slips into a list anyway, its "- " lines are drawn as real bullets
+ * (the Summary's dots) rather than shown as typed dashes.
+ */
+function StoryParagraph({ text, accent }: { text: string; accent: string }) {
+  const textClass =
+    "font-['Avenir',sans-serif] text-[16px] lg:text-[17px] leading-[1.7] text-[#C4C7CC]"
+  const lines = text.split('\n')
+  if (!lines.some((line) => STORY_BULLET.test(line))) {
+    return <p className={`m-0 whitespace-pre-wrap ${textClass}`}>{text}</p>
+  }
+
+  // Runs of marker lines become lists; anything between them stays a paragraph.
+  const blocks: { list: boolean; lines: string[] }[] = []
+  for (const line of lines) {
+    if (!line.trim()) continue
+    const list = STORY_BULLET.test(line)
+    const last = blocks[blocks.length - 1]
+    const content = list ? line.replace(STORY_BULLET, '') : line
+    if (last && last.list === list) last.lines.push(content)
+    else blocks.push({ list, lines: [content] })
+  }
+
+  return (
+    <div className="flex flex-col gap-[10px]">
+      {blocks.map((block, i) =>
+        block.list ? (
+          <ul key={i} className="m-0 p-0 list-none flex flex-col gap-[10px]">
+            {block.lines.map((item, j) => (
+              <li key={j} className="flex gap-[12px] items-start">
+                <span
+                  aria-hidden="true"
+                  className="mt-[11px] w-[6px] h-[6px] rounded-full shrink-0"
+                  style={{ backgroundColor: accent }}
+                />
+                <span className={textClass}>{item}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p key={i} className={`m-0 whitespace-pre-wrap ${textClass}`}>
+            {block.lines.join('\n')}
+          </p>
+        ),
+      )}
+    </div>
   )
 }
 
