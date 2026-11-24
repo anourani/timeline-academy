@@ -111,17 +111,6 @@ export function setCachedEventPhotos(
   }
 }
 
-/** Remove clears an event's details; its gallery goes with them. */
-export function clearCachedEventPhotos(eventId: string): void {
-  try {
-    for (const k of allCacheKeys()) {
-      if (k.startsWith(`${PREFIX}${eventId}:`)) localStorage.removeItem(k)
-    }
-  } catch {
-    // ignore
-  }
-}
-
 /** Sign-out: what a person looked at stays with them, not with the device. */
 export function clearAllEventPhotos(): void {
   try {

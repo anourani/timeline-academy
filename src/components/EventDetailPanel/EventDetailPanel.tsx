@@ -17,7 +17,6 @@ import { focusEventBar, useEventMorph } from './useEventMorph'
 import { fetchSubjectPhotos } from '@/services/wikipediaPhotos'
 import { articleFromSources, photoSubjects } from '@/services/wikipediaArticle'
 import {
-  clearCachedEventPhotos,
   getCachedEventPhotos,
   setCachedEventPhotos,
 } from '@/services/eventPhotoCache'
@@ -25,8 +24,9 @@ import {
 // The event view: clicking an event opens it as a full page, grown out of the
 // bar that was clicked (docs/2026-11-24-event-view-prd.md). It replaced a
 // 352px right-hand panel, and kept that panel's whole behaviour — generation
-// on open, streaming, the scroll pin, persistence, Regenerate / Remove,
-// Edit / Delete — under a new layout and a new way in and out.
+// on open, streaming, the scroll pin, persistence, Regenerate,
+// Edit / Delete — under a new layout and a new way in and out. (The panel's
+// Remove button, which cleared an event's details, was dropped.)
 //
 // The component name and props are the panel's, so both mount points (the
 // editor and the shared viewer) changed only by passing categories and
@@ -42,7 +42,7 @@ interface EventDetailPanelProps<E extends EnrichableEvent> {
   onEventChange: (updated: E) => void
   /**
    * A World Events entry: context, not the user's content. Nothing in the
-   * view may change it — no Edit or Delete, and no Regenerate or Remove —
+   * view may change it — no Edit or Delete, and no Regenerate —
    * but its description still generates on open, like any event's.
    */
   readOnly?: boolean
@@ -110,7 +110,6 @@ export function EventDetailPanel<E extends EnrichableEvent>({
   const [sources, setSources] = useState<EventSource[]>([])
   const [errorMessage, setErrorMessage] = useState('')
   const [errorProvider, setErrorProvider] = useState<ByokProvider | null>(null)
-  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false)
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
@@ -367,12 +366,12 @@ export function EventDetailPanel<E extends EnrichableEvent>({
     if (!open) return
     const handleKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
-      if (showRemoveConfirm || showRegenerateConfirm || showDeleteConfirm) return
+      if (showRegenerateConfirm || showDeleteConfirm) return
       onClose()
     }
     document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
-  }, [open, onClose, showRemoveConfirm, showRegenerateConfirm, showDeleteConfirm])
+  }, [open, onClose, showRegenerateConfirm, showDeleteConfirm])
 
   // A confirmation left open when the view closes would reappear over the next
   // event opened.
@@ -446,19 +445,6 @@ export function EventDetailPanel<E extends EnrichableEvent>({
   function handleRegenerate() {
     if (!event) return
     setShowRegenerateConfirm(true)
-  }
-
-  function handleRemove() {
-    if (!event) return
-    clearCachedEventPhotos(event.id)
-    onEventChange({
-      ...event,
-      description: null,
-      imageUrl: null,
-      imageAttribution: null,
-      sources: null,
-    })
-    onClose()
   }
 
   if (typeof document === 'undefined' || !visible || !view) return null
@@ -593,17 +579,19 @@ export function EventDetailPanel<E extends EnrichableEvent>({
           </div>
 
           {/* The page. Two columns from `lg` (title, At a glance, summary |
-              photos, story, sources); one below it, where `contents` lets the
-              two column wrappers dissolve so `order` can interleave them:
-              photos, title, At a glance, summary, story, sources. */}
+              photos, story, sources) — with or without photos, so an event
+              that has none keeps the same shape and its story simply starts
+              at the top of the right column. One column below `lg`, where
+              `contents` lets the two column wrappers dissolve so `order` can
+              interleave them: photos, title, At a glance, summary, story,
+              sources. There the photo runs up under the top bar, hence the
+              negative margin when there is one. */}
           <div
-            className={`flex flex-col w-full mx-auto pb-[64px] lg:px-[48px] ${
-              hasPhotoArea
-                ? '-mt-[64px] lg:mt-0 lg:flex-row lg:items-start lg:gap-[64px] max-w-[1296px]'
-                : 'max-w-[816px]'
+            className={`flex flex-col w-full max-w-[1296px] mx-auto pb-[64px] lg:px-[48px] lg:flex-row lg:items-start lg:gap-[64px] ${
+              hasPhotoArea ? '-mt-[64px] lg:mt-0' : ''
             }`}
           >
-            <div className={hasPhotoArea ? 'contents lg:flex lg:flex-col lg:flex-1 lg:min-w-0 lg:max-w-[520px]' : 'contents'}>
+            <div className="contents lg:flex lg:flex-col lg:flex-1 lg:min-w-0 lg:max-w-[520px]">
               <header data-morph-stage="header" className="order-2 px-[20px] lg:px-0 pt-[20px] lg:pt-[8px]">
                 <div className="flex flex-wrap items-center gap-[8px]">
                   {(category || isWorldEvent) && (
@@ -683,7 +671,7 @@ export function EventDetailPanel<E extends EnrichableEvent>({
               </div>
             </div>
 
-            <div className={hasPhotoArea ? 'contents lg:flex lg:flex-col lg:w-[640px] lg:shrink-0' : 'contents'}>
+            <div className="contents lg:flex lg:flex-col lg:w-[640px] lg:shrink-0">
               <div data-morph-stage="photo" className="order-1">
                 <PhotoViewer
                   // Remount per event: resets the index and what has loaded.
@@ -695,7 +683,14 @@ export function EventDetailPanel<E extends EnrichableEvent>({
                 />
               </div>
 
-              <div data-morph-stage="content" className="order-5 px-[20px] lg:px-0 mt-[36px] lg:mt-[40px]">
+              <div
+                data-morph-stage="content"
+                // Under the photos when there are some; otherwise level with
+                // the top of the left column.
+                className={`order-5 px-[20px] lg:px-0 mt-[36px] ${
+                  hasPhotoArea ? 'lg:mt-[40px]' : 'lg:mt-[8px]'
+                }`}
+              >
                 {showStory && (
                   <PageSection label="The story">
                     {paragraphs.length > 0 ? (
@@ -746,12 +741,9 @@ export function EventDetailPanel<E extends EnrichableEvent>({
                 )}
 
                 {showFooter && (
-                  <div className="mt-[40px] flex gap-[10px] max-w-[360px]">
+                  <div className="mt-[40px] flex max-w-[180px]">
                     <FooterButton onClick={handleRegenerate} disabled={state === 'generating'}>
                       Regenerate
-                    </FooterButton>
-                    <FooterButton onClick={() => setShowRemoveConfirm(true)} disabled={state === 'generating'}>
-                      Remove
                     </FooterButton>
                   </div>
                 )}
@@ -760,16 +752,6 @@ export function EventDetailPanel<E extends EnrichableEvent>({
           </div>
         </div>
       </div>
-
-      <ConfirmationModal
-        isOpen={showRemoveConfirm}
-        onClose={() => setShowRemoveConfirm(false)}
-        onConfirm={handleRemove}
-        title="Remove event details"
-        message="This will clear the description, image, and sources for this event. The event itself will not be deleted."
-        confirmLabel="Remove"
-        cancelLabel="Cancel"
-      />
 
       <ConfirmationModal
         isOpen={showDeleteConfirm}

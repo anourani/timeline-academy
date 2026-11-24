@@ -176,7 +176,7 @@ The switch itself lives in the **dock** (`FloatingToolbar/ModeTabs.tsx`), not th
 | Timeline title (`GlobalNav`) | Editable `<input>`. | Static `<p>`. |
 | Dock buttons | Add Event, Events, Settings. | Add Event and Settings collapse to zero width and fade out; Events stays. |
 | Mode tabs in the dock | Desktop only. | Desktop, plus the mobile footer — so a window narrowed while presenting can still get back. |
-| Event view footer (`EventDetailPanel`) | Regenerate / Remove shown. | Hidden (`showFooter`). |
+| Event view footer (`EventDetailPanel`) | Regenerate shown. | Hidden (`showFooter`). |
 | `EventTableEditor` (events drawer) | Full editor: Categories tab, editable cells (desktop only — see [Events Drawer](#events-drawer)), row add/delete, category reorder, Cancel/Save. | Reader: Categories tab absent, cells static, no delete column, no Add/Save, Cancel becomes **Close**. The category filter chips and the sort stay — they are reading affordances — but the "Edit categories →" chip goes. |
 
 Switching to view mode closes the Settings panel and the Add Event dialog (`App.tsx`'s `onModeChange`); the events drawer is allowed to stay open, because it has a read-only form. Both closes are defensive — each of those surfaces renders a modal backdrop above the dock, so neither can actually be open at the moment the tabs are clicked.
@@ -440,7 +440,7 @@ A read-only lane of context events drawn below the event band. It is switched on
 - `'loading'`: the `StreamingSkeleton` bars show, riding a sticky, viewport-wide strip so they stay in view at any scroll.
 - `'error'`: the lane is hidden, and the Design menu's subtitle explains and offers a retry.
 
-**Read-only.** No `onPointerDown`, so no drag. A click opens the event view (`EventDetailPanel`) with `readOnly`, which hides Edit/Delete and Regenerate/Remove. Descriptions still generate on open. Ids start `we:`; the page routes the panel's write-back for those to `useWorldEvents.updateEvent`, never to the timeline's events.
+**Read-only.** No `onPointerDown`, so no drag. A click opens the event view (`EventDetailPanel`) with `readOnly`, which hides Edit/Delete and Regenerate. Descriptions still generate on open. Ids start `we:`; the page routes the panel's write-back for those to `useWorldEvents.updateEvent`, never to the timeline's events.
 
 ---
 
@@ -593,7 +593,7 @@ Both are hidden in view mode. `Timeline` no longer takes an `onDeleteEvent` prop
 
 Clicking an event opens it as a full page: `EventDetailPanel` (the name predates the page; it replaced a 352px right-hand panel in Nov 2026). Spec: `docs/2026-11-24-event-view-prd.md`.
 
-**Layout.** A fixed `z-50` layer portalled to `<body>`, `role="dialog"`, background `#0B0B0B`, scrolling inside itself under a sticky top bar (Close; Edit / Delete in edit mode). From `lg` two columns — title block (category and chapter chips, `h1`), At a glance, Summary | `PhotoViewer`, The story, Sources, Regenerate / Remove — and one below it, where both column wrappers are `display: contents` so `order` can interleave their children: photos, title, At a glance, summary, story, sources. With no photos and nothing searching, one centred 720px column.
+**Layout.** A fixed `z-50` layer portalled to `<body>`, `role="dialog"`, background `#0B0B0B`, scrolling inside itself under a sticky top bar (Close; Edit / Delete in edit mode). From `lg` two columns — title block (category and chapter chips, `h1`), At a glance, Summary | `PhotoViewer`, The story, Sources, Regenerate — and one below it, where both column wrappers are `display: contents` so `order` can interleave their children: photos, title, At a glance, summary, story, sources. An event with no photos keeps the two columns: the photo slot renders nothing and the story starts at the top of the right column.
 
 **The morph** (`useEventMorph.ts`, timings in `src/constants/motion.ts`). The page grows out of the clicked bar and shrinks back into it, through the Web Animations API so an interrupted open can `reverse()` from where it is:
 
@@ -610,7 +610,7 @@ Clicking an event opens it as a full page: `EventDetailPanel` (the name predates
 2. **`fetchSubjectPhotos`** (`wikipediaPhotos.ts`) takes each survivor as an exact English Wikipedia title (redirects followed, disambiguation pages skipped) and drops any whose short description marks it as a publication, an award or a place (`NEVER_PICTURED`) — "Named Fortune Businessperson of the Year" is not about Fortune.
 3. Its photo is that article's lead image, photographs only (JPEG/PNG/WebP, so an SVG logo or map is dropped), at most three.
 
-A World Events entry uses its fact-checked `article` directly. Nothing is ever searched for. Earlier schemes — the top search hit; every image on a relevant article; anything the model named — each put unrelated pictures on events. The result is cached per event with the subjects it came from in `eventPhotoCache.ts` (localStorage, versioned, cleared by Remove and on sign-out). `events.image_url` is no longer read or written by the view; values stored before this are left alone.
+A World Events entry uses its fact-checked `article` directly. Nothing is ever searched for. Earlier schemes — the top search hit; every image on a relevant article; anything the model named — each put unrelated pictures on events. The result is cached per event with the subjects it came from in `eventPhotoCache.ts` (localStorage, versioned, cleared on sign-out). `events.image_url` is no longer read or written by the view; values stored before this are left alone.
 
 **At a glance.** When is computed from the event's dates (`utils/eventWhen.ts`); Where, Who and Age are the description's trailing fact lines (its `Pictured` line drives the photos instead) (see [Data Flow & Persistence](#data-flow--persistence) › Event descriptions).
 

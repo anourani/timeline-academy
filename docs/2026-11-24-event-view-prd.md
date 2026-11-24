@@ -311,6 +311,8 @@ Built on `godin/dreamy-gauss-65s815` in three commits (layout + morph; gallery; 
   - The prompt says the same, and says most events have no `Pictured` line.
   - The same photo can still appear on two events whose titles both name the same thing ("Co-founds Nvidia", "Nvidia goes public").
   - The lead image in `events.image_url` is no longer read or written.
+- **No photos keeps the two columns (§5 said one centred column).** On desktop the story and sources move to the top of the right column, so every event has the same shape.
+- **The Remove button is gone (§3, §7).** Regenerate is the only footer action.
 - **Not built yet:**
   - The full-screen photo view (§5, open question 1).
   - Browser-back closing the view (§9). Back still leaves the route, exactly as it did with the side panel.
