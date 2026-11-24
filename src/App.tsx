@@ -1602,6 +1602,8 @@ export function App() {
         event={detailPanelEvent}
         timelineTitle={title}
         mode={mode}
+        categories={streamCategories}
+        chapters={streamChapters}
         onClose={() => setDetailPanelEvent(null)}
         readOnly={detailPanelEvent !== null && isWorldEventId(detailPanelEvent.id)}
         onEventChange={(updated) => {

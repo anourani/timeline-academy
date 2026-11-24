@@ -262,6 +262,8 @@ export function TimelineViewer() {
         event={detailPanelEvent}
         timelineTitle={timeline.title}
         mode="view"
+        categories={timeline.categories}
+        chapters={timeline.chapters}
         readOnly={detailPanelEvent !== null && 'source' in detailPanelEvent}
         onClose={() => setDetailPanelEvent(null)}
         onEventChange={(updated) => {
