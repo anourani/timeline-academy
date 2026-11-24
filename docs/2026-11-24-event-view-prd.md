@@ -1,6 +1,6 @@
 # Event view: open an event as a full page
 
-PRD · Proposed, not built · Nov 24, 2026 · written against `d86c199` · design direction **E** in *Immersive Event View* (claude.ai canvas, frames `E-Feature` and `E-Feature-Mobile`)
+PRD · Built, not yet verified live · Nov 24, 2026 · written against `d86c199`; see §14 for what the build changed · design direction **E** in *Immersive Event View* (claude.ai canvas, frames `E-Feature` and `E-Feature-Mobile`)
 
 | | |
 |---|---|
@@ -290,3 +290,29 @@ There is no test suite, so every item is checked by hand. Run `npx tsc --noEmit 
 2. **Persist the gallery** in an `events.photos` column later, so shared viewers don't refetch? Not needed for launch.
 3. **Photo relevance.** `generator=images` returns everything on the page, including maps and diagrams the filter may miss. If quality is poor in testing, fall back to the lead image plus the article's infobox and gallery sections only.
 4. **"Age" wording.** "Age 30" vs "Aged 30" vs "30 years old". Pick one, and use it in the prompt shape too.
+
+## 14. As built
+
+Built on `godin/dreamy-gauss-65s815` in three commits (layout + morph; gallery; At a glance + prompt). The mechanism is documented in `src/TIMELINE_ARCHITECTURE.md` §Event View. Where the build differs from the sections above:
+
+- **No separate selection-ring step (§4, row 0).** The morph starts on the click itself, with no 80ms wait: the layer begins as the bar's exact rectangle and tint, so the bar lifting *is* the feedback.
+- **Two columns from `lg` (1024px), not `md`.** Below that the page is one column with the photos first, on tablets as well as phones.
+- **Close (§4).** The bar's tint returns only in the last half of the shrink; earlier it washed the whole screen orange. The timeline's push-back scale is dropped once the open finishes and re-applied for the close. Left on, it overhangs the viewport, and phone browsers widened the page to fit it. `<html>` is also `overflow: hidden` while the view is up.
+- **Duration (§6)** is elapsed time ("July 16 – 24" is "8 days"), not inclusive days.
+- **The gallery (§5) is fetched for every open**, cached events included, unless it is already in the browser cache. The persisted lead image shows until the gallery arrives.
+- **Not built yet:**
+  - The full-screen photo view (§5, open question 1).
+  - Browser-back closing the view (§9). Back still leaves the route, exactly as it did with the side panel.
+
+**Checked so far.** Checked in a local dev build with stand-in Wikipedia responses (this environment can't reach Wikipedia or the Supabase backend), on desktop (1440 × 900) and a phone (390 × 844):
+- Open, close, Esc mid-open, and reduced motion.
+- Focus moving to Close and back to the bar, and the editor made inert then restored.
+- Gallery filtering and order, thumbnails, and arrow keys staying within the event.
+- At a glance with and without fact lines.
+- The description parser, against new, old, mid-stream and malformed text.
+
+**Still to check live:**
+- The real Wikipedia gallery quality (open question 3).
+- The prompt producing fact lines with both BYOK providers and the server path.
+- The CSP on production.
+- The §12 checklist on a deploy preview.

@@ -15,7 +15,7 @@ import type { ByokProvider } from '@/types/ai'
 import { PROVIDER_META } from '@/constants/byokProviders'
 import { getKey } from '@/services/userApiKey'
 import { PhotoViewer } from './PhotoViewer'
-import { AtAGlance } from './AtAGlance'
+import { AtAGlance, type GlanceRow } from './AtAGlance'
 import { focusEventBar, useEventMorph } from './useEventMorph'
 import { fetchEventPhotos } from '@/services/wikipediaPhotos'
 import {
@@ -488,7 +488,14 @@ export function EventDetailPanel<E extends EnrichableEvent>({
   const displayAttribution = state === 'loaded' ? view.imageAttribution ?? imageAttribution : imageAttribution
   const displaySources = state === 'loaded' ? view.sources ?? sources : sources
 
-  const { summary, paragraphs } = parseEventDescription(description)
+  const { summary, paragraphs, facts } = parseEventDescription(description)
+  // The model's At a glance rows, in a fixed order. They stream last, so while
+  // generating with none yet, one skeleton row holds their place.
+  const factRows: GlanceRow[] = [
+    facts.where ? { label: 'Where', value: facts.where } : null,
+    facts.who ? { label: 'Who', value: facts.who } : null,
+    facts.age ? { label: 'Age', value: facts.age } : null,
+  ].filter((row): row is GlanceRow => row !== null)
   const generating = state === 'generating'
   // Nothing has streamed yet: the model is still searching, and there is no
   // telling whether a summary is coming (a new edge function) or not (an old
@@ -645,7 +652,7 @@ export function EventDetailPanel<E extends EnrichableEvent>({
               </header>
 
               <div data-morph-stage="content" className="order-3 px-[20px] lg:px-0 mt-[24px] lg:mt-[30px]">
-                <AtAGlance when={when} rows={[]} pending={false} />
+                <AtAGlance when={when} rows={factRows} pending={generating} />
               </div>
 
               <div data-morph-stage="content" className="order-4 px-[20px] lg:px-0 mt-[36px]">

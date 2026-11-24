@@ -49,7 +49,8 @@ src/
 │                     #   llmShared (provider-neutral), eventEnrichment,
 │                     #   llmPrompts, userApiKey, viewerEventCache,
 │                     #   worldEvents + worldEventCache (the World Events lane),
-│                     #   wikipediaSearch, wikipediaImage
+│                     #   wikipediaSearch, wikipediaImage, wikipediaPhotos +
+│                     #   eventPhotoCache (the event view's gallery)
 ├── utils/            # Helpers (excelSheet/excelExport, dateUtils,
 │                     #   eventStacking, draftStorage, saveEvents, etc.)
 ├── types/            # TypeScript type definitions (event.ts, timeline.ts)
@@ -175,7 +176,7 @@ That sentence is the whole model. Everything below is how it is enforced.
 
 Everything in `docs/` is dated and written against a named commit, so read the status line at the top before trusting the body. Newest first:
 
-- `2026-11-24-event-view-prd.md` — clicking an event opens a full-page event view (photos + At a glance, then summary → story → sources), with the clicked bar morphing into the page as the defining animation (proposed, not built).
+- `2026-11-24-event-view-prd.md` — clicking an event opens a full-page event view (photo gallery + At a glance, then summary → story → sources), with the clicked bar morphing into the page as the defining animation (built, not yet verified live; mechanism in `TIMELINE_ARCHITECTURE.md` §Event View).
 - `2026-11-08-event-panel-tldr-plan.md` — the event details panel as summary → story → sources, with the summary stored inside `description` (built, not yet verified live).
 - `2026-10-21-events-drawer-prd.md` — the events drawer as a full-height bottom drawer (shipped).
 - `2026-09-29-product-cleanup-review.md` — nine weighted fixes plus the dead-code sweep; **done**. The list of what was deleted and why is here, so check it before "restoring" something.

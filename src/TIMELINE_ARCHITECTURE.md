@@ -28,6 +28,7 @@
 14. [Scroll-to-Target](#scroll-to-target)
 15. [Add-Event Cursor](#add-event-cursor)
 16. [Event Hover Cursor](#event-hover-cursor)
+16a. [Event View](#event-view)
 17. [Event Form Dialog](#event-form-dialog)
 17a. [Events Drawer](#events-drawer)
 18. [Scale / Zoom System](#scale--zoom-system)
@@ -170,12 +171,12 @@ The switch itself lives in the **dock** (`FloatingToolbar/ModeTabs.tsx`), not th
 | Add-Event Cursor (hover band) | Rendered when `onAddEvent` is provided, except while the pointer is over an event. | Not rendered. |
 | Hover an event | Native cursor hidden, `EventHoverCursor` drawn in its place. | Same. |
 | Click on event | Calls `onOpenDetails(event)`. | Calls `onOpenDetails(event)`. |
-| `EventDetailPanel` header | Edit / Delete shown. | Hidden. |
+| Event view top bar (`EventDetailPanel`) | Edit / Delete shown. | Hidden. |
 | Click on a month cell | Opens the `EventForm` Dialog seeded with that month's first day. | No-op (`handleMonthClick` returns early). |
 | Timeline title (`GlobalNav`) | Editable `<input>`. | Static `<p>`. |
 | Dock buttons | Add Event, Events, Settings. | Add Event and Settings collapse to zero width and fade out; Events stays. |
 | Mode tabs in the dock | Desktop only. | Desktop, plus the mobile footer — so a window narrowed while presenting can still get back. |
-| `EventDetailPanel` footer | Regenerate / Remove shown. | Hidden (`showFooter`). |
+| Event view footer (`EventDetailPanel`) | Regenerate / Remove shown. | Hidden (`showFooter`). |
 | `EventTableEditor` (events drawer) | Full editor: Categories tab, editable cells (desktop only — see [Events Drawer](#events-drawer)), row add/delete, category reorder, Cancel/Save. | Reader: Categories tab absent, cells static, no delete column, no Add/Save, Cancel becomes **Close**. The category filter chips and the sort stay — they are reading affordances — but the "Edit categories →" chip goes. |
 
 Switching to view mode closes the Settings panel and the Add Event dialog (`App.tsx`'s `onModeChange`); the events drawer is allowed to stay open, because it has a read-only form. Both closes are defensive — each of those surfaces renders a modal backdrop above the dock, so neither can actually be open at the moment the tabs are clicked.
@@ -439,7 +440,7 @@ A read-only lane of context events drawn below the event band. It is switched on
 - `'loading'`: the `StreamingSkeleton` bars show, riding a sticky, viewport-wide strip so they stay in view at any scroll.
 - `'error'`: the lane is hidden, and the Design menu's subtitle explains and offers a retry.
 
-**Read-only.** No `onPointerDown`, so no drag. A click opens `EventDetailPanel` with `readOnly`, which hides Edit/Delete and Regenerate/Remove. Descriptions still generate on open. Ids start `we:`; the page routes the panel's write-back for those to `useWorldEvents.updateEvent`, never to the timeline's events.
+**Read-only.** No `onPointerDown`, so no drag. A click opens the event view (`EventDetailPanel`) with `readOnly`, which hides Edit/Delete and Regenerate/Remove. Descriptions still generate on open. Ids start `we:`; the page routes the panel's write-back for those to `useWorldEvents.updateEvent`, never to the timeline's events.
 
 ---
 
@@ -574,17 +575,38 @@ A translucent vertical band that follows the user's hovered month while the time
 - The only React state involved is `isOverEvent` in `Timeline`, which flips on enter/exit (not per move) to suppress the Add-Event Cursor band — the two affordances never appear together.
 - **Suppressed during drag** (`dragState.isDragging`), where the existing `cursor: grabbing` applies instead.
 - **`prefers-reduced-motion`**: no trail, no breathe, no press scale; the disc appears and follows with 0ms transitions.
-- **Coarse pointers** get no following cursor. `pointerType !== 'mouse'` skips the hover path entirely; a tap instead fires one 44px `bloom()` at the tap point as launch feedback, and the detail panel opens.
+- **Coarse pointers** get no following cursor. `pointerType !== 'mouse'` skips the hover path entirely; a tap instead fires one 44px `bloom()` at the tap point as launch feedback, and the event view opens.
 - **Keyboard / screen readers** never see the cursor. Events are `role="button"` with `tabIndex={0}`, an `aria-label` of `"{title}, {dates}. Open details"`, Enter/Space activation, and a 2px `:focus-visible` outline in the category colour (`.timeline-event:focus-visible` in `index.css`, colour passed inline as `--event-focus-color`). The native `title` tooltip was dropped — the OS tooltip fights the custom cursor and the aria-label carries the same content.
 
 ### Where Edit and Delete went
 
-`EventActionsMenu` has been removed. A left click on an event always calls `onOpenDetails(event)`, in edit and view mode alike, which opens `EventDetailPanel`. The panel's header carries the two edit-mode authoring actions:
+`EventActionsMenu` has been removed. A left click on an event always calls `onOpenDetails(event)`, in edit and view mode alike, which opens the event view (`EventDetailPanel`, see [Event View](#event-view)). Its top bar carries the two edit-mode authoring actions:
 
 - **Edit** → the page sets `pendingEditEventId` and closes the panel; `Timeline` consumes that prop, opens its `EventForm` Dialog on the matching event, and clears it via `onEditRequestHandled` (the same controlled-prop pattern as `pendingScrollTarget` / `onScrollComplete`, because the panel is mounted by the page and sits outside `Timeline`'s subtree).
 - **Delete** → confirms through `ConfirmationModal`, then calls the page's delete handler and closes the panel.
 
 Both are hidden in view mode. `Timeline` no longer takes an `onDeleteEvent` prop.
+
+---
+
+## Event View
+
+Clicking an event opens it as a full page: `EventDetailPanel` (the name predates the page; it replaced a 352px right-hand panel in Nov 2026). Spec: `docs/2026-11-24-event-view-prd.md`.
+
+**Layout.** A fixed `z-50` layer portalled to `<body>`, `role="dialog"`, background `#0B0B0B`, scrolling inside itself under a sticky top bar (Close; Edit / Delete in edit mode). From `lg` two columns — title block (category and chapter chips, `h1`), At a glance, Summary | `PhotoViewer`, The story, Sources, Regenerate / Remove — and one below it, where both column wrappers are `display: contents` so `order` can interleave their children: photos, title, At a glance, summary, story, sources. With no photos and nothing searching, one centred 720px column.
+
+**The morph** (`useEventMorph.ts`, timings in `src/constants/motion.ts`). The page grows out of the clicked bar and shrinks back into it, through the Web Animations API so an interrupted open can `reverse()` from where it is:
+
+- The layer's `clip-path: inset(…)` starts at the bar's on-screen rectangle (found by `[data-event-id]`, clamped to the viewport) with its 4px radius, and opens to the viewport; its background crossfades from the bar's tint (`${color}73`, read from `data-event-color`) to the page colour.
+- `#root` — the whole editor or viewer; the layer is outside it — scales to 1.15 around the bar's centre and fades out. Once the open finishes the scale is dropped (the root is invisible by then): left on, it overhangs the viewport and a phone browser widens its layout viewport to fit. `<html>` is `overflow: hidden` while the view is up for the same reason, and to stop the page behind from scrolling.
+- Children marked `data-morph-stage` (`header`, `photo`, `content`) fade and rise in at fixed delays; `content` elements stagger in DOM order.
+- Close re-measures the bar (`#root` is un-scaled first; the layer hides the jump), fades the stages, shrinks the clip back to the bar with the tint returning only in the last half, and hands over to the real bar in the final frames. Without a bar on screen it fades and drops; with `prefers-reduced-motion` both directions are a short crossfade.
+
+**Lifecycle.** The page passes `event` and clears it to close, so the component keeps the last event in `retainedRef` and stays mounted (`present`) until the close animation resolves. Generation starts on click, not after the animation. `#root` is `inert` while the view is up; focus moves to Close at the start of the open, Tab is trapped in the layer, and focus returns to the bar on close. Escape closes unless a confirmation is open. There is no click-outside.
+
+**Photos.** `PhotoViewer` shows up to six: `wikipediaPhotos.ts` finds the event's article and asks en.wikipedia.org for its lead image name and every image on it (`generator=images`, 1600px renditions, Commons metadata), keeping JPEG/PNG/WebP at least 800×500 and dropping page furniture by file name. The gallery is cached per event in `eventPhotoCache.ts` (localStorage, cleared by Remove and on sign-out); only the lead image is persisted on the event, as before, and it stands in until the gallery arrives or when it finds nothing. Left/Right move between photos while focus is in the viewer — never between events.
+
+**At a glance.** When is computed from the event's dates (`utils/eventWhen.ts`); Where, Who and Age are the description's trailing fact lines (see [Data Flow & Persistence](#data-flow--persistence) › Event descriptions).
 
 ---
 
@@ -1302,15 +1324,16 @@ list deliberately omits, implying a saved timeline that does not exist.
 
 An enriched event's `description` (in `events.description`, on drafts, and in `viewerEventCache`) is stored exactly as the model streamed it. Since Nov 2026 the enrich prompt (`llmPrompts.ts`, mirrored in `enrich-event`) asks for 3–5 `- ` bullets, a blank line, then the description as plain paragraphs. There is no separate summary column, on purpose: an unapplied migration would fail every save, while text in an existing column can't.
 
-`parseEventDescription` (`src/utils/eventDescription.ts`) is the only reader of the format. It splits the string into `summary` and `paragraphs`, and runs on every render of the detail panel, so it must accept every shape a description can be in:
+`parseEventDescription` (`src/utils/eventDescription.ts`) is the only reader of the format. It splits the string into `summary`, `paragraphs` and `facts`, and runs on every render of the event view, so it must accept every shape a description can be in:
 
 - **The new shape, complete** → Summary, The story, Sources.
 - **Mid-stream** — a bare `-`, a half-written bullet, bullets with no story yet. The panel keeps a story skeleton under the bullets until the first paragraph lands.
 - **The old shape** — written before the prompt changed, or by an edge function the site has outrun → no bullets, so no Summary section; the paragraphs render as the story, as before. Regenerate moves an event to the new shape; there is no backfill.
+- **Fact lines** (Nov 2026) — after the story, a blank line and up to three `Where:` / `Who:` / `Age:` lines for the event view's At a glance list, returned as `facts`. Only a final block made entirely of those keys counts (bold stripped), so a paragraph that starts "Who…" stays story; a half-written key on the last line is held back rather than flashed as a paragraph. They come last for deploy skew: an old cached site shows them as one closing paragraph instead of losing its summary.
 
 The summary ends at the first non-bullet line, blank or not. Text the model writes before its first bullet (a "Let me search…" preamble) therefore suppresses the summary rather than being shown as one; the prompt forbids it.
 
-The photo above it is `PhotoHeader`, which takes a list of `{ url, attribution }`. Every event stores one image, so the list always holds 0 or 1 today; the swipe, hover arrows and dots for several are built but dormant. See `docs/2026-11-08-event-panel-tldr-plan.md` §7.
+Photos are the event view's gallery, not part of the description — see [Event View](#event-view).
 
 ### Plan limits
 
