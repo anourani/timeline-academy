@@ -190,15 +190,14 @@ Deno.serve(async (req: Request) => {
             },
             body: JSON.stringify({
               model: "claude-sonnet-5",
-              // Sonnet 5 runs adaptive thinking by default and max_tokens caps
-              // thinking PLUS response text, so the old 1024 — sized for the
-              // description alone — would now truncate mid-sentence.
-              //
-              // Thinking stays on rather than being disabled to reclaim the
-              // budget: with it off, Sonnet 5 reaches for tools noticeably
-              // less often, and this call is only worth making if web_search
-              // actually fires. max_tokens is a ceiling, not a charge.
+              // Thinking is off to cut the wait before the first word
+              // (November 2026). It used to stay on because without it
+              // Sonnet 5 reaches for web_search less often, and a call whose
+              // search never fires returns no sources. That trade was
+              // accepted for speed; revisit here if unsourced descriptions
+              // become common. Mirrors `enrich` in src/constants/models.ts.
               max_tokens: 4096,
+              thinking: { type: "disabled" },
               system: SYSTEM_PROMPT,
               tools: [
                 {
