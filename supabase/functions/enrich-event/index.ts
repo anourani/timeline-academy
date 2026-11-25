@@ -46,8 +46,14 @@ Write your answer in exactly this shape, starting with the first bullet and writ
 1. A summary of 3 to 5 bullets. Each bullet is one short sentence on its own line, starting with "- ". The bullets summarize the description that follows and add no facts of their own.
 2. One blank line.
 3. The description, as plain paragraphs separated by blank lines. A simple event gets one paragraph of up to ~150 words. Use more paragraphs only when the event has distinct phases, places or consequences, keeping each one short and the whole description under ~250 words.
+4. One blank line, then up to four fact lines, each on its own line, in exactly this shape and order:
+Where: <the place, as specific as the sources allow>
+Who: <the main people or groups involved, at most four names>
+Age: <the subject's age in whole years when the event began>
+Pictured: <the other person or thing this event's title names, as exact English Wikipedia article titles separated by " | ", at most three>
+Leave out any fact line the sources do not support. Separate the names in the Who line with commas. Write the Age line only when the timeline follows one person's life and this event is part of that life. Most events have no Pictured line. Write it only when the event's title itself names another specific person, organization, product, work or discovery that the event is centrally about and a reader would expect to see: the spouse in a marriage, the company in a founding, the product in a launch, the thing discovered. Never name the timeline's own subject, and never a country, city, venue, publication or award. When the event is about the timeline's subject alone, such as an award, a ranking, a speech, a public appearance, a move or a personal milestone, or when you are unsure, leave the Pictured line out. Name only articles that exist.
 
-Use a neutral encyclopedic tone. No headings, no labels such as "Summary:", no bold or other formatting, and no inline citations or footnotes — sources are listed separately. Do not invent facts that aren't in the search results.`;
+Use a neutral encyclopedic tone. Apart from the fact lines, no headings, no labels such as "Summary:", no bold or other formatting, and no inline citations or footnotes — sources are listed separately. Do not invent facts that aren't in the search results.`;
 
 function buildUserPrompt(req: EnrichRequest): string {
   const lines: string[] = [];
@@ -63,7 +69,7 @@ function buildUserPrompt(req: EnrichRequest): string {
     lines.push(`Timeline context: ${req.timelineTitle}`);
   }
   lines.push(
-    `Use the web_search tool to find sources, then write the summary bullets and the description in the shape described. Output only those — no headings, no source lists.`
+    `Use the web_search tool to find sources, then write the summary bullets, the description and the fact lines in the shape described. Output only those — no headings, no source lists.`
   );
   return lines.join("\n");
 }
@@ -184,15 +190,14 @@ Deno.serve(async (req: Request) => {
             },
             body: JSON.stringify({
               model: "claude-sonnet-5",
-              // Sonnet 5 runs adaptive thinking by default and max_tokens caps
-              // thinking PLUS response text, so the old 1024 — sized for the
-              // description alone — would now truncate mid-sentence.
-              //
-              // Thinking stays on rather than being disabled to reclaim the
-              // budget: with it off, Sonnet 5 reaches for tools noticeably
-              // less often, and this call is only worth making if web_search
-              // actually fires. max_tokens is a ceiling, not a charge.
+              // Thinking is off to cut the wait before the first word
+              // (November 2026). It used to stay on because without it
+              // Sonnet 5 reaches for web_search less often, and a call whose
+              // search never fires returns no sources. That trade was
+              // accepted for speed; revisit here if unsourced descriptions
+              // become common. Mirrors `enrich` in src/constants/models.ts.
               max_tokens: 4096,
+              thinking: { type: "disabled" },
               system: SYSTEM_PROMPT,
               tools: [
                 {

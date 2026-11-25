@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState, useEffect } from 'react';
+import { useCallback, useMemo, useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { Timeline } from '../Timeline/Timeline';
@@ -262,6 +262,8 @@ export function TimelineViewer() {
         event={detailPanelEvent}
         timelineTitle={timeline.title}
         mode="view"
+        categories={timeline.categories}
+        chapters={timeline.chapters}
         readOnly={detailPanelEvent !== null && 'source' in detailPanelEvent}
         onClose={() => setDetailPanelEvent(null)}
         onEventChange={(updated) => {

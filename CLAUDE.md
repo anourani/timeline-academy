@@ -16,10 +16,10 @@ npm run preview   # Preview production build locally
 **Nothing above typechecks.** `npm run build` is bare `vite build`, and `npx tsc --noEmit` at the repo root checks *zero files* — the root tsconfig is `"files": []` with project references, so it exits clean no matter what is broken. The real command is:
 
 ```bash
-npx tsc --noEmit -p tsconfig.app.json   # 10 pre-existing errors on main; add none
+npx tsc --noEmit -p tsconfig.app.json   # 5 pre-existing errors on main; add none
 ```
 
-Run `npm ci` first. Without `node_modules`, `npx` downloads the newest TypeScript instead of the pinned 5.6.2, and that version fails on `baseUrl` being deprecated — one unrelated error, and the ten real ones never get checked.
+Run `npm ci` first. Without `node_modules`, `npx` downloads the newest TypeScript instead of the pinned 5.6.2, and that version fails on `baseUrl` being deprecated — one unrelated error, and the five real ones never get checked.
 
 No test framework is configured — every check is manual. This is the direct reason a five-month drift between this repo and the live project went unnoticed, along with three features that were silently broken in production for months (see `docs/2026-08-05-security-review-handoff.md`).
 
@@ -31,8 +31,9 @@ src/
 │   ├── EventTableEditor/  # The events drawer: Events table (sort, filter, row
 │   │                 #   numbers) + Categories tab. 95dvh bottom drawer at every
 │   │                 #   breakpoint; event rows are read-only below `sm`
-│   ├── FloatingToolbar/  # The dock: Events · Design · Legend · Settings · API Keys · mode
-│   │                 #   tabs (icon-only below `md`). DockMenu is the popover/
+│   ├── FloatingToolbar/  # The dock: Events · Design · Legend · Settings · API Keys (icon-only
+│   │                 #   below `md`). The Edit/Present mode tabs are hidden for now
+│   │                 #   (`SHOW_MODE_TABS`), code kept. DockMenu is the popover/
 │   │                 #   drawer shell the Design, Legend and API Keys menus share
 │   ├── Legal/        # /privacy and /terms pages
 │   ├── Onboarding/   # First-visit welcome modal → tour, + "Getting started" checklist on /
@@ -49,7 +50,8 @@ src/
 │                     #   llmShared (provider-neutral), eventEnrichment,
 │                     #   llmPrompts, userApiKey, viewerEventCache,
 │                     #   worldEvents + worldEventCache (the World Events lane),
-│                     #   wikipediaSearch, wikipediaImage
+│                     #   wikipediaSearch, wikipediaPhotos + wikipediaArticle +
+│                     #   eventPhotoCache (the event view's photos)
 ├── utils/            # Helpers (excelSheet/excelExport, dateUtils,
 │                     #   eventStacking, draftStorage, saveEvents, etc.)
 ├── types/            # TypeScript type definitions (event.ts, timeline.ts)
@@ -175,6 +177,7 @@ That sentence is the whole model. Everything below is how it is enforced.
 
 Everything in `docs/` is dated and written against a named commit, so read the status line at the top before trusting the body. Newest first:
 
+- `2026-11-24-event-view-prd.md` — clicking an event opens a full-page event view (photo gallery + At a glance, then summary → story → sources), with the clicked bar morphing into the page as the defining animation (built, not yet verified live; mechanism in `TIMELINE_ARCHITECTURE.md` §Event View).
 - `2026-11-08-event-panel-tldr-plan.md` — the event details panel as summary → story → sources, with the summary stored inside `description` (built, not yet verified live).
 - `2026-10-21-events-drawer-prd.md` — the events drawer as a full-height bottom drawer (shipped).
 - `2026-09-29-product-cleanup-review.md` — nine weighted fixes plus the dead-code sweep; **done**. The list of what was deleted and why is here, so check it before "restoring" something.

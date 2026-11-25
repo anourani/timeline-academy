@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, KeyboardEvent, ClipboardEvent } from 'react';
+import { useRef, useEffect, useState, KeyboardEvent, ClipboardEvent } from 'react';
 import { DEFAULT_CATEGORIES } from '@/constants/categories';
 
 interface OtpInputProps {

@@ -219,10 +219,14 @@ export const MODELS: ModelDef[] = [
         thinking: { type: 'disabled' },
       },
       enrich: {
-        // Thinking deliberately left on: with it off, Sonnet 5 reaches for
-        // tools noticeably less often, and this call is only worth making if
-        // web_search actually fires.
+        // Thinking off, to cut the wait before the first word (November
+        // 2026). It was left on until then because without it Sonnet 5
+        // reaches for web_search less often, and an enrichment whose search
+        // never fires has an empty Sources list. That trade was accepted for
+        // speed; if unsourced descriptions become common, this is the line
+        // to revisit.
         max_tokens: 4096,
+        thinking: { type: 'disabled' },
         ...ANTHROPIC_WEB_SEARCH,
       },
     },
@@ -261,10 +265,11 @@ export const MODELS: ModelDef[] = [
         output_config: { effort: 'low' },
       },
       enrich: {
-        // Effort left at the API default here, unlike generate: this call
-        // depends on the model deciding to search, and that is the one place
-        // in the app where more reasoning earns its cost.
+        // Thinking can't be switched off safely on Opus 5 (see `generate`),
+        // so low effort is this model's version of Sonnet's `disabled`: the
+        // shortest wait before the description starts.
         max_tokens: THINKING_CEILING,
+        output_config: { effort: 'low' },
         ...ANTHROPIC_WEB_SEARCH,
       },
     },
@@ -299,7 +304,10 @@ export const MODELS: ModelDef[] = [
         output_config: { effort: 'low' },
       },
       enrich: {
+        // `thinking` must stay absent (400 otherwise), so low effort is the
+        // only lever for a shorter wait here.
         max_tokens: THINKING_CEILING,
+        output_config: { effort: 'low' },
         ...ANTHROPIC_WEB_SEARCH,
       },
     },

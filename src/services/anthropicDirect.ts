@@ -115,12 +115,12 @@ export async function enrichEventDirect(
           { role: 'user', content: buildEnrichUserPrompt(event, timelineTitle) },
         ],
         stream: true,
-        // max_tokens and the web_search tool come from the registry: every
-        // model here thinks, and the cap covers thinking PLUS the description,
-        // so the ceiling is per-model. Thinking is deliberately left on for
-        // this call — with it off the model reaches for tools noticeably less
-        // often, and an enrichment whose search never fires produces an empty
-        // Sources list with no error anywhere.
+        // max_tokens, the web_search tool and the thinking setting come from
+        // the registry, per model: thinking is off on Sonnet and at low effort
+        // on Opus and Fable, to shorten the wait before the first word. The
+        // known cost is that a model thinking less searches less often, and
+        // an enrichment whose search never fires produces an empty Sources
+        // list with no error anywhere.
         ...model.params.enrich,
       }),
       signal,

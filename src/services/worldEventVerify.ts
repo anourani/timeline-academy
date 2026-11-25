@@ -15,7 +15,7 @@
 //      in the article's opening paragraphs, and it keeps the model's dates.
 //   4. Anything else is dropped.
 //
-// Browser-direct, like wikipediaSearch and wikipediaImage: no server round
+// Browser-direct, like wikipediaSearch and wikipediaPhotos: no server round
 // trip and no cost to anyone. Both hosts must be in netlify.toml connect-src.
 // A failed lookup throws rather than letting unchecked dates through, so the
 // lane shows its "couldn't load" state and offers a retry.

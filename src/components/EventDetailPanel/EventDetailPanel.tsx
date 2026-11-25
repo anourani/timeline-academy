@@ -1,23 +1,36 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Pencil, Trash2, X } from 'lucide-react'
 import { ConfirmationModal } from '../Modal/ConfirmationModal'
-import { PanelResizeHandle } from '../ui/PanelResizeHandle'
 import { Skeleton, SkeletonText } from '../ui/skeleton'
-import { usePanelWidth } from '@/hooks/usePanelWidth'
-import { useWindowResizing } from '@/hooks/useWindowResizing'
-import { SETTINGS_PANEL_DEFAULT_WIDTH } from '@/constants/panels'
-import { formatDateLong } from '@/utils/dateUtils'
 import { parseEventDescription } from '@/utils/eventDescription'
-import {
-  enrichEvent,
-  fetchEventImage,
-} from '@/services/eventEnrichment'
-import type { EnrichableEvent, EventSource } from '@/types/event'
+import { formatEventWhen } from '@/utils/eventWhen'
+import { enrichEvent } from '@/services/eventEnrichment'
+import type { CategoryConfig, EnrichableEvent, EventPhoto, EventSource } from '@/types/event'
+import type { TimelineChapter } from '@/types/timeline'
 import type { ByokProvider } from '@/types/ai'
 import { PROVIDER_META } from '@/constants/byokProviders'
 import { getKey } from '@/services/userApiKey'
-import { PhotoHeader, type PanelPhoto } from './PhotoHeader'
+import { PhotoViewer } from './PhotoViewer'
+import { AtAGlance, type GlanceRow } from './AtAGlance'
+import { focusEventBar, useEventMorph } from './useEventMorph'
+import { fetchSubjectPhotos } from '@/services/wikipediaPhotos'
+import { articleFromSources, photoSubjects } from '@/services/wikipediaArticle'
+import {
+  getCachedEventPhotos,
+  setCachedEventPhotos,
+} from '@/services/eventPhotoCache'
+
+// The event view: clicking an event opens it as a full page, grown out of the
+// bar that was clicked (docs/2026-11-24-event-view-prd.md). It replaced a
+// 352px right-hand panel, and kept that panel's whole behaviour — generation
+// on open, streaming, the scroll pin, persistence, Regenerate,
+// Edit / Delete — under a new layout and a new way in and out. (The panel's
+// Remove button, which cleared an event's details, was dropped.)
+//
+// The component name and props are the panel's, so both mount points (the
+// editor and the shared viewer) changed only by passing categories and
+// chapters for the chips.
 
 interface EventDetailPanelProps<E extends EnrichableEvent> {
   open: boolean
@@ -29,30 +42,20 @@ interface EventDetailPanelProps<E extends EnrichableEvent> {
   onEventChange: (updated: E) => void
   /**
    * A World Events entry: context, not the user's content. Nothing in the
-   * panel may change it — no Edit or Delete, and no Regenerate or Remove
-   * footer — but its description still generates on open, like any event's.
+   * view may change it — no Edit or Delete, and no Regenerate —
+   * but its description still generates on open, like any event's.
    */
   readOnly?: boolean
-  /** Edit-mode authoring actions. Since clicking an event opens this panel
-   *  rather than an actions menu, the panel header is where Edit and Delete
-   *  live. Omitted in view mode. */
+  /** Edit-mode authoring actions, shown in the top bar. Omitted in view mode. */
   onEdit?: () => void
   onDelete?: () => void
+  /** For the category chip and colour. World Events entries have no category. */
+  categories?: CategoryConfig[]
+  /** For the chapter chip, on timelines that have chapters. */
+  chapters?: TimelineChapter[]
 }
 
 type PanelState = 'idle' | 'generating' | 'loaded' | 'error'
-
-/**
- * The image is a separate request from the description — a Wikipedia lookup
- * that runs alongside the stream — so it needs its own state. Keying its
- * placeholder off `PanelState` meant the frame stopped pulsing the moment the
- * *text* finished, with the picture still in flight, and kept pulsing for the
- * whole generation when Wikipedia had no picture to give.
- *
- * `'settled'` covers found, not-found and failed alike: all three are the end
- * of waiting, and an empty frame is the honest answer to the last two.
- */
-type ImageState = 'idle' | 'loading' | 'settled'
 
 /** Keys that scroll a container, plus Tab — moving focus to a link near the
  *  bottom scrolls it into view, and that is the reader's doing. */
@@ -66,13 +69,27 @@ const SOURCE_SKELETON_WIDTHS = ['72%', '54%', '63%']
 /** Three one-line bullets, ragged for the same reason. */
 const SUMMARY_SKELETON_WIDTHS = ['88%', '76%', '82%']
 
-function formatDateRange(event: EnrichableEvent): string {
-  if (event.startDate === event.endDate) return formatDateLong(event.startDate)
-  return `${formatDateLong(event.startDate)} → ${formatDateLong(event.endDate)}`
-}
+/** Neutral grey for entries with no category (World Events). */
+const NO_CATEGORY_COLOR = '#9B9EA3'
+
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 function hasGeneratedContent(event: EnrichableEvent | null): boolean {
   return Boolean(event?.description)
+}
+
+/** The chapter whose months contain the event's start, compared as `YYYY-MM`. */
+function chapterFor(
+  chapters: TimelineChapter[] | undefined,
+  startDate: string,
+): TimelineChapter | null {
+  if (!chapters?.length || !startDate) return null
+  const month = startDate.slice(0, 7)
+  return (
+    chapters.find((c) => c.startDate.slice(0, 7) <= month && month <= c.endDate.slice(0, 7)) ??
+    null
+  )
 }
 
 export function EventDetailPanel<E extends EnrichableEvent>({
@@ -85,26 +102,16 @@ export function EventDetailPanel<E extends EnrichableEvent>({
   onEdit,
   onDelete,
   readOnly = false,
+  categories,
+  chapters,
 }: EventDetailPanelProps<E>) {
   const [state, setState] = useState<PanelState>('idle')
   const [streamedDescription, setStreamedDescription] = useState('')
-  const [imageUrl, setImageUrl] = useState<string | null>(null)
-  const [imageAttribution, setImageAttribution] = useState<string | null>(null)
-  const [imageState, setImageState] = useState<ImageState>('idle')
   const [sources, setSources] = useState<EventSource[]>([])
   const [errorMessage, setErrorMessage] = useState('')
   const [errorProvider, setErrorProvider] = useState<ByokProvider | null>(null)
-  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false)
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [isResizing, setIsResizing] = useState(false)
-
-  // Shared by the editor and the viewer — this is one component mounted from
-  // two routes, so a resize on either follows the reader everywhere.
-  const { width, setWidth, resetWidth } = usePanelWidth(
-    'event_panel_width',
-    SETTINGS_PANEL_DEFAULT_WIDTH
-  )
 
   // The other provider, offered only when the user has a key for it. No
   // automatic failover — spending on an account the user didn't pick for this
@@ -117,22 +124,132 @@ export function EventDetailPanel<E extends EnrichableEvent>({
       })()
     : null
   const abortRef = useRef<AbortController | null>(null)
-  const panelRef = useRef<HTMLElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
   // Hold the reader at the top while content is still arriving — but only until
-  // they scroll, after which the panel is theirs and nothing here touches it
-  // again. Stated as a guarantee rather than a fix for one mechanism: the panel
+  // they scroll, after which the page is theirs and nothing here touches it
+  // again. Stated as a guarantee rather than a fix for one mechanism: the page
   // has no scroll code of its own, so anything that moves it (a browser
   // heuristic, a late reflow, a focus we don't control) is something this holds
   // against without having to name it first.
   const pinnedRef = useRef(true)
-  const isWindowResizing = useWindowResizing()
-  const skipTransition = isResizing || isWindowResizing
 
-  // Reset state when the panel closes or the event changes.
+  // ---- Open / close lifecycle -------------------------------------------
+  //
+  // The parent clears `event` the moment it closes the view, but the page has
+  // to stay on screen — showing that event — while it shrinks back into the
+  // bar. `present` keeps the layer mounted until the close animation ends, and
+  // `retainedRef` keeps the event it was showing.
+  const layerRef = useRef<HTMLDivElement | null>(null)
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null)
+  const shownIdRef = useRef<string | null>(null)
+  const retainedRef = useRef<E | null>(null)
+  const [present, setPresent] = useState(false)
+  const morph = useEventMorph(layerRef)
+  const titleId = useId()
+
+  if (event) retainedRef.current = event
+  const view: E | null = event ?? (present ? retainedRef.current : null)
+  const visible = (open && !!event) || present
+
+  // Before paint, so the layer is never seen at full size before it starts as
+  // the bar.
+  useLayoutEffect(() => {
+    if (open && event) {
+      if (shownIdRef.current === event.id) return
+      shownIdRef.current = event.id
+      setPresent(true)
+      morph.open(event.id)
+      // Usable at once, not when the animation ends.
+      closeButtonRef.current?.focus({ preventScroll: true })
+      return
+    }
+    if (!open && shownIdRef.current) {
+      const id = shownIdRef.current
+      shownIdRef.current = null
+      morph.close(id).then(() => {
+        // Reopened while closing: that open owns the layer now.
+        if (shownIdRef.current) return
+        setPresent(false)
+        focusEventBar(id)
+      })
+    }
+    // `morph` is stable; keyed on the event's identity, not its content.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, event?.id])
+
+  // The photos: one picture of each *other* person or thing the event's title
+  // names — the spouse in "Marries Lori Huang", the product in "Launches
+  // CUDA" — taken from that subject's own Wikipedia article
+  // (wikipediaPhotos.ts). Which subjects qualify is `photoSubjects`' call, and
+  // it is strict on purpose: never the timeline's own subject, and nothing the
+  // title does not name. Most events get no photos, and then the photo area is
+  // not rendered at all. Nothing is ever searched for.
+  //
+  // `gallery` is null while deciding or looking; once found it is the answer,
+  // even when empty. `galleryFailed`: Wikipedia could not be reached.
+  const [gallery, setGallery] = useState<EventPhoto[] | null>(null)
+  const [galleryFailed, setGalleryFailed] = useState(false)
+  const currentSources = state === 'loaded' ? event?.sources ?? sources : sources
+  const checkedArticle =
+    event && 'article' in event
+      ? (event as { article?: { title?: string } }).article?.title ?? null
+      : null
+  type PhotoPlan = { subjects: string[] }
+  let photoPlan: PhotoPlan | null = null
+  if (event && (state === 'loaded' || state === 'error')) {
+    const settledFacts =
+      state === 'loaded' ? parseEventDescription(event.description ?? streamedDescription).facts : {}
+    // A World Events entry's article was fact-checked as that entry's own;
+    // everything else goes through `photoSubjects`, which keeps only what the
+    // event's title names and never the timeline's own subject.
+    photoPlan = {
+      subjects: checkedArticle
+        ? [checkedArticle]
+        : photoSubjects({
+            eventTitle: event.title,
+            timelineTitle,
+            pictured: settledFacts.pictured,
+            who: settledFacts.who,
+            citedArticle: articleFromSources(currentSources),
+          }),
+    }
+  }
+  const photoBasis = photoPlan ? JSON.stringify(photoPlan) : null
+  useEffect(() => {
+    if (!open || !event) return
+    setGalleryFailed(false)
+    if (!photoPlan || !photoBasis) {
+      setGallery(null)
+      return
+    }
+    const cached = getCachedEventPhotos(event.id, event.title)
+    if (cached && cached.basis === photoBasis) {
+      setGallery(cached.photos)
+      return
+    }
+    setGallery(null)
+    let cancelled = false
+    const { id, title } = event
+    fetchSubjectPhotos(photoPlan.subjects)
+      .then((photos) => {
+        if (cancelled) return
+        setCachedEventPhotos(id, title, photoBasis, photos)
+        setGallery(photos)
+      })
+      .catch(() => {
+        if (!cancelled) setGalleryFailed(true)
+      })
+    return () => {
+      cancelled = true
+    }
+    // `photoBasis` stands for `photoPlan`, which is rebuilt every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, event?.id, event?.title, photoBasis])
+
+  // Reset state when the view closes or the event changes.
   useEffect(() => {
     if (!open || !event) {
-      // Cleanup any in-flight stream when panel closes.
+      // Cleanup any in-flight stream when the view closes.
       if (abortRef.current) {
         abortRef.current.abort()
         abortRef.current = null
@@ -140,7 +257,7 @@ export function EventDetailPanel<E extends EnrichableEvent>({
       return
     }
 
-    // A new event starts at the top, pinned again. The panel is reused across
+    // A new event starts at the top, pinned again. The view is reused across
     // events, so without this, opening one inherits both the previous event's
     // offset and the previous reader's decision to have scrolled away from it.
     pinnedRef.current = true
@@ -150,27 +267,21 @@ export function EventDetailPanel<E extends EnrichableEvent>({
       // Cached content — render straight from the event.
       setState('loaded')
       setStreamedDescription(event.description ?? '')
-      setImageUrl(event.imageUrl ?? null)
-      setImageAttribution(event.imageAttribution ?? null)
       setSources(event.sources ?? [])
-      // Nothing is being fetched. `PhotoHeader` still pulses until the <img>
-      // paints — a cached URL is still bytes away.
-      setImageState('settled')
       return
     }
 
     // Fresh event — auto-generation runs in either edit or view/present mode.
     // Routing (BYOK key vs session token vs JWT) is handled inside enrichEvent;
-    // the panel just kicks off generation.
+    // the view just kicks off generation. It starts with the open animation,
+    // not after it: skeletons settle into the page as it grows.
     setState('generating')
     setStreamedDescription('')
-    setImageUrl(null)
-    setImageAttribution(null)
     setSources([])
     setErrorMessage('')
     setErrorProvider(null)
 
-    runGeneration(event, false)
+    runGeneration(event)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, event?.id])
 
@@ -179,7 +290,7 @@ export function EventDetailPanel<E extends EnrichableEvent>({
   // say who caused it, and the thing being guarded against is precisely a
   // scroll nobody asked for. So intent is read from the gestures that scroll a
   // container — wheel and trackpad, touch drag, the scrollbar itself, and the
-  // scroll keys once focus is inside the panel — and anything that moves the
+  // scroll keys once focus is inside the view — and anything that moves the
   // offset without one of those is put back.
   useEffect(() => {
     const el = contentRef.current
@@ -193,18 +304,13 @@ export function EventDetailPanel<E extends EnrichableEvent>({
     }
     const handlePointerDown = (e: PointerEvent) => {
       // Only a press in the scrollbar gutter counts; a click on a button or a
-      // source link is not a request to move the view. Overlay scrollbars (the
-      // macOS default) leave no gutter and may not dispatch here at all, but
-      // they are also invisible until something has already scrolled — and that
-      // scroll was a wheel or trackpad gesture, which released the pin above.
+      // source link is not a request to move the view.
       const offsetX = e.clientX - el.getBoundingClientRect().left
       if (offsetX >= el.clientWidth) release()
     }
     const handleScroll = () => {
       // Only while content is still arriving. Once generation is done nothing
-      // grows, so there is nothing left to guard against and the panel is
-      // entirely the reader's — this keeps the guard to the few seconds it is
-      // actually for.
+      // grows, so there is nothing left to guard against.
       if (state !== 'generating') return
       if (!pinnedRef.current || el.scrollTop === 0) return
       // Nobody asked for this. Put it back.
@@ -223,21 +329,29 @@ export function EventDetailPanel<E extends EnrichableEvent>({
       el.removeEventListener('pointerdown', handlePointerDown)
       el.removeEventListener('scroll', handleScroll)
     }
-  }, [state])
+    // `visible`: the scroll container only exists while the view is up.
+  }, [state, visible])
+
+  // Below `lg` the top bar sits over the photo as a light scrim. Once the photo
+  // has scrolled away the bar turns solid, or text would show through it.
+  const [pastPhoto, setPastPhoto] = useState(false)
+  useEffect(() => {
+    const el = contentRef.current
+    if (!el) return
+    const update = () => setPastPhoto(el.scrollTop > 220)
+    update()
+    el.addEventListener('scroll', update, { passive: true })
+    return () => el.removeEventListener('scroll', update)
+  }, [visible])
 
   // Re-assert the top before paint whenever something that grows has grown, so
-  // a displaced position is never shown even for a frame. The scroll listener
-  // above is the backstop for anything the browser adjusts after layout, which
-  // is too late for this effect to see. Writing 0 over 0 is a no-op, so in the
-  // ordinary case this costs a ref check and nothing else.
+  // a displaced position is never shown even for a frame.
   useLayoutEffect(() => {
     if (!pinnedRef.current) return
     const el = contentRef.current
     if (!el || el.scrollTop === 0) return
     el.scrollTop = 0
-    // The raw state rather than the `display*` values derived further down —
-    // same signal, and these exist at this point in the component.
-  }, [streamedDescription, imageUrl, imageAttribution, sources])
+  }, [streamedDescription, gallery, sources])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -246,46 +360,26 @@ export function EventDetailPanel<E extends EnrichableEvent>({
     }
   }, [])
 
-  // Escape closes the panel. Click outside the panel also closes it (desktop
-  // has no visible backdrop so the timeline behind stays visible, but a click
-  // anywhere off-panel should still dismiss the way Cancel would). Suppress
-  // outside-click while a confirmation modal is open so clicking the modal's
-  // overlay doesn't also dismiss the panel underneath it.
+  // Escape closes the view — unless a confirmation is open, which Escape
+  // closes instead. There is no click-outside: nothing is outside a full page.
   useEffect(() => {
     if (!open) return
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    const handleMouseDown = (e: MouseEvent) => {
-      if (showRemoveConfirm || showRegenerateConfirm || showDeleteConfirm) return
-      const node = panelRef.current
-      if (!node) return
-      const target = e.target as Node | null
-      if (target && !node.contains(target)) {
-        onClose()
-      }
+      if (e.key !== 'Escape') return
+      if (showRegenerateConfirm || showDeleteConfirm) return
+      onClose()
     }
     document.addEventListener('keydown', handleKey)
-    // mousedown (not click) so we close before any background element starts
-    // its own interaction (e.g. dragging an event).
-    document.addEventListener('mousedown', handleMouseDown)
-    return () => {
-      document.removeEventListener('keydown', handleKey)
-      document.removeEventListener('mousedown', handleMouseDown)
-    }
-  }, [open, onClose, showRemoveConfirm, showRegenerateConfirm, showDeleteConfirm])
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [open, onClose, showRegenerateConfirm, showDeleteConfirm])
 
-  // A confirmation left open when the panel closes would reappear over the next
+  // A confirmation left open when the view closes would reappear over the next
   // event opened.
   useEffect(() => {
     if (!open) setShowDeleteConfirm(false)
   }, [open])
 
-  function runGeneration(
-    currentEvent: E,
-    preserveImage: boolean,
-    providerOverride?: ByokProvider,
-  ) {
+  function runGeneration(currentEvent: E, providerOverride?: ByokProvider) {
     // Abort any prior in-flight generation
     if (abortRef.current) abortRef.current.abort()
     const ctrl = new AbortController()
@@ -293,44 +387,12 @@ export function EventDetailPanel<E extends EnrichableEvent>({
 
     setState('generating')
     setStreamedDescription('')
-    if (!preserveImage) {
-      setImageUrl(null)
-      setImageAttribution(null)
-    }
     setSources([])
     setErrorMessage('')
     setErrorProvider(null)
 
     let descBuffer = ''
     let collectedSources: EventSource[] = []
-    let nextImageUrl: string | null = preserveImage ? currentEvent.imageUrl ?? null : null
-    let nextImageAttribution: string | null = preserveImage
-      ? currentEvent.imageAttribution ?? null
-      : null
-
-    // Image fetch in parallel with text streaming. Only re-fetch if not preserving.
-    if (!preserveImage) {
-      setImageState('loading')
-      fetchEventImage(currentEvent.title)
-        .then((res) => {
-          if (ctrl.signal.aborted) return
-          nextImageUrl = res.imageUrl
-          nextImageAttribution = res.attribution
-          setImageUrl(res.imageUrl)
-          setImageAttribution(res.attribution)
-          setImageState('settled')
-        })
-        .catch(() => {
-          // `fetchEventImage` already resolves to null/null on failure, so this
-          // only fires on something unexpected — but the frame must stop
-          // waiting either way rather than pulse forever.
-          if (ctrl.signal.aborted) return
-          setImageState('settled')
-        })
-    } else {
-      setImageState('settled')
-    }
-
     enrichEvent(
       currentEvent,
       timelineTitle,
@@ -347,12 +409,13 @@ export function EventDetailPanel<E extends EnrichableEvent>({
         },
         onDone: () => {
           if (ctrl.signal.aborted) return
-          // Persist the full set of fields atomically.
+          // Persist the full set of fields atomically. `imageUrl` rides along
+          // untouched in the spread: the view no longer reads or writes it —
+          // its photos are looked up from what the description says the event
+          // is about, and cached in the browser.
           onEventChange({
             ...currentEvent,
             description: descBuffer || null,
-            imageUrl: nextImageUrl,
-            imageAttribution: nextImageAttribution,
             sources: collectedSources.length > 0 ? collectedSources : null,
           })
           setState('loaded')
@@ -373,8 +436,7 @@ export function EventDetailPanel<E extends EnrichableEvent>({
    *  where the previous attempt produced nothing to protect. */
   function regenerateNow(providerOverride?: ByokProvider) {
     if (!event) return
-    // Preserve image only if we already have one.
-    runGeneration(event, !!imageUrl, providerOverride)
+    runGeneration(event, providerOverride)
   }
 
   /** Footer "Regenerate", which replaces a description that already worked.
@@ -385,30 +447,24 @@ export function EventDetailPanel<E extends EnrichableEvent>({
     setShowRegenerateConfirm(true)
   }
 
-  function handleRemove() {
-    if (!event) return
-    onEventChange({
-      ...event,
-      description: null,
-      imageUrl: null,
-      imageAttribution: null,
-      sources: null,
-    })
-    onClose()
-  }
+  if (typeof document === 'undefined' || !visible || !view) return null
 
-  if (typeof document === 'undefined') return null
-
-  const showFooter = mode === 'edit' && open && !!event && !readOnly
+  const showFooter = mode === 'edit' && open && !readOnly
   // Edit and Delete used to live in the click-path actions menu. That menu is
-  // gone — a click opens this panel — so the header carries them instead.
-  const showAuthoringActions = mode === 'edit' && !!event && !!onEdit && !!onDelete && !readOnly
-  const description = state === 'loaded' ? event?.description ?? streamedDescription : streamedDescription
-  const displayImageUrl = state === 'loaded' ? event?.imageUrl ?? imageUrl : imageUrl
-  const displayAttribution = state === 'loaded' ? event?.imageAttribution ?? imageAttribution : imageAttribution
-  const displaySources = state === 'loaded' ? event?.sources ?? sources : sources
+  // gone — a click opens this view — so the top bar carries them instead.
+  const showAuthoringActions = mode === 'edit' && !!onEdit && !!onDelete && !readOnly
+  const description = state === 'loaded' ? view.description ?? streamedDescription : streamedDescription
+  const displaySources = state === 'loaded' ? view.sources ?? sources : sources
 
-  const { summary, paragraphs } = parseEventDescription(description)
+  const { summary, paragraphs, facts } = parseEventDescription(description)
+  // The model's At a glance rows, in a fixed order. They stream last, so while
+  // generating with none yet, one skeleton row holds their place.
+  const factRows: GlanceRow[] = [
+    facts.where ? { label: 'Where', value: facts.where } : null,
+    // Models sometimes separate the names with the Pictured line's pipes.
+    facts.who ? { label: 'Who', value: facts.who.replace(/\s*\|\s*/g, ', ') } : null,
+    facts.age ? { label: 'Age', value: facts.age } : null,
+  ].filter((row): row is GlanceRow => row !== null)
   const generating = state === 'generating'
   // Nothing has streamed yet: the model is still searching, and there is no
   // telling whether a summary is coming (a new edge function) or not (an old
@@ -422,176 +478,242 @@ export function EventDetailPanel<E extends EnrichableEvent>({
   const showStory = state !== 'error' && (paragraphs.length > 0 || showStorySkeleton)
   // Sources arrive on their own callback, usually before the stream finishes.
   const showSourcesSkeleton = generating && displaySources.length === 0
-  const photos: PanelPhoto[] = displayImageUrl
-    ? [{ url: displayImageUrl, attribution: displayAttribution }]
-    : []
+  // The photos are only ever the subjects' own pictures. The lead image stored
+  // on the event is not shown: it came from a title search and was not chosen
+  // for what the event is about.
+  const photos: EventPhoto[] = gallery ?? []
+  // A pulsing frame while the subjects are still being decided or looked up.
+  const searchingPhotos = photos.length === 0 && gallery === null && !galleryFailed
+  const hasPhotoArea = photos.length > 0 || searchingPhotos
+
+  const categoryId = (view as { category?: string }).category
+  const category = categoryId ? categories?.find((c) => c.id === categoryId) ?? null : null
+  const isWorldEvent = 'source' in view
+  const accent = category?.color ?? NO_CATEGORY_COLOR
+  const chapter = chapterFor(chapters, view.startDate)
+  const when = formatEventWhen(view.startDate, view.endDate)
+
+  /** Keep Tab inside the page: the editor behind it is inert. */
+  const trapTab = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'Tab' || !layerRef.current) return
+    const focusables = Array.from(layerRef.current.querySelectorAll<HTMLElement>(FOCUSABLE))
+    if (focusables.length === 0) return
+    const first = focusables[0]
+    const last = focusables[focusables.length - 1]
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault()
+      last.focus()
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault()
+      first.focus()
+    }
+  }
 
   return createPortal(
     <>
-      {/* Backdrop — same bg-black/50 overlay TimelineSettingsPanel uses.
-          Clicking dismisses the panel. */}
       <div
-        onClick={onClose}
-        className={`fixed inset-0 z-40 bg-black/50 transition-opacity duration-300 ease-out ${
-          open ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        }`}
-        aria-hidden="true"
-      />
-
-      <aside
-        ref={panelRef}
-        // Width goes through a custom property rather than an inline `width`
-        // so it stays behind the `md:` prefix — below that breakpoint the
-        // panel is full-screen off `inset-0` and must not be constrained.
-        style={{ '--event-panel-width': `${width}px` } as React.CSSProperties}
-        className={`fixed inset-0 md:inset-y-0 md:right-0 md:left-auto md:w-[var(--event-panel-width)] md:pr-[6px] md:py-[6px] z-50 ${
-          skipTransition ? '' : 'transition-[transform,width] duration-300 ease-out'
-        } ${open ? 'translate-x-0' : 'translate-x-full'}`}
-        aria-hidden={!open}
-        aria-label="Event details"
+        ref={layerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        onKeyDown={trapTab}
+        // Above the side panel and the dock (z-40).
+        className="fixed inset-0 z-50 bg-[#0B0B0B]"
       >
-        {open && (
-          <PanelResizeHandle
-            side="right"
-            width={width}
-            onWidthChange={setWidth}
-            onResizeStateChange={setIsResizing}
-            onReset={resetWidth}
-            label="Resize event details panel"
-          />
-        )}
-        <div className="h-full w-full bg-[#171717] flex flex-col overflow-hidden border-0 md:border md:border-[#262626] rounded-none md:rounded-[6px]">
-          {/* Scroll anchoring is deliberately left at the browser default. It
-              was suspected of walking the panel down as the description
-              streamed, but measurement says otherwise: appending paragraphs
-              below the reader moves nothing, and where anchoring does act — a
-              late image or attribution growing *above* the reader — it holds
-              them on the same sentence, which is what a reader wants. Turning
-              it off would reintroduce that jump. */}
+        {/* The skeletons are `aria-hidden`, so this is the only thing telling a
+            screen reader that the view is mid-generation. `polite` — it must
+            not interrupt whatever is being read. */}
+        <p className="sr-only" role="status" aria-live="polite">
+          {state === 'generating'
+            ? 'Generating event details'
+            : state === 'loaded'
+              ? 'Event details ready'
+              : ''}
+        </p>
+
+        {/* Scroll anchoring is left at the browser default: where it acts — a
+            late image growing above the reader — it holds them on the same
+            sentence, which is what a reader wants. */}
+        <div
+          ref={contentRef}
+          aria-busy={state === 'generating'}
+          className="absolute inset-0 overflow-y-auto overflow-x-hidden"
+        >
+          {/* Top bar. Sticky on a strip of the page colour, so the page scrolls
+              under it; over a photo (below `lg`) the strip is a light scrim. */}
           <div
-            ref={contentRef}
-            aria-busy={state === 'generating'}
-            className="flex flex-col items-stretch overflow-y-auto flex-1 min-h-0"
+            data-morph-stage="header"
+            className={`sticky top-0 z-10 flex items-center justify-between gap-3 h-[64px] lg:h-[72px] px-[12px] lg:px-[24px] bg-gradient-to-b ${
+              hasPhotoArea && !pastPhoto
+                ? 'from-black/55 to-transparent lg:from-[#0B0B0B] lg:via-[#0B0B0B]/90'
+                : 'from-[#0B0B0B] via-[#0B0B0B]/90 to-transparent'
+            }`}
           >
-            {event && (
-              <>
-                {/* The skeletons are `aria-hidden`, so this is the only thing
-                    telling a screen reader that the panel is mid-generation.
-                    `polite` — it must not interrupt whatever is being read. */}
-                <p className="sr-only" role="status" aria-live="polite">
-                  {state === 'generating'
-                    ? 'Generating event details'
-                    : state === 'loaded'
-                      ? 'Event details ready'
-                      : ''}
-                </p>
+            <button
+              ref={closeButtonRef}
+              type="button"
+              onClick={onClose}
+              aria-label="Close event"
+              className="flex items-center gap-[8px] h-[44px] lg:h-[40px] min-w-[44px] justify-center lg:justify-start px-[10px] lg:pl-[10px] lg:pr-[12px] rounded-[10px] border border-white/15 bg-black/40 lg:bg-[#111111] text-[#ECEEF1] hover:bg-white/10 transition-colors"
+            >
+              <X size={18} strokeWidth={1.5} />
+              <span className="hidden lg:inline font-['Avenir',sans-serif] text-[14px]">Close</span>
+              <kbd className="hidden lg:inline label-xs-type1 text-[#9B9EA3] border border-white/20 rounded-[4px] px-[5px] py-[1px]">
+                esc
+              </kbd>
+            </button>
+            {showAuthoringActions && (
+              <div className="flex items-center gap-2">
+                <HeaderIconButton onClick={onEdit} label="Edit event">
+                  <Pencil size={16} strokeWidth={1.25} />
+                </HeaderIconButton>
+                <HeaderIconButton
+                  onClick={() => setShowDeleteConfirm(true)}
+                  label="Delete event"
+                  destructive
+                >
+                  <Trash2 size={16} strokeWidth={1.25} />
+                </HeaderIconButton>
+              </div>
+            )}
+          </div>
 
-                <PhotoHeader
-                  // Remount per event: resets the slide and what has loaded.
-                  key={event.id}
-                  photos={photos}
-                  date={formatDateRange(event)}
-                  title={event.title}
-                  searching={imageState === 'loading'}
-                  actions={
-                    <>
-                      {showAuthoringActions && (
-                        <>
-                          <HeaderIconButton onClick={onEdit} label="Edit event">
-                            <Pencil size={16} strokeWidth={1.25} />
-                          </HeaderIconButton>
-                          <HeaderIconButton
-                            onClick={() => setShowDeleteConfirm(true)}
-                            label="Delete event"
-                            destructive
-                          >
-                            <Trash2 size={16} strokeWidth={1.25} />
-                          </HeaderIconButton>
-                        </>
-                      )}
-                      <button
-                        onClick={onClose}
-                        className="md:hidden flex items-center justify-center p-1.5 rounded-lg border border-white/15 bg-white/10 backdrop-blur-[12px] text-[#c9ced4] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4),inset_0px_1px_0px_0px_rgba(255,255,255,0.1)] hover:bg-white/20 hover:text-[#dadee5] transition-colors"
-                        aria-label="Close panel"
-                      >
-                        <X size={16} strokeWidth={1.25} />
-                      </button>
-                    </>
-                  }
-                />
-
-                <div className="flex flex-col px-[20px] pt-[20px] pb-[24px]">
-                  {state === 'error' && (
-                    <div className="flex flex-col gap-2">
-                      <p className="body-m text-[#9B9EA3] m-0">
-                        Couldn't generate details. {errorMessage ? `(${errorMessage})` : ''}
-                      </p>
-                      <div className="flex flex-wrap gap-3">
-                        <button
-                          onClick={() => regenerateNow()}
-                          className="font-['Avenir',sans-serif] text-[14px] leading-[20px] text-[#DADEE5] underline hover:text-white"
-                        >
-                          Try again
-                        </button>
-                        {retryProvider && (
-                          <button
-                            onClick={() => regenerateNow(retryProvider)}
-                            className="font-['Avenir',sans-serif] text-[14px] leading-[20px] text-[#9B9EA3] underline hover:text-[#DADEE5]"
-                          >
-                            Retry with {PROVIDER_META[retryProvider].label}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {state !== 'error' && showSummary && (
-                    <PanelSection label="Summary" first>
-                      {summary.length > 0 ? (
-                        <ul className="m-0 p-0 list-none flex flex-col gap-[10px]">
-                          {summary.map((item, i) => (
-                            <li key={i} className="flex gap-[12px] items-start">
-                              <span
-                                aria-hidden="true"
-                                className="mt-[9px] w-[6px] h-[6px] rounded-full bg-[#9B9EA3] shrink-0"
-                              />
-                              <span className="body-lg text-[#ECEEF1]">{item}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <SkeletonText lines={3} widths={SUMMARY_SKELETON_WIDTHS} className="gap-[14px]" />
-                      )}
-                    </PanelSection>
-                  )}
-
-                  {showStory && (
-                    <PanelSection label="The story" first={!showSummary}>
-                      {paragraphs.length > 0 ? (
-                        <div className="flex flex-col gap-[16px] max-w-[62ch]">
-                          {paragraphs.map((para, i) => (
-                            <p key={i} className="body-lg text-[#C4C7CC] m-0 whitespace-pre-wrap">
-                              {para}
-                            </p>
-                          ))}
-                        </div>
-                      ) : (
-                        // Two blocks rather than one run of bars: the reserved
-                        // height matches the two-paragraph shape most stories
-                        // come back in.
-                        <div className="flex flex-col gap-[16px]">
-                          <SkeletonText lines={4} />
-                          <SkeletonText lines={4} />
-                        </div>
-                      )}
-                    </PanelSection>
-                  )}
-
-                  {(showSourcesSkeleton || displaySources.length > 0) && (
-                    <PanelSection
-                      label="Sources"
-                      first={state !== 'error' && !showSummary && !showStory}
+          {/* The page. Two columns from `lg` (title, At a glance, summary |
+              photos, story, sources) — with or without photos, so an event
+              that has none keeps the same shape and its story simply starts
+              at the top of the right column. One column below `lg`, where
+              `contents` lets the two column wrappers dissolve so `order` can
+              interleave them: photos, title, At a glance, summary, story,
+              sources. There the photo runs up under the top bar, hence the
+              negative margin when there is one. */}
+          <div
+            className={`flex flex-col w-full max-w-[1296px] mx-auto pb-[64px] lg:px-[48px] lg:flex-row lg:items-start lg:gap-[64px] ${
+              hasPhotoArea ? '-mt-[64px] lg:mt-0' : ''
+            }`}
+          >
+            <div className="contents lg:flex lg:flex-col lg:flex-1 lg:min-w-0 lg:max-w-[520px]">
+              <header data-morph-stage="header" className="order-2 px-[20px] lg:px-0 pt-[20px] lg:pt-[8px]">
+                <div className="flex flex-wrap items-center gap-[8px]">
+                  {(category || isWorldEvent) && (
+                    <span
+                      className="inline-flex items-center gap-[7px] h-[26px] px-[10px] rounded-full border font-['Avenir',sans-serif] text-[12px] text-[#ECEEF1]"
+                      style={{ backgroundColor: `${accent}1F`, borderColor: `${accent}66` }}
                     >
+                      <span aria-hidden="true" className="w-[7px] h-[7px] rounded-full" style={{ backgroundColor: accent }} />
+                      {category?.label ?? 'World events'}
+                    </span>
+                  )}
+                  {chapter && (
+                    <span className="inline-flex items-center h-[26px] px-[10px] rounded-full border border-[#333333] font-['Avenir',sans-serif] text-[12px] text-[#C4C7CC]">
+                      {chapter.label}
+                    </span>
+                  )}
+                </div>
+                <h1
+                  id={titleId}
+                  className="m-0 mt-[14px] font-['Aleo',serif] font-medium text-[#ECEEF1] text-[32px] leading-[1.12] lg:text-[46px] lg:leading-[1.08] tracking-[-0.01em]"
+                >
+                  {view.title}
+                </h1>
+              </header>
+
+              <div data-morph-stage="content" className="order-3 px-[20px] lg:px-0 mt-[24px] lg:mt-[30px]">
+                <AtAGlance when={when} rows={factRows} pending={generating} />
+              </div>
+
+              <div data-morph-stage="content" className="order-4 px-[20px] lg:px-0 mt-[36px]">
+                {state === 'error' && (
+                  <div className="flex flex-col gap-2">
+                    <p className="body-m text-[#9B9EA3] m-0">
+                      Couldn't generate details. {errorMessage ? `(${errorMessage})` : ''}
+                    </p>
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        onClick={() => regenerateNow()}
+                        className="font-['Avenir',sans-serif] text-[14px] leading-[20px] text-[#DADEE5] underline hover:text-white"
+                      >
+                        Try again
+                      </button>
+                      {retryProvider && (
+                        <button
+                          onClick={() => regenerateNow(retryProvider)}
+                          className="font-['Avenir',sans-serif] text-[14px] leading-[20px] text-[#9B9EA3] underline hover:text-[#DADEE5]"
+                        >
+                          Retry with {PROVIDER_META[retryProvider].label}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {state !== 'error' && showSummary && (
+                  <PageSection label="Summary">
+                    {summary.length > 0 ? (
+                      <ul className="m-0 p-0 list-none flex flex-col gap-[14px]">
+                        {summary.map((item, i) => (
+                          <li key={i} className="flex gap-[12px] items-start">
+                            <span
+                              aria-hidden="true"
+                              className="mt-[10px] w-[6px] h-[6px] rounded-full shrink-0"
+                              style={{ backgroundColor: accent }}
+                            />
+                            <span className="font-['Aleo',serif] text-[18px] leading-[1.4] text-[#ECEEF1]">
+                              {item}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <SkeletonText lines={3} widths={SUMMARY_SKELETON_WIDTHS} className="gap-[14px]" />
+                    )}
+                  </PageSection>
+                )}
+              </div>
+            </div>
+
+            <div className="contents lg:flex lg:flex-col lg:w-[640px] lg:shrink-0">
+              <div data-morph-stage="photo" className="order-1">
+                <PhotoViewer
+                  // Remount per event: resets the index and what has loaded.
+                  key={view.id}
+                  photos={photos}
+                  title={view.title}
+                  searching={searchingPhotos}
+                  accent={accent}
+                />
+              </div>
+
+              <div
+                data-morph-stage="content"
+                // Under the photos when there are some; otherwise level with
+                // the top of the left column.
+                className={`order-5 px-[20px] lg:px-0 mt-[36px] ${
+                  hasPhotoArea ? 'lg:mt-[40px]' : 'lg:mt-[8px]'
+                }`}
+              >
+                {showStory && (
+                  <PageSection label="The story">
+                    {paragraphs.length > 0 ? (
+                      <div className="flex flex-col gap-[16px] max-w-[62ch]">
+                        {paragraphs.map((para, i) => (
+                          <StoryParagraph key={i} text={para} accent={accent} />
+                        ))}
+                      </div>
+                    ) : (
+                      // Two blocks rather than one run of bars: the reserved
+                      // height matches the two-paragraph shape most stories
+                      // come back in.
+                      <div className="flex flex-col gap-[16px]">
+                        <SkeletonText lines={4} />
+                        <SkeletonText lines={4} />
+                      </div>
+                    )}
+                  </PageSection>
+                )}
+
+                {(showSourcesSkeleton || displaySources.length > 0) && (
+                  <div className={showStory ? 'mt-[36px]' : ''}>
+                    <PageSection label="Sources">
                       <div className="flex flex-col">
                         {displaySources.length > 0
                           ? displaySources.map((source, i) => (
@@ -614,35 +736,22 @@ export function EventDetailPanel<E extends EnrichableEvent>({
                               </div>
                             ))}
                       </div>
-                    </PanelSection>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
+                    </PageSection>
+                  </div>
+                )}
 
-          {showFooter && (
-            <div className="flex gap-[10px] px-[20px] pb-[20px] pt-[12px] shrink-0">
-              <FooterButton onClick={handleRegenerate} disabled={state === 'generating'}>
-                Regenerate
-              </FooterButton>
-              <FooterButton onClick={() => setShowRemoveConfirm(true)} disabled={state === 'generating'}>
-                Remove
-              </FooterButton>
+                {showFooter && (
+                  <div className="mt-[40px] flex max-w-[180px]">
+                    <FooterButton onClick={handleRegenerate} disabled={state === 'generating'}>
+                      Regenerate
+                    </FooterButton>
+                  </div>
+                )}
+              </div>
             </div>
-          )}
+          </div>
         </div>
-      </aside>
-
-      <ConfirmationModal
-        isOpen={showRemoveConfirm}
-        onClose={() => setShowRemoveConfirm(false)}
-        onConfirm={handleRemove}
-        title="Remove event details"
-        message="This will clear the description, image, and sources for this event. The event itself will not be deleted."
-        confirmLabel="Remove"
-        cancelLabel="Cancel"
-      />
+      </div>
 
       <ConfirmationModal
         isOpen={showDeleteConfirm}
@@ -652,11 +761,7 @@ export function EventDetailPanel<E extends EnrichableEvent>({
           onDelete?.()
         }}
         title="Delete event"
-        message={
-          event
-            ? `"${event.title}" will be removed from the timeline. This cannot be undone.`
-            : ''
-        }
+        message={`"${view.title}" will be removed from the timeline. This cannot be undone.`}
         confirmLabel="Delete"
         cancelLabel="Cancel"
       />
@@ -675,27 +780,70 @@ export function EventDetailPanel<E extends EnrichableEvent>({
   )
 }
 
+/** A line the model started with a list marker. */
+const STORY_BULLET = /^\s*[-*•]\s+/
+
 /**
- * One of the panel's stacked sections — Summary, The story, Sources. Each
- * after the first is set off by a hairline; `first` is computed by the caller
- * because which section leads depends on what this description contains (an
- * old one has no summary).
+ * One paragraph of the story. The prompt asks for plain paragraphs, but when a
+ * model slips into a list anyway, its "- " lines are drawn as real bullets
+ * (the Summary's dots) rather than shown as typed dashes.
  */
-function PanelSection({
+function StoryParagraph({ text, accent }: { text: string; accent: string }) {
+  const textClass =
+    "font-['Avenir',sans-serif] text-[16px] leading-[1.7] text-[#C4C7CC]"
+  const lines = text.split('\n')
+  if (!lines.some((line) => STORY_BULLET.test(line))) {
+    return <p className={`m-0 whitespace-pre-wrap ${textClass}`}>{text}</p>
+  }
+
+  // Runs of marker lines become lists; anything between them stays a paragraph.
+  const blocks: { list: boolean; lines: string[] }[] = []
+  for (const line of lines) {
+    if (!line.trim()) continue
+    const list = STORY_BULLET.test(line)
+    const last = blocks[blocks.length - 1]
+    const content = list ? line.replace(STORY_BULLET, '') : line
+    if (last && last.list === list) last.lines.push(content)
+    else blocks.push({ list, lines: [content] })
+  }
+
+  return (
+    <div className="flex flex-col gap-[10px]">
+      {blocks.map((block, i) =>
+        block.list ? (
+          <ul key={i} className="m-0 p-0 list-none flex flex-col gap-[10px]">
+            {block.lines.map((item, j) => (
+              <li key={j} className="flex gap-[12px] items-start">
+                <span
+                  aria-hidden="true"
+                  className="mt-[11px] w-[6px] h-[6px] rounded-full shrink-0"
+                  style={{ backgroundColor: accent }}
+                />
+                <span className={textClass}>{item}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p key={i} className={`m-0 whitespace-pre-wrap ${textClass}`}>
+            {block.lines.join('\n')}
+          </p>
+        ),
+      )}
+    </div>
+  )
+}
+
+/** One of the page's sections — Summary, The story, Sources. */
+function PageSection({
   label,
-  first,
   children,
 }: {
   label: string
-  first?: boolean
   children: React.ReactNode
 }) {
   return (
-    <section
-      aria-label={label}
-      className={`flex flex-col gap-[12px] ${first ? '' : 'mt-[24px] pt-[24px] border-t border-[#262626]'}`}
-    >
-      <h3 className="label-s-type1 uppercase tracking-[0.08em] text-[#9B9EA3] m-0">{label}</h3>
+    <section aria-label={label} className="flex flex-col gap-[14px]">
+      <h2 className="label-s-type1 uppercase tracking-[0.08em] text-[#9B9EA3] m-0">{label}</h2>
       {children}
     </section>
   )
@@ -717,7 +865,7 @@ function HeaderIconButton({
       onClick={onClick}
       aria-label={label}
       title={label}
-      className={`flex items-center justify-center p-1.5 rounded-lg border border-white/15 bg-white/10 backdrop-blur-[12px] shadow-[0px_8px_32px_0px_rgba(0,0,0,0.4),inset_0px_1px_0px_0px_rgba(255,255,255,0.1)] hover:bg-white/20 transition-colors ${
+      className={`flex items-center justify-center w-[44px] h-[44px] lg:w-[40px] lg:h-[40px] rounded-[10px] border border-white/15 bg-black/40 lg:bg-[#111111] hover:bg-white/10 transition-colors ${
         destructive
           ? 'text-destructive hover:text-destructive'
           : 'text-[#c9ced4] hover:text-[#dadee5]'
@@ -741,7 +889,7 @@ function FooterButton({
     <button
       onClick={onClick}
       disabled={disabled}
-      className="flex-1 flex items-center justify-center h-[33px] px-[10px] py-[5px] rounded-[10px] border border-white/[0.15] bg-white/10 backdrop-blur-[12px] shadow-[0px_8px_32px_rgba(0,0,0,0.4),inset_0px_1px_0px_1px_rgba(255,255,255,0.1)] font-['Avenir',sans-serif] font-medium text-[14px] leading-[150%] text-[#C9CED4] hover:bg-white/20 hover:text-[#dadee5] transition-colors disabled:opacity-50 disabled:pointer-events-none"
+      className="flex-1 flex items-center justify-center h-[36px] px-[10px] py-[5px] rounded-[10px] border border-white/[0.15] bg-white/10 font-['Avenir',sans-serif] font-medium text-[14px] leading-[150%] text-[#C9CED4] hover:bg-white/20 hover:text-[#dadee5] transition-colors disabled:opacity-50 disabled:pointer-events-none"
     >
       {children}
     </button>

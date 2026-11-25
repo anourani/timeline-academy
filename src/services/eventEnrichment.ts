@@ -3,20 +3,11 @@ import { enrichEventDirect } from './anthropicDirect'
 import { enrichEventOpenAIDirect } from './openaiDirect'
 import { readSseStream } from './llmShared'
 import { getActiveModel } from './userApiKey'
-import { fetchWikipediaImage } from './wikipediaImage'
 import type { ByokProvider, EnrichmentStreamHandlers } from '@/types/ai'
 import type { EnrichableEvent, EventSource } from '../types/event'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string
-
-export async function fetchEventImage(title: string): Promise<{
-  imageUrl: string | null
-  attribution: string | null
-}> {
-  // Browser-direct Wikipedia lookup — no server round-trip.
-  return fetchWikipediaImage(title)
-}
 
 /**
  * Enrich an event with AI-generated description, sources, and image.
